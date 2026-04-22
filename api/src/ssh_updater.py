@@ -149,6 +149,7 @@ def run_update_job(db: Session, job_id: int) -> None:
     if not server:
         job.status = "failed"
         job.output = "Server not found"
+        job.summary = "Server not found"
         job.finished_at = datetime.utcnow()
         db.commit()
         return
@@ -222,6 +223,7 @@ def run_update_job(db: Session, job_id: int) -> None:
 
         job.status = "success" if exit_code == 0 and not timed_out else "failed"
         job.output = output_with_steps
+        job.summary = summary
         job.finished_at = datetime.utcnow()
         db.commit()
     except Exception as exc:
@@ -232,6 +234,7 @@ def run_update_job(db: Session, job_id: int) -> None:
         failure_text = redact_secrets(failure_text, [server_password, server_sudo_password])
         step_text = "\n".join(step_logs)
         job.output = f"[summary]\nUpdate failed\n\n[steps]\n{step_text}\n\n[error]\n{failure_text}".strip()
+        job.summary = "Update failed"
         job.finished_at = datetime.utcnow()
         db.commit()
     finally:

@@ -60,6 +60,7 @@ def ensure_schema_columns() -> None:
     statements = [
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS cron_expression VARCHAR(120)",
         "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
+        "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS summary VARCHAR(255)",
     ]
     with engine.begin() as conn:
         for statement in statements:

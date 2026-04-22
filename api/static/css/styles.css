@@ -360,6 +360,10 @@ td {
   border-bottom: 1px solid #e4dbc8;
 }
 
+.selected-job-row td {
+  background: rgba(0, 107, 107, 0.08);
+}
+
 .status {
   display: inline-block;
   border-radius: 999px;

@@ -317,11 +317,16 @@ function renderStatus(status) {
   return `<span class="status status-${status}">${status}</span>`;
 }
 
-function formatOutputPreview(output) {
-  if (!output) {
+function formatOutputPreview(job) {
+  if (job.summary) {
+    return escapeHtml(job.summary);
+  }
+
+  if (job.status === "pending" || job.status === "running") {
     return "-";
   }
-  return output.replace(/\s+/g, " ").slice(0, 120);
+
+  return "Update completed";
 }
 
 function escapeHtml(value) {
@@ -343,7 +348,7 @@ function renderJobRow(job) {
         <td>${escapeHtml(job.created_at)}</td>
         <td>${escapeHtml(job.started_at || "-")}</td>
         <td>${escapeHtml(job.finished_at || "-")}</td>
-        <td>${escapeHtml(formatOutputPreview(job.output))}</td>
+        <td>${formatOutputPreview(job)}</td>
         <td><button type="button" class="btn-secondary" data-view-job="${job.id}">View output</button></td>
       </tr>
     `;
@@ -358,6 +363,17 @@ function setDisplayedJobOutput(job) {
   if (selectedJobLabel) {
     selectedJobLabel.textContent = `job #${job.id}`;
   }
+
+  const logDetails = latestLog.closest("details");
+  if (logDetails) {
+    logDetails.open = true;
+  }
+
+  document.querySelectorAll("#jobs-body tr").forEach((row) => {
+    row.classList.remove("selected-job-row");
+  });
+  const selectedRow = document.querySelector(`#jobs-body tr[data-job-id="${job.id}"]`);
+  selectedRow?.classList.add("selected-job-row");
 }
 
 async function viewJobOutput(jobId) {
@@ -410,11 +426,8 @@ async function loadJobs() {
 
 jobsBody?.addEventListener("click", async (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLElement)) {
-    return;
-  }
-
-  const button = target.closest("button[data-view-job]");
+  const element = target instanceof Element ? target : target?.parentElement;
+  const button = element?.closest("button[data-view-job]");
   if (!button) {
     return;
   }

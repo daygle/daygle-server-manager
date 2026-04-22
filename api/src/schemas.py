@@ -67,6 +67,7 @@ class UpdateJobRead(BaseModel):
     status: str
     command: str
     output: str | None
+    summary: str | None
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
