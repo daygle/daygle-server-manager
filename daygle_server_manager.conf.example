@@ -3,4 +3,5 @@
 # SSH keys are managed through the web interface — no file path needed.
 
 SESSION_SECRET=replace-with-long-random-secret
+POSTGRES_PASSWORD=replace-with-db-password
 DATABASE_URL=postgresql+psycopg2://daygle_server_manager:change_me@db:5432/daygle_server_manager

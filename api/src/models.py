@@ -66,3 +66,25 @@ class UpdateJob(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
     server: Mapped[Server] = relationship("Server", back_populates="update_jobs")
+
+
+class UpdateSchedule(Base):
+    __tablename__ = "update_schedules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    server_ids_raw: Mapped[str] = mapped_column("server_ids", Text, nullable=False)
+    package_manager: Mapped[str] = mapped_column(String(20), nullable=False, default="auto")
+    interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    @property
+    def server_ids(self) -> list[int]:
+        return [int(value) for value in self.server_ids_raw.split(",") if value.strip()]
+
+    @server_ids.setter
+    def server_ids(self, values: list[int]) -> None:
+        self.server_ids_raw = ",".join(str(value) for value in values)

@@ -39,7 +39,8 @@ The `.conf.example` file documents every available key:
 | Key | Description |
 |-----|-------------|
 | `SESSION_SECRET` | Random hex string used to sign session cookies. Generated automatically by `setup.sh`. |
-| `DATABASE_URL` | PostgreSQL DSN. Default targets the compose `db` service. Change password here **and** in `docker-compose.yml` together. |
+| `POSTGRES_PASSWORD` | Password used by the PostgreSQL container. Automatically synchronized by `setup.sh` from `DATABASE_URL`. |
+| `DATABASE_URL` | PostgreSQL DSN used by API/worker. `setup.sh` keeps its password in sync with `POSTGRES_PASSWORD`. |
 
 ## Quick Start (Docker Compose Only)
 
@@ -51,7 +52,7 @@ cd daygle-server-manager
 
 # Configure (generates conf file and session secret)
 bash setup.sh
-# Edit daygle_server_manager.conf to change DB password if needed
+# Edit daygle_server_manager.conf if needed
 
 # Start system
 docker compose up -d --build
@@ -89,7 +90,8 @@ Common checks:
 - `daygle_server_manager.conf` missing: run `bash setup.sh` again in the repo root.
 - Web UI does not load on port `8000`: confirm nothing else is already bound to `8000` on the host.
 - `api` container keeps restarting: check `docker compose logs api` for config or dependency errors.
-- Database connection/authentication errors: make sure `DATABASE_URL` in `daygle_server_manager.conf` matches the PostgreSQL credentials in [docker-compose.yml](/workspaces/daygle-server-manager/docker-compose.yml).
+- Database connection/authentication errors: run `bash setup.sh` again to re-sync DB password values in `daygle_server_manager.conf`, then restart containers.
+- Existing `db/data` keeps the original DB password from first initialization. If password changed later, either restore the old password in `daygle_server_manager.conf` or reset `db/data` for a fresh DB.
 - Database fails to start: verify [db/data](/workspaces/daygle-server-manager/db/data) is writable by Docker on the host.
 - Changes to config not taking effect: restart the stack with `docker compose up -d --build` after editing the conf file.
 - SSH updates fail after login works: confirm the target server has your public key in `~/.ssh/authorized_keys`, the selected SSH key in `/ssh-keys` matches that public key, and the remote user can run `sudo` if required.
