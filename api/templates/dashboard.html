@@ -30,6 +30,7 @@
           <th>Status</th>
           <th>Package Manager</th>
           <th>Created</th>
+          <th>Details</th>
         </tr>
       </thead>
       <tbody>
@@ -40,10 +41,11 @@
           <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
           <td>{{ job.package_manager }}</td>
           <td>{{ job.created_at }}</td>
+          <td>{{ (job.output or '-')[:120] }}</td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="5">No jobs yet.</td>
+          <td colspan="6">No jobs yet.</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -123,6 +123,23 @@ docker compose up -d
 - `/help`
 - `/about`
 
+## Scheduling Updates
+
+- Open `/updates` and create a schedule with name, server targets, package manager, and a cron expression.
+- Schedules run automatically in the background while the API service is running.
+- You can enable, disable, and delete schedules from the same page.
+
+Examples:
+
+- `0 2 * * *` (daily at 02:00 UTC)
+- `0 */6 * * *` (every 6 hours)
+- `30 3 * * 0` (every Sunday at 03:30 UTC)
+
+## Editing Servers
+
+- Open `/servers`, click Edit on any row, update fields, then click Update Server.
+- Use Cancel Edit to return to create mode.
+
 ## Update Script
 
 ```bash

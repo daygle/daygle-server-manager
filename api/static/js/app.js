@@ -4,11 +4,15 @@ const sidebarMobileToggle = document.getElementById("sidebarMobileToggle");
 
 const serverForm = document.getElementById("server-form");
 const runForm = document.getElementById("run-form");
+const scheduleForm = document.getElementById("schedule-form");
 const jobsBody = document.getElementById("jobs-body");
+const schedulesBody = document.getElementById("schedules-body");
 const latestLog = document.getElementById("latest-log");
 const authMethod = document.getElementById("auth_method");
 const passwordLabel = document.getElementById("password_label");
 const keyLabel = document.getElementById("key_label");
+const cancelEditBtn = document.getElementById("cancel_edit_btn");
+const saveServerBtn = document.getElementById("save_server_btn");
 
 if (sidebar && localStorage.getItem("sidebarCollapsed") === "true") {
   sidebar.classList.add("collapsed");
@@ -27,9 +31,31 @@ sidebarMobileToggle?.addEventListener("click", () => {
 });
 
 function toggleAuthFields() {
+  if (!authMethod || !passwordLabel || !keyLabel) {
+    return;
+  }
+
   const isPassword = authMethod.value === "password";
+  const passwordInput = passwordLabel.querySelector('input[name="password"]');
+  const keySelect = keyLabel.querySelector('select[name="ssh_key_id"]');
+
   passwordLabel.classList.toggle("hidden", !isPassword);
   keyLabel.classList.toggle("hidden", isPassword);
+
+  if (passwordInput) {
+    passwordInput.required = isPassword;
+    if (!isPassword) {
+      passwordInput.value = "";
+    }
+  }
+
+  if (keySelect) {
+    keySelect.disabled = isPassword;
+    keySelect.required = !isPassword;
+    if (isPassword) {
+      keySelect.value = "";
+    }
+  }
 }
 
 authMethod?.addEventListener("change", toggleAuthFields);
@@ -40,6 +66,7 @@ if (authMethod && passwordLabel && keyLabel) {
 serverForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(serverForm);
+  const serverId = formData.get("server_id");
 
   const payload = {
     name: formData.get("name"),
@@ -48,23 +75,97 @@ serverForm?.addEventListener("submit", async (event) => {
     username: formData.get("username"),
     auth_method: formData.get("auth_method"),
     password: formData.get("password") || null,
-      ssh_key_id: formData.get("ssh_key_id") ? Number(formData.get("ssh_key_id")) : null,
+    ssh_key_id: formData.get("ssh_key_id") ? Number(formData.get("ssh_key_id")) : null,
     sudo_password: formData.get("sudo_password") || null,
   };
 
-  const response = await fetch("/api/servers", {
-    method: "POST",
+  if (!payload.password) {
+    delete payload.password;
+  }
+
+  const endpoint = serverId ? `/api/servers/${serverId}` : "/api/servers";
+  const method = serverId ? "PUT" : "POST";
+
+  const response = await fetch(endpoint, {
+    method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    alert(error.detail || "Failed to add server");
+    alert(error.detail || "Failed to save server");
     return;
   }
 
+  serverForm.reset();
+  const serverIdInput = serverForm.querySelector('input[name="server_id"]');
+  if (serverIdInput) {
+    serverIdInput.value = "";
+  }
+  if (cancelEditBtn) {
+    cancelEditBtn.classList.add("hidden");
+  }
+  if (saveServerBtn) {
+    saveServerBtn.textContent = "Save Server";
+  }
   window.location.reload();
+});
+
+document.querySelectorAll("[data-edit-server]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const row = button.closest("tr");
+    if (!row || !serverForm) {
+      return;
+    }
+
+    const setField = (name, value) => {
+      const field = serverForm.querySelector(`[name="${name}"]`);
+      if (field) {
+        field.value = value || "";
+      }
+    };
+
+    setField("server_id", row.dataset.serverId);
+    setField("name", row.dataset.serverName);
+    setField("host", row.dataset.serverHost);
+    setField("port", row.dataset.serverPort);
+    setField("username", row.dataset.serverUsername);
+    setField("auth_method", row.dataset.serverAuth);
+    setField("ssh_key_id", row.dataset.serverSshKeyId || "");
+    setField("sudo_password", "");
+    setField("password", "");
+
+    toggleAuthFields();
+    const passwordInput = serverForm.querySelector('input[name="password"]');
+    if (passwordInput && row.dataset.serverAuth === "password") {
+      passwordInput.placeholder = "Leave blank to keep current password";
+    }
+
+    if (saveServerBtn) {
+      saveServerBtn.textContent = "Update Server";
+    }
+    if (cancelEditBtn) {
+      cancelEditBtn.classList.remove("hidden");
+    }
+    serverForm.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+});
+
+cancelEditBtn?.addEventListener("click", () => {
+  if (!serverForm) {
+    return;
+  }
+  serverForm.reset();
+  const serverIdInput = serverForm.querySelector('input[name="server_id"]');
+  if (serverIdInput) {
+    serverIdInput.value = "";
+  }
+  if (saveServerBtn) {
+    saveServerBtn.textContent = "Save Server";
+  }
+  cancelEditBtn.classList.add("hidden");
+  toggleAuthFields();
 });
 
 document.querySelectorAll("[data-delete-server]").forEach((button) => {
@@ -122,6 +223,13 @@ function renderStatus(status) {
   return `<span class="status status-${status}">${status}</span>`;
 }
 
+function formatOutputPreview(output) {
+  if (!output) {
+    return "-";
+  }
+  return output.replace(/\s+/g, " ").slice(0, 120);
+}
+
 async function loadJobs() {
   if (!jobsBody || !latestLog) {
     return;
@@ -144,6 +252,7 @@ async function loadJobs() {
         <td>${job.created_at}</td>
         <td>${job.started_at || "-"}</td>
         <td>${job.finished_at || "-"}</td>
+        <td>${formatOutputPreview(job.output)}</td>
       </tr>
     `
     )
@@ -153,6 +262,76 @@ async function loadJobs() {
     latestLog.textContent = jobs[0].output || "No output yet for latest job.";
   }
 }
+
+scheduleForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const scheduleServers = [...document.querySelectorAll("#schedule-server-checks input:checked")].map((x) => Number(x.value));
+  if (scheduleServers.length === 0) {
+    alert("Select at least one server for this schedule");
+    return;
+  }
+
+  const payload = {
+    name: document.getElementById("schedule_name")?.value,
+    cron_expression: document.getElementById("cron_expression")?.value,
+    package_manager: document.getElementById("schedule_package_manager")?.value || "auto",
+    server_ids: scheduleServers,
+    enabled: true,
+  };
+
+  const response = await fetch("/api/schedules", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    alert(error.detail || "Failed to create schedule");
+    return;
+  }
+
+  window.location.reload();
+});
+
+document.querySelectorAll("[data-toggle-schedule]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const scheduleId = button.getAttribute("data-toggle-schedule");
+    if (!scheduleId) {
+      return;
+    }
+
+    const response = await fetch(`/api/schedules/${scheduleId}/toggle`, { method: "POST" });
+    if (!response.ok) {
+      const error = await response.json();
+      alert(error.detail || "Failed to toggle schedule");
+      return;
+    }
+    window.location.reload();
+  });
+});
+
+document.querySelectorAll("[data-delete-schedule]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const scheduleId = button.getAttribute("data-delete-schedule");
+    if (!scheduleId) {
+      return;
+    }
+
+    if (!window.confirm("Delete this schedule?")) {
+      return;
+    }
+
+    const response = await fetch(`/api/schedules/${scheduleId}`, { method: "DELETE" });
+    if (!response.ok) {
+      const error = await response.json();
+      alert(error.detail || "Failed to delete schedule");
+      return;
+    }
+    window.location.reload();
+  });
+});
 
 if (jobsBody) {
   setInterval(loadJobs, 5000);

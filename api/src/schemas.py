@@ -30,6 +30,17 @@ class ServerCreate(BaseModel):
     sudo_password: str | None = None
 
 
+class ServerUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    host: str | None = Field(default=None, min_length=1, max_length=255)
+    port: int | None = Field(default=None, ge=1, le=65535)
+    username: str | None = Field(default=None, min_length=1, max_length=120)
+    auth_method: str | None = Field(default=None, pattern="^(key|password)$")
+    password: str | None = None
+    ssh_key_id: int | None = None
+    sudo_password: str | None = None
+
+
 class ServerRead(BaseModel):
     id: int
     name: str
@@ -58,6 +69,31 @@ class UpdateJobRead(BaseModel):
     output: str | None
     started_at: datetime | None
     finished_at: datetime | None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UpdateScheduleCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    server_ids: list[int] = Field(min_length=1)
+    package_manager: str = Field(default="auto", pattern="^(auto|apt|dnf|yum)$")
+    cron_expression: str = Field(min_length=5, max_length=120)
+    interval_minutes: int | None = Field(default=None, ge=5, le=10080)
+    enabled: bool = True
+
+
+class UpdateScheduleRead(BaseModel):
+    id: int
+    name: str
+    server_ids: list[int]
+    package_manager: str
+    cron_expression: str | None
+    interval_minutes: int
+    enabled: bool
+    next_run_at: datetime
+    last_run_at: datetime | None
     created_at: datetime
 
     class Config:

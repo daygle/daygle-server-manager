@@ -5,22 +5,57 @@
 
 {% block content %}
 <section class="panel prose">
-  <h2>System Update Commands</h2>
-  <p>This project includes a CLI update script similar to your mail-archiver repo workflow.</p>
+  <h2>Website Functions</h2>
 
-  <h3>Check for updates</h3>
-  <pre><code>./update.sh --check</code></pre>
+  <h3>1. Add a server</h3>
+  <p>Go to <strong>Servers</strong> and fill out:</p>
+  <ul>
+    <li><strong>Name</strong>: Friendly display name (must be unique)</li>
+    <li><strong>Host</strong>: IP or DNS name</li>
+    <li><strong>Port</strong>: Usually 22</li>
+    <li><strong>Username</strong>: Remote Linux user</li>
+    <li><strong>Auth Method</strong>: SSH Key or Password</li>
+    <li><strong>Sudo Password</strong>: Optional; needed only if sudo prompts for it</li>
+  </ul>
+  <p>Click <strong>Save Server</strong>. To modify an existing server, use <strong>Edit</strong> in the table and then <strong>Update Server</strong>.</p>
 
-  <h3>Interactive update</h3>
-  <pre><code>./update.sh</code></pre>
+  <h3>2. Run updates now</h3>
+  <p>Go to <strong>System Updates</strong>:</p>
+  <ul>
+    <li>Select one or more target servers</li>
+    <li>Choose package manager (or Auto detect)</li>
+    <li>Click <strong>Start Update</strong></li>
+  </ul>
+  <p>Watch progress in the jobs table and open <strong>Latest job output</strong> for full logs.</p>
 
-  <h3>Unattended update</h3>
-  <pre><code>./update.sh --force</code></pre>
+  <h3>3. Create cron schedules</h3>
+  <p>In <strong>System Updates → Schedules</strong>:</p>
+  <ul>
+    <li>Set a schedule name</li>
+    <li>Enter a cron expression (server time in UTC)</li>
+    <li>Select target servers and package manager</li>
+    <li>Click <strong>Create Schedule</strong></li>
+  </ul>
+  <p>Example cron expressions:</p>
+  <pre><code>0 2 * * *      # daily at 02:00 UTC
+0 */6 * * *    # every 6 hours
+30 3 * * 0     # every Sunday at 03:30 UTC</code></pre>
+  <p>Use <strong>Enable/Disable</strong> and <strong>Delete</strong> in the schedule table to manage existing schedules.</p>
 
-  <h3>Update but do not restart containers</h3>
-  <pre><code>./update.sh --skip-start</code></pre>
+  <h3>4. Understand failures</h3>
+  <p>Dashboard and Updates tables include a <strong>Details</strong> column with a failure snippet. For full context, open <strong>Latest job output</strong>.</p>
+  <ul>
+    <li><strong>Auth failed</strong>: verify username/password or SSH key</li>
+    <li><strong>sudo errors</strong>: verify sudo password or sudo rights</li>
+    <li><strong>package manager unknown</strong>: host may not be apt/dnf/yum based</li>
+    <li><strong>timeout/unreachable</strong>: network, DNS, firewall, or host offline</li>
+  </ul>
 
-  <h3>Show options</h3>
-  <pre><code>./update.sh --help</code></pre>
+  <h3>5. Update this application</h3>
+  <pre><code>bash update.sh --check
+bash update.sh
+bash update.sh --force
+bash update.sh --skip-start
+bash update.sh --help</code></pre>
 </section>
 {% endblock %}

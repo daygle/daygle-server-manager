@@ -1,21 +1,33 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Thread
+from time import sleep
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from croniter import croniter
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from .config import get_setting
 from .database import Base, SessionLocal, engine, get_db
-from .models import SSHKey, Server, UpdateJob, User
-from .schemas import SSHKeyCreate, SSHKeyRead, ServerCreate, ServerRead, UpdateJobRead, UpdateRequest
+from .models import SSHKey, Server, UpdateJob, UpdateSchedule, User
+from .schemas import (
+    SSHKeyCreate,
+    SSHKeyRead,
+    ServerCreate,
+    ServerRead,
+    ServerUpdate,
+    UpdateJobRead,
+    UpdateRequest,
+    UpdateScheduleCreate,
+    UpdateScheduleRead,
+)
 from .security import hash_password, verify_password
 from .ssh_updater import run_update_job
 
@@ -36,6 +48,75 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    ensure_schedule_columns()
+    if not getattr(app.state, "schedule_worker_started", False):
+        app.state.schedule_worker_started = True
+        thread = Thread(target=run_schedule_loop, daemon=True)
+        thread.start()
+
+
+def ensure_schedule_columns() -> None:
+    # Add new schedule fields on existing databases without requiring migrations.
+    statements = [
+        "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS cron_expression VARCHAR(120)",
+    ]
+    with engine.begin() as conn:
+        for statement in statements:
+            conn.execute(text(statement))
+
+
+def get_next_schedule_run(schedule: UpdateSchedule, from_time: datetime | None = None) -> datetime:
+    base_time = from_time or datetime.utcnow()
+    if schedule.cron_expression:
+        return croniter(schedule.cron_expression, base_time).get_next(datetime)
+    return base_time + timedelta(minutes=schedule.interval_minutes)
+
+
+def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str) -> list[int]:
+    created_jobs: list[int] = []
+    for server in servers:
+        job = UpdateJob(
+            server_id=server.id,
+            package_manager=package_manager,
+            status="pending",
+            command="Pending package manager detection...",
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        created_jobs.append(job.id)
+        thread = Thread(target=process_job_async, args=(job.id,), daemon=True)
+        thread.start()
+
+    return created_jobs
+
+
+def run_schedule_loop() -> None:
+    while True:
+        db = SessionLocal()
+        try:
+            now = datetime.utcnow()
+            due_schedules = (
+                db.query(UpdateSchedule)
+                .filter(UpdateSchedule.enabled.is_(True), UpdateSchedule.next_run_at <= now)
+                .all()
+            )
+
+            for schedule in due_schedules:
+                servers = db.query(Server).filter(Server.id.in_(schedule.server_ids)).all()
+                if servers:
+                    enqueue_update_jobs(db, servers, schedule.package_manager)
+
+                schedule.last_run_at = now
+                schedule.next_run_at = get_next_schedule_run(schedule, now)
+                db.commit()
+        except Exception as exc:
+            print(f"[schedule-worker] error: {type(exc).__name__}: {exc}")
+        finally:
+            db.close()
+
+        sleep(30)
 
 
 def process_job_async(job_id: int) -> None:
@@ -286,6 +367,7 @@ def updates_page(request: Request, db: Session = Depends(get_db)):
 
     servers = db.query(Server).order_by(Server.name.asc()).all()
     jobs = db.query(UpdateJob).order_by(UpdateJob.created_at.desc()).limit(30).all()
+    schedules = db.query(UpdateSchedule).order_by(UpdateSchedule.created_at.desc()).all()
     return render_app_template(
         request,
         "updates.html",
@@ -293,6 +375,7 @@ def updates_page(request: Request, db: Session = Depends(get_db)):
         current_user,
         servers=servers,
         jobs=jobs,
+        schedules=schedules,
     )
 
 
@@ -583,6 +666,59 @@ def create_server(server_data: ServerCreate, request: Request, db: Session = Dep
     return server
 
 
+@app.put("/api/servers/{server_id}", response_model=ServerRead)
+def update_server(server_id: int, payload: ServerUpdate, request: Request, db: Session = Depends(get_db)):
+    require_api_user(request, db, admin=True)
+
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    updates = payload.model_dump(exclude_unset=True)
+
+    if "name" in updates:
+        clean_name = (updates.get("name") or "").strip()
+        if not clean_name:
+            raise HTTPException(status_code=400, detail="Server name cannot be empty")
+        existing = db.query(Server).filter(Server.name == clean_name, Server.id != server_id).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Server name already exists")
+        server.name = clean_name
+
+    if "host" in updates:
+        server.host = (updates.get("host") or "").strip()
+    if "port" in updates and updates.get("port") is not None:
+        server.port = updates["port"]
+    if "username" in updates:
+        server.username = (updates.get("username") or "").strip()
+
+    auth_method = updates.get("auth_method", server.auth_method)
+    if auth_method == "password":
+        password = updates.get("password")
+        if password:
+            server.password = password
+        if not server.password:
+            raise HTTPException(status_code=400, detail="SSH password is required for password auth")
+        server.auth_method = "password"
+        server.ssh_key_id = None
+    elif auth_method == "key":
+        ssh_key_id = updates.get("ssh_key_id", server.ssh_key_id)
+        if not ssh_key_id:
+            raise HTTPException(status_code=400, detail="SSH key is required for key auth")
+        if not db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first():
+            raise HTTPException(status_code=400, detail="Selected SSH key does not exist")
+        server.auth_method = "key"
+        server.ssh_key_id = ssh_key_id
+        server.password = None
+
+    if "sudo_password" in updates:
+        server.sudo_password = updates.get("sudo_password") or None
+
+    db.commit()
+    db.refresh(server)
+    return server
+
+
 @app.get("/api/servers", response_model=list[ServerRead])
 def list_servers(request: Request, db: Session = Depends(get_db)):
     require_api_user(request, db)
@@ -610,23 +746,75 @@ def run_updates(payload: UpdateRequest, request: Request, db: Session = Depends(
     if not servers:
         raise HTTPException(status_code=404, detail="No matching servers found")
 
-    created_jobs: list[int] = []
-    for server in servers:
-        job = UpdateJob(
-            server_id=server.id,
-            package_manager=payload.package_manager,
-            status="pending",
-            command="Pending package manager detection...",
-        )
-        db.add(job)
-        db.commit()
-        db.refresh(job)
-
-        created_jobs.append(job.id)
-        thread = Thread(target=process_job_async, args=(job.id,), daemon=True)
-        thread.start()
+    created_jobs = enqueue_update_jobs(db, servers, payload.package_manager)
 
     return {"job_ids": created_jobs}
+
+
+@app.post("/api/schedules", response_model=UpdateScheduleRead)
+def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session = Depends(get_db)):
+    require_api_user(request, db, admin=True)
+
+    if db.query(UpdateSchedule).filter(UpdateSchedule.name == payload.name).first():
+        raise HTTPException(status_code=400, detail="Schedule name already exists")
+
+    servers = db.query(Server).filter(Server.id.in_(payload.server_ids)).all()
+    if len(servers) != len(set(payload.server_ids)):
+        raise HTTPException(status_code=400, detail="One or more servers in the schedule do not exist")
+
+    cron_expr = payload.cron_expression.strip()
+    if not croniter.is_valid(cron_expr):
+        raise HTTPException(status_code=400, detail="Invalid cron expression")
+
+    schedule = UpdateSchedule(
+        name=payload.name.strip(),
+        package_manager=payload.package_manager,
+        cron_expression=cron_expr,
+        interval_minutes=payload.interval_minutes or 60,
+        enabled=payload.enabled,
+        next_run_at=croniter(cron_expr, datetime.utcnow()).get_next(datetime),
+    )
+    schedule.server_ids = sorted(set(payload.server_ids))
+
+    db.add(schedule)
+    db.commit()
+    db.refresh(schedule)
+    return schedule
+
+
+@app.get("/api/schedules", response_model=list[UpdateScheduleRead])
+def list_schedules(request: Request, db: Session = Depends(get_db)):
+    require_api_user(request, db)
+    return db.query(UpdateSchedule).order_by(UpdateSchedule.created_at.desc()).all()
+
+
+@app.post("/api/schedules/{schedule_id}/toggle", response_model=UpdateScheduleRead)
+def toggle_schedule(schedule_id: int, request: Request, db: Session = Depends(get_db)):
+    require_api_user(request, db, admin=True)
+
+    schedule = db.query(UpdateSchedule).filter(UpdateSchedule.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    schedule.enabled = not schedule.enabled
+    if schedule.enabled:
+        schedule.next_run_at = get_next_schedule_run(schedule, datetime.utcnow())
+    db.commit()
+    db.refresh(schedule)
+    return schedule
+
+
+@app.delete("/api/schedules/{schedule_id}")
+def delete_schedule(schedule_id: int, request: Request, db: Session = Depends(get_db)):
+    require_api_user(request, db, admin=True)
+
+    schedule = db.query(UpdateSchedule).filter(UpdateSchedule.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    db.delete(schedule)
+    db.commit()
+    return {"message": "Schedule deleted"}
 
 
 @app.get("/api/updates", response_model=list[UpdateJobRead])

@@ -75,6 +75,7 @@ class UpdateSchedule(Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
     server_ids_raw: Mapped[str] = mapped_column("server_ids", Text, nullable=False)
     package_manager: Mapped[str] = mapped_column(String(20), nullable=False, default="auto")
+    cron_expression: Mapped[str | None] = mapped_column(String(120), nullable=True)
     interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     next_run_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

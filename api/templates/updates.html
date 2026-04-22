@@ -33,6 +33,87 @@
 </section>
 
 <section class="panel">
+  <h2>Schedules</h2>
+  <form id="schedule-form" class="grid-form">
+    <label>
+      Schedule Name
+      <input id="schedule_name" name="name" required placeholder="Nightly patch window" />
+    </label>
+    <label>
+      Cron Expression
+      <input id="cron_expression" name="cron_expression" required placeholder="0 2 * * *" />
+      <small class="field-help">Example: <code>0 2 * * *</code> runs daily at 02:00 UTC.</small>
+    </label>
+    <label>
+      Package Manager
+      <select id="schedule_package_manager" name="package_manager">
+        <option value="auto" selected>Auto detect</option>
+        <option value="apt">apt</option>
+        <option value="dnf">dnf</option>
+        <option value="yum">yum</option>
+      </select>
+    </label>
+
+    <div style="grid-column: 1 / -1;">
+      <div class="stat-label" style="margin-bottom: 6px;">Target Servers</div>
+      <div class="server-checks" id="schedule-server-checks">
+        {% for server in servers %}
+        <label class="check-item">
+          <input type="checkbox" value="{{ server.id }}" />
+          <span>{{ server.name }} ({{ server.host }})</span>
+        </label>
+        {% else %}
+        <p>Add servers first from the Servers page.</p>
+        {% endfor %}
+      </div>
+    </div>
+    <button type="submit">Create Schedule</button>
+  </form>
+
+  <div class="table-wrap" style="margin-top: 1rem;">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Servers</th>
+          <th>Schedule</th>
+          <th>Next Run</th>
+          <th>Last Run</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="schedules-body">
+        {% for schedule in schedules %}
+        <tr>
+          <td>{{ schedule.name }}</td>
+          <td>{{ schedule.server_ids|join(', ') }}</td>
+          <td>{{ schedule.cron_expression or ('every ' ~ schedule.interval_minutes ~ ' min (legacy)') }}</td>
+          <td>{{ schedule.next_run_at }}</td>
+          <td>{{ schedule.last_run_at or '-' }}</td>
+          <td>
+            <span class="status {% if schedule.enabled %}status-success{% else %}status-failed{% endif %}">
+              {{ 'enabled' if schedule.enabled else 'disabled' }}
+            </span>
+          </td>
+          <td>
+            <button type="button" class="btn-secondary" data-toggle-schedule="{{ schedule.id }}">
+              {{ 'Disable' if schedule.enabled else 'Enable' }}
+            </button>
+            <button type="button" class="btn-danger" data-delete-schedule="{{ schedule.id }}">Delete</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7">No schedules configured.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="panel">
   <h2>Update Jobs</h2>
   <div class="table-wrap">
     <table>
@@ -45,6 +126,7 @@
           <th>Created</th>
           <th>Started</th>
           <th>Finished</th>
+          <th>Details</th>
         </tr>
       </thead>
       <tbody id="jobs-body">
@@ -57,10 +139,11 @@
           <td>{{ job.created_at }}</td>
           <td>{{ job.started_at or '-' }}</td>
           <td>{{ job.finished_at or '-' }}</td>
+          <td>{{ (job.output or '-')[:120] }}</td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="7">No jobs yet.</td>
+          <td colspan="8">No jobs yet.</td>
         </tr>
         {% endfor %}
       </tbody>

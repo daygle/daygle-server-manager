@@ -239,6 +239,10 @@ h3 {
   gap: 12px;
 }
 
+.grid-form > * {
+  min-width: 0;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -253,6 +257,8 @@ button {
   border: 1px solid #d8cfbe;
   padding: 10px;
   min-height: 42px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 button {
@@ -269,10 +275,34 @@ button:hover {
   box-shadow: 0 6px 18px rgba(0, 107, 107, 0.28);
 }
 
+.grid-form button[type="submit"] {
+  grid-column: 1 / -1;
+  width: auto;
+  justify-self: start;
+  padding-inline: 16px;
+}
+
+.field-help {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
 .btn-danger {
   min-height: 34px;
   padding: 4px 12px;
   background: linear-gradient(135deg, #a03221, #b63b2b);
+}
+
+.btn-secondary {
+  min-height: 34px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #44546b, #58708d);
+}
+
+td .btn-secondary,
+td .btn-danger {
+  margin-right: 6px;
 }
 
 .run-form {
