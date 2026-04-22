@@ -9,6 +9,14 @@ from sqlalchemy.orm import Session
 from .models import Server, UpdateJob
 
 
+def redact_secrets(text: str, secrets: list[str | None]) -> str:
+    redacted = text
+    for secret in secrets:
+        if secret:
+            redacted = redacted.replace(secret, "[REDACTED]")
+    return redacted
+
+
 def detect_package_manager(client: paramiko.SSHClient) -> str:
     detection_command = (
         "if command -v apt-get >/dev/null 2>&1; then echo apt; "
@@ -95,6 +103,7 @@ def run_update_job(db: Session, job_id: int) -> None:
 
         sudo_password = server.sudo_password or server.password
         exit_code, output = run_remote_command(client, command, sudo_password)
+        output = redact_secrets(output, [server.password, server.sudo_password])
 
         job.status = "success" if exit_code == 0 else "failed"
         job.output = output
@@ -102,7 +111,8 @@ def run_update_job(db: Session, job_id: int) -> None:
         db.commit()
     except Exception as exc:
         job.status = "failed"
-        job.output = f"{type(exc).__name__}: {exc}"
+        failure_text = f"{type(exc).__name__}: {exc}"
+        job.output = redact_secrets(failure_text, [server.password, server.sudo_password])
         job.finished_at = datetime.utcnow()
         db.commit()
     finally:
