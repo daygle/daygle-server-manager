@@ -59,7 +59,7 @@ class UpdateJob(Base):
     server_id: Mapped[int] = mapped_column(ForeignKey("servers.id"), nullable=False)
     package_manager: Mapped[str] = mapped_column(String(20), nullable=False, default="auto")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
-    command: Mapped[str] = mapped_column(String(255), nullable=False)
+    command: Mapped[str] = mapped_column(Text, nullable=False)
     output: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

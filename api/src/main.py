@@ -48,17 +48,18 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
-    ensure_schedule_columns()
+    ensure_schema_columns()
     if not getattr(app.state, "schedule_worker_started", False):
         app.state.schedule_worker_started = True
         thread = Thread(target=run_schedule_loop, daemon=True)
         thread.start()
 
 
-def ensure_schedule_columns() -> None:
-    # Add new schedule fields on existing databases without requiring migrations.
+def ensure_schema_columns() -> None:
+    # Add compatibility columns/types on existing databases without requiring migrations.
     statements = [
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS cron_expression VARCHAR(120)",
+        "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
     ]
     with engine.begin() as conn:
         for statement in statements:

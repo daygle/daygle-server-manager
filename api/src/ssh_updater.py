@@ -156,6 +156,8 @@ def run_update_job(db: Session, job_id: int) -> None:
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     step_logs: list[str] = []
+    server_password = server.password
+    server_sudo_password = server.sudo_password
 
     try:
         step_logs.append(f"[{datetime.utcnow().isoformat()}] Starting update job")
@@ -197,7 +199,7 @@ def run_update_job(db: Session, job_id: int) -> None:
 
         sudo_password = server.sudo_password or server.password
         exit_code, output, timed_out = run_remote_command(client, command, sudo_password)
-        output = redact_secrets(output, [server.password, server.sudo_password])
+        output = redact_secrets(output, [server_password, server_sudo_password])
         summary = summarize_update_result(package_manager, output, exit_code, timed_out)
 
         # Common lock wording for apt/dpkg. Keep message concise and actionable.
@@ -223,9 +225,11 @@ def run_update_job(db: Session, job_id: int) -> None:
         job.finished_at = datetime.utcnow()
         db.commit()
     except Exception as exc:
+        # If the first write failed (e.g., DB constraint), clear transaction state first.
+        db.rollback()
         job.status = "failed"
         failure_text = f"{type(exc).__name__}: {exc}"
-        failure_text = redact_secrets(failure_text, [server.password, server.sudo_password])
+        failure_text = redact_secrets(failure_text, [server_password, server_sudo_password])
         step_text = "\n".join(step_logs)
         job.output = f"[summary]\nUpdate failed\n\n[steps]\n{step_text}\n\n[error]\n{failure_text}".strip()
         job.finished_at = datetime.utcnow()
