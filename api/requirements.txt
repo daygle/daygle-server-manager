@@ -7,3 +7,4 @@ python-multipart==0.0.20
 passlib[bcrypt]==1.7.4
 psycopg2-binary==2.9.10
 cryptography>=42.0.0
+itsdangerous>=2.2.0
