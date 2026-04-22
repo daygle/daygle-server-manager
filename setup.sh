@@ -69,9 +69,25 @@ else
         echo ""
         echo "Database password setup"
         echo "Press Enter to use an auto-generated password, or type your own."
-        read -r -s -p "DB password: " INPUT_PASSWORD
-        echo ""
-        DB_PASSWORD="$INPUT_PASSWORD"
+
+        while true; do
+            read -r -s -p "Database Password: " INPUT_PASSWORD
+            echo ""
+
+            if [[ -z "$INPUT_PASSWORD" ]]; then
+                break
+            fi
+
+            read -r -s -p "Confirm Database Password: " CONFIRM_PASSWORD
+            echo ""
+
+            if [[ "$INPUT_PASSWORD" == "$CONFIRM_PASSWORD" ]]; then
+                DB_PASSWORD="$INPUT_PASSWORD"
+                break
+            fi
+
+            echo -e "${RED}Passwords do not match. Try again.${NC}"
+        done
     fi
 
     if [[ -z "$DB_PASSWORD" ]]; then
@@ -96,14 +112,4 @@ if [[ -f daygle_server_manager.conf ]]; then
     fi
 fi
 
-# ---------------------------------------------------------------------------
-# 2. Summary
-# ---------------------------------------------------------------------------
 echo -e "${GREEN}Setup complete!${NC}"
-echo ""
-echo "Next steps:"
-echo "  1. Edit daygle_server_manager.conf if you need to change settings."
-echo "  2. Run: docker compose up -d"
-echo "  3. Open http://localhost:8000 to create your admin account."
-echo "  4. Go to SSH Keys in the web interface to generate or import an SSH key."
-echo "  5. Copy the displayed public key to each server you want to manage."
