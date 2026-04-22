@@ -52,6 +52,7 @@ cd daygle-server-manager
 
 # Configure (generates conf file and session secret)
 bash setup.sh
+# setup.sh prompts for DB password (Enter = auto-generate)
 # Edit daygle_server_manager.conf if needed
 
 # Start system

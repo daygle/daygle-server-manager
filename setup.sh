@@ -32,6 +32,15 @@ set_or_add_conf_value() {
     fi
 }
 
+generate_password() {
+    local bytes="$1"
+    if command -v openssl &>/dev/null; then
+        openssl rand -hex "$bytes"
+    else
+        python3 -c "import secrets; print(secrets.token_hex(${bytes}))"
+    fi
+}
+
 # ---------------------------------------------------------------------------
 # 1. Configuration file
 # ---------------------------------------------------------------------------
@@ -47,20 +56,26 @@ else
     cp daygle_server_manager.conf.example daygle_server_manager.conf
 
     # Generate a cryptographically random session secret
-    if command -v openssl &>/dev/null; then
-        SECRET=$(openssl rand -hex 32)
-    else
-        SECRET=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-    fi
+    SECRET=$(generate_password 32)
 
     # Replace the placeholder in the conf file
     sed -i "s/replace-with-long-random-secret/${SECRET}/" daygle_server_manager.conf
 
-    # Generate a DB password and keep DATABASE_URL + POSTGRES_PASSWORD in sync.
-    if command -v openssl &>/dev/null; then
-        DB_PASSWORD=$(openssl rand -hex 16)
-    else
-        DB_PASSWORD=$(python3 -c "import secrets; print(secrets.token_hex(16))")
+    # Choose a DB password and keep DATABASE_URL + POSTGRES_PASSWORD in sync.
+    DEFAULT_DB_PASSWORD=$(generate_password 16)
+    DB_PASSWORD="${DB_PASSWORD:-}"
+
+    if [[ -z "$DB_PASSWORD" && -t 0 ]]; then
+        echo ""
+        echo "Database password setup"
+        echo "Press Enter to use an auto-generated password, or type your own."
+        read -r -s -p "DB password: " INPUT_PASSWORD
+        echo ""
+        DB_PASSWORD="$INPUT_PASSWORD"
+    fi
+
+    if [[ -z "$DB_PASSWORD" ]]; then
+        DB_PASSWORD="$DEFAULT_DB_PASSWORD"
     fi
 
     DB_URL="postgresql+psycopg2://daygle_server_manager:${DB_PASSWORD}@db:5432/daygle_server_manager"
