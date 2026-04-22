@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block page_title %}SSH Keys - Daygle Server Manager{% endblock %}
+{% block title %}SSH Keys{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Generate New Key</h2>
+  <form id="generate-form" class="grid-form" style="align-items: end;">
+    <label>Key Name <input name="name" id="gen-name" required placeholder="e.g. prod-servers" /></label>
+    <button type="submit">Generate ed25519 Key</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Import Existing Key</h2>
+  <p style="color: var(--text-muted); font-size: 0.9rem;">Paste an OpenSSH PEM private key (the contents of your <code>id_ed25519</code> or <code>id_rsa</code> file).</p>
+  <form id="import-form" class="grid-form">
+    <label>Key Name <input name="name" id="imp-name" required placeholder="e.g. my-existing-key" /></label>
+    <label style="grid-column: 1 / -1;">
+      Private Key (PEM)
+      <textarea name="private_key" id="imp-key" rows="8" required
+        style="font-family: monospace; font-size: 0.82rem; width: 100%; resize: vertical;"
+        placeholder="-----BEGIN OPENSSH PRIVATE KEY-----
+...
+-----END OPENSSH PRIVATE KEY-----"></textarea>
+    </label>
+    <button type="submit">Import Key</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Stored Keys</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Public Key</th>
+          <th>Created</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="keys-table">
+        {% for key in ssh_keys %}
+        <tr id="key-row-{{ key.id }}">
+          <td>{{ key.name }}</td>
+          <td><span class="badge badge-info">{{ key.key_type }}</span></td>
+          <td>
+            <code style="font-size: 0.78rem; word-break: break-all;">{{ key.public_key[:60] }}…</code>
+            <button class="btn-small" onclick="copyPubKey({{ key.id }}, `{{ key.public_key }}`)">Copy</button>
+          </td>
+          <td>{{ key.created_at.strftime('%Y-%m-%d') }}</td>
+          <td>
+            <button class="btn-danger" type="button" data-delete-key="{{ key.id }}">Delete</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr id="no-keys-row">
+          <td colspan="5">No SSH keys stored yet. Generate or import one above.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<script>
+async function copyPubKey(id, pubKey) {
+  await navigator.clipboard.writeText(pubKey);
+  const btns = document.querySelectorAll(`#key-row-${id} .btn-small`);
+  btns.forEach(b => { b.textContent = 'Copied!'; setTimeout(() => { b.textContent = 'Copy'; }, 2000); });
+}
+
+document.getElementById('generate-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('gen-name').value.trim();
+  if (!name) return;
+
+  const res = await fetch(`/api/ssh-keys/generate?name=${encodeURIComponent(name)}`, { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) { alert(data.detail || 'Failed to generate key'); return; }
+
+  addKeyRow(data);
+  document.getElementById('gen-name').value = '';
+});
+
+document.getElementById('import-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = document.getElementById('imp-name').value.trim();
+  const private_key = document.getElementById('imp-key').value.trim();
+
+  const res = await fetch('/api/ssh-keys', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, private_key }),
+  });
+  const data = await res.json();
+  if (!res.ok) { alert(data.detail || 'Failed to import key'); return; }
+
+  addKeyRow(data);
+  document.getElementById('imp-name').value = '';
+  document.getElementById('imp-key').value = '';
+});
+
+function addKeyRow(key) {
+  document.getElementById('no-keys-row')?.remove();
+  const tbody = document.getElementById('keys-table');
+  const preview = key.public_key.substring(0, 60) + '…';
+  const tr = document.createElement('tr');
+  tr.id = `key-row-${key.id}`;
+  tr.innerHTML = `
+    <td>${key.name}</td>
+    <td><span class="badge badge-info">${key.key_type}</span></td>
+    <td>
+      <code style="font-size:0.78rem;word-break:break-all;">${preview}</code>
+      <button class="btn-small" onclick="copyPubKey(${key.id}, \`${key.public_key}\`)">Copy</button>
+    </td>
+    <td>${key.created_at.substring(0, 10)}</td>
+    <td><button class="btn-danger" type="button" data-delete-key="${key.id}">Delete</button></td>
+  `;
+  tbody.appendChild(tr);
+  attachDeleteListener(tr.querySelector('[data-delete-key]'));
+}
+
+function attachDeleteListener(btn) {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.deleteKey;
+    if (!confirm('Delete this SSH key?')) return;
+    const res = await fetch(`/api/ssh-keys/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.detail || 'Failed to delete key'); return; }
+    document.getElementById(`key-row-${id}`)?.remove();
+  });
+}
+
+document.querySelectorAll('[data-delete-key]').forEach(attachDeleteListener);
+</script>
+{% endblock %}

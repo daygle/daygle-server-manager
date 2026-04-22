@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block page_title %}System Updates - Daygle Server Manager{% endblock %}
+{% block title %}System Updates{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Run Updates</h2>
+  <form id="run-form" class="run-form">
+    <div class="server-checks" id="server-checks">
+      {% for server in servers %}
+      <label class="check-item">
+        <input type="checkbox" value="{{ server.id }}" />
+        <span>{{ server.name }} ({{ server.host }})</span>
+      </label>
+      {% else %}
+      <p>Add servers first from the Servers page.</p>
+      {% endfor %}
+    </div>
+
+    <label>
+      Package Manager
+      <select id="package_manager">
+        <option value="auto" selected>Auto detect</option>
+        <option value="apt">apt</option>
+        <option value="dnf">dnf</option>
+        <option value="yum">yum</option>
+      </select>
+    </label>
+
+    <button type="submit">Start Update</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Update Jobs</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Server ID</th>
+          <th>Status</th>
+          <th>Package Manager</th>
+          <th>Created</th>
+          <th>Started</th>
+          <th>Finished</th>
+        </tr>
+      </thead>
+      <tbody id="jobs-body">
+        {% for job in jobs %}
+        <tr>
+          <td>{{ job.id }}</td>
+          <td>{{ job.server_id }}</td>
+          <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
+          <td>{{ job.package_manager }}</td>
+          <td>{{ job.created_at }}</td>
+          <td>{{ job.started_at or '-' }}</td>
+          <td>{{ job.finished_at or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7">No jobs yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <details class="job-log">
+    <summary>Latest job output</summary>
+    <pre id="latest-log">No output loaded.</pre>
+  </details>
+</section>
+{% endblock %}

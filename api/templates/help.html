@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block page_title %}Help - Daygle Server Manager{% endblock %}
+{% block title %}Help{% endblock %}
+
+{% block content %}
+<section class="panel prose">
+  <h2>System Update Commands</h2>
+  <p>This project includes a CLI update script similar to your mail-archiver repo workflow.</p>
+
+  <h3>Check for updates</h3>
+  <pre><code>./update.sh --check</code></pre>
+
+  <h3>Interactive update</h3>
+  <pre><code>./update.sh</code></pre>
+
+  <h3>Unattended update</h3>
+  <pre><code>./update.sh --force</code></pre>
+
+  <h3>Update but do not restart containers</h3>
+  <pre><code>./update.sh --skip-start</code></pre>
+
+  <h3>Show options</h3>
+  <pre><code>./update.sh --help</code></pre>
+</section>
+{% endblock %}

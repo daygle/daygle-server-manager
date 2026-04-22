@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block page_title %}Daygle Server Manager{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+      integrity="sha512-SnH5WK+bZxgPHs44uWix+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkR4j8tBtjv0Vh2z8kPKzEfVQ2CkKfM04QyA=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+  </head>
+  <body>
+    <div class="bg-pattern"></div>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+          <button class="brand-button" id="sidebarBrand" type="button" title="Toggle sidebar">
+            <i class="fa-solid fa-server"></i>
+            <span class="brand-text">Daygle Server Manager</span>
+          </button>
+        </div>
+
+        <nav class="sidebar-nav">
+          <div class="nav-section">
+            <a href="/dashboard" class="nav-link {% if active_page == 'dashboard' %}active{% endif %}">
+              <i class="fas fa-chart-line"></i><span>Dashboard</span>
+            </a>
+          </div>
+
+          <div class="nav-section">
+            <div class="nav-section-title">Operations &amp; Monitoring</div>
+            <a href="/servers" class="nav-link {% if active_page == 'servers' %}active{% endif %}">
+              <i class="fas fa-server"></i><span>Servers</span>
+            </a>
+            <a href="/updates" class="nav-link {% if active_page == 'updates' %}active{% endif %}">
+              <i class="fas fa-rotate"></i><span>System Updates</span>
+            </a>
+          </div>
+
+          {% if current_user and current_user.is_admin %}
+          <div class="nav-section">
+            <div class="nav-section-title">System Management</div>
+            <a href="/users" class="nav-link {% if active_page == 'users' %}active{% endif %}">
+              <i class="fas fa-users"></i><span>User Management</span>
+            </a>
+              <a href="/ssh-keys" class="nav-link {% if active_page == 'ssh-keys' %}active{% endif %}">
+                <i class="fas fa-key"></i><span>SSH Keys</span>
+              </a>
+          </div>
+          {% endif %}
+
+          <div class="nav-section">
+            <div class="nav-section-title">Help</div>
+            <a href="/help" class="nav-link {% if active_page == 'help' %}active{% endif %}">
+              <i class="fas fa-circle-question"></i><span>Help</span>
+            </a>
+            <a href="/about" class="nav-link {% if active_page == 'about' %}active{% endif %}">
+              <i class="fas fa-info-circle"></i><span>About</span>
+            </a>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="topbar-left">
+            <button class="sidebar-mobile-toggle" id="sidebarMobileToggle" type="button">
+              <i class="fas fa-bars"></i>
+            </button>
+            <h1 class="page-title">{% block title %}Daygle Server Manager{% endblock %}</h1>
+          </div>
+          <div class="topbar-right">
+            <div class="user-chip">
+              <i class="fas fa-user"></i>
+              <span>{{ current_user.username }}</span>
+            </div>
+            <a href="/logout" class="logout-link">
+              <i class="fas fa-right-from-bracket"></i>
+              <span>Logout</span>
+            </a>
+          </div>
+        </header>
+
+        <section class="content-container">
+          {% if flash %}
+          <div class="flash flash-{{ flash.type }}">{{ flash.message }}</div>
+          {% endif %}
+          {% block content %}{% endblock %}
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+  </body>
+</html>

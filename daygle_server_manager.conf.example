@@ -1,0 +1,6 @@
+# Daygle Server Manager configuration
+# Copy this file to daygle_server_manager.conf and change values.
+# SSH keys are managed through the web interface — no file path needed.
+
+SESSION_SECRET=replace-with-long-random-secret
+DATABASE_URL=postgresql+psycopg2://daygle_server_manager:change_me@db:5432/daygle_server_manager

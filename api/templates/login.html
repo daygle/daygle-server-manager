@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login - Daygle Server Manager</title>
+    <link rel="stylesheet" href="/static/css/styles.css" />
+  </head>
+  <body class="auth-page">
+    <div class="auth-card panel">
+      <h1>Sign In</h1>
+      <p>Login to manage updates and servers.</p>
+
+      {% if flash %}
+      <div class="flash flash-{{ flash.type }}">{{ flash.message }}</div>
+      {% endif %}
+
+      <form method="post" action="/login" class="auth-form">
+        <label>Username <input name="username" required /></label>
+        <label>Password <input type="password" name="password" required /></label>
+        <button type="submit">Sign In</button>
+      </form>
+    </div>
+  </body>
+</html>

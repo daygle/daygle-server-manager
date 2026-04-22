@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block page_title %}User Management - Daygle Server Manager{% endblock %}
+{% block title %}User Management{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Create User</h2>
+  <form method="post" action="/users/create" class="grid-form">
+    <label>Username <input name="username" required minlength="3" /></label>
+    <label>Password <input name="password" type="password" required minlength="8" /></label>
+    <label>Confirm Password <input name="confirm_password" type="password" required minlength="8" /></label>
+    <label>First Name <input name="first_name" /></label>
+    <label>Last Name <input name="last_name" /></label>
+    <label>Email <input name="email" type="email" /></label>
+    <label><input type="checkbox" name="is_admin" value="true" /> Admin User</label>
+    <label><input type="checkbox" name="enabled" value="true" checked /> Enabled</label>
+    <button type="submit">Create User</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Users</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th>Last Login</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+        <tr>
+          <td>{{ user.id }}</td>
+          <td>{{ user.username }}</td>
+          <td>{{ (user.first_name or '') ~ ' ' ~ (user.last_name or '') }}</td>
+          <td>{{ user.email or '-' }}</td>
+          <td>{{ 'Admin' if user.is_admin else 'User' }}</td>
+          <td>{{ 'Enabled' if user.enabled else 'Disabled' }}</td>
+          <td>{{ user.created_at }}</td>
+          <td>{{ user.last_login or '-' }}</td>
+          <td>
+            <form method="post" action="/users/{{ user.id }}/toggle-enabled" style="display:inline;">
+              <button type="submit">{{ 'Disable' if user.enabled else 'Enable' }}</button>
+            </form>
+            <form method="post" action="/users/{{ user.id }}/delete" style="display:inline;">
+              <button class="btn-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9">No users found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

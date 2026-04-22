@@ -1,0 +1,2 @@
+-- Optional PostgreSQL initialization script.
+-- Core tables are currently managed by SQLAlchemy on API startup.

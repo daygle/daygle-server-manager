@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block page_title %}Servers - Daygle Server Manager{% endblock %}
+{% block title %}Servers{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Add Server</h2>
+  <form id="server-form" class="grid-form">
+    <label>Name <input name="name" required /></label>
+    <label>Host <input name="host" required placeholder="192.168.1.100" /></label>
+    <label>Port <input type="number" name="port" value="22" required /></label>
+    <label>Username <input name="username" required /></label>
+    <label>
+      Auth Method
+      <select name="auth_method" id="auth_method">
+        <option value="key" selected>SSH Key</option>
+        <option value="password">Password</option>
+      </select>
+    </label>
+    <label id="password_label" class="hidden">Password <input type="password" name="password" /></label>
+    <label id="key_label">
+      SSH Key
+      <select name="ssh_key_id" id="ssh_key_id">
+        <option value="">-- Select a key --</option>
+        {% for key in ssh_keys %}
+        <option value="{{ key.id }}">{{ key.name }} ({{ key.key_type }})</option>
+        {% else %}
+        <option disabled>No SSH keys stored — add one on the SSH Keys page</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Sudo Password (optional) <input type="password" name="sudo_password" /></label>
+    <button type="submit">Save Server</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Configured Servers</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Host</th>
+          <th>User</th>
+          <th>Auth</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for server in servers %}
+        <tr>
+          <td>{{ server.id }}</td>
+          <td>{{ server.name }}</td>
+          <td>{{ server.host }}:{{ server.port }}</td>
+          <td>{{ server.username }}</td>
+          <td>{{ server.auth_method }}</td>
+          <td>
+            <button class="btn-danger" type="button" data-delete-server="{{ server.id }}">Delete</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6">No servers configured yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
+

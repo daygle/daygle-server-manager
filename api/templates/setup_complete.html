@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block page_title %}Setup Complete — Daygle Server Manager{% endblock %}
+{% block title %}Setup Complete{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Setup Complete</h1>
+  <p>Your admin account has been created.</p>
+</div>
+
+<div class="panel" style="max-width: 640px;">
+  <h2>Next Steps</h2>
+  <ol style="line-height: 2;">
+    <li>Go to <a href="/ssh-keys"><strong>SSH Keys</strong></a> and generate or import an SSH key.</li>
+    <li>Copy the displayed public key to each server you want to manage.</li>
+    <li>Go to <a href="/servers"><strong>Servers</strong></a> and add your servers, selecting the SSH key.</li>
+    <li>Go to <a href="/updates"><strong>System Updates</strong></a> to run your first update job.</li>
+  </ol>
+  <div style="margin-top: 1.5rem;">
+    <a href="/ssh-keys">Go to SSH Keys &rarr;</a>
+  </div>
+</div>
+{% endblock %}
