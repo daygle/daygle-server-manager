@@ -733,6 +733,21 @@ def delete_server(server_id: int, request: Request, db: Session = Depends(get_db
     if not server:
         raise HTTPException(status_code=404, detail="Server not found")
 
+    # Remove dependent update jobs first to avoid setting non-null server_id to NULL.
+    db.query(UpdateJob).filter(UpdateJob.server_id == server_id).delete(synchronize_session=False)
+
+    # Remove this server from all schedules; delete schedules that would become empty.
+    schedules = db.query(UpdateSchedule).all()
+    for schedule in schedules:
+        ids = schedule.server_ids
+        if server_id not in ids:
+            continue
+        remaining_ids = [sid for sid in ids if sid != server_id]
+        if not remaining_ids:
+            db.delete(schedule)
+        else:
+            schedule.server_ids = remaining_ids
+
     db.delete(server)
     db.commit()
     return {"message": "Server deleted"}
