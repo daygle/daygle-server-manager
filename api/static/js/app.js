@@ -8,11 +8,13 @@ const scheduleForm = document.getElementById("schedule-form");
 const jobsBody = document.getElementById("jobs-body");
 const schedulesBody = document.getElementById("schedules-body");
 const latestLog = document.getElementById("latest-log");
+const selectedJobLabel = document.getElementById("selected-job-label");
 const authMethod = document.getElementById("auth_method");
 const passwordLabel = document.getElementById("password_label");
 const keyLabel = document.getElementById("key_label");
 const cancelEditBtn = document.getElementById("cancel_edit_btn");
 const saveServerBtn = document.getElementById("save_server_btn");
+let selectedJobId = null;
 
 if (sidebar && localStorage.getItem("sidebarCollapsed") === "true") {
   sidebar.classList.add("collapsed");
@@ -230,6 +232,58 @@ function formatOutputPreview(output) {
   return output.replace(/\s+/g, " ").slice(0, 120);
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderJobRow(job) {
+  return `
+      <tr data-job-id="${job.id}">
+        <td>${job.id}</td>
+        <td>${job.server_id}</td>
+        <td>${renderStatus(job.status)}</td>
+        <td>${escapeHtml(job.package_manager)}</td>
+        <td>${escapeHtml(job.created_at)}</td>
+        <td>${escapeHtml(job.started_at || "-")}</td>
+        <td>${escapeHtml(job.finished_at || "-")}</td>
+        <td>${escapeHtml(formatOutputPreview(job.output))}</td>
+        <td><button type="button" class="btn-secondary" data-view-job="${job.id}">View output</button></td>
+      </tr>
+    `;
+}
+
+function setDisplayedJobOutput(job) {
+  if (!latestLog) {
+    return;
+  }
+
+  latestLog.textContent = job.output || "No output yet for this job.";
+  if (selectedJobLabel) {
+    selectedJobLabel.textContent = `job #${job.id}`;
+  }
+}
+
+async function viewJobOutput(jobId) {
+  if (!latestLog) {
+    return;
+  }
+
+  const response = await fetch(`/api/updates/${jobId}`);
+  if (!response.ok) {
+    alert("Failed to load job output");
+    return;
+  }
+
+  const job = await response.json();
+  selectedJobId = Number(job.id);
+  setDisplayedJobOutput(job);
+}
+
 async function loadJobs() {
   if (!jobsBody || !latestLog) {
     return;
@@ -241,27 +295,45 @@ async function loadJobs() {
   }
 
   const jobs = await response.json();
-  jobsBody.innerHTML = jobs
-    .map(
-      (job) => `
-      <tr data-job-id="${job.id}">
-        <td>${job.id}</td>
-        <td>${job.server_id}</td>
-        <td>${renderStatus(job.status)}</td>
-        <td>${job.package_manager}</td>
-        <td>${job.created_at}</td>
-        <td>${job.started_at || "-"}</td>
-        <td>${job.finished_at || "-"}</td>
-        <td>${formatOutputPreview(job.output)}</td>
-      </tr>
-    `
-    )
-    .join("");
+  if (jobs.length === 0) {
+    jobsBody.innerHTML = '<tr><td colspan="9">No jobs yet.</td></tr>';
+    latestLog.textContent = "No output loaded.";
+    if (selectedJobLabel) {
+      selectedJobLabel.textContent = "latest";
+    }
+    selectedJobId = null;
+    return;
+  }
 
-  if (jobs.length > 0) {
-    latestLog.textContent = jobs[0].output || "No output yet for latest job.";
+  jobsBody.innerHTML = jobs.map((job) => renderJobRow(job)).join("");
+
+  const selectedJob = selectedJobId ? jobs.find((job) => job.id === selectedJobId) : null;
+  if (selectedJob) {
+    setDisplayedJobOutput(selectedJob);
+  } else {
+    selectedJobId = jobs[0].id;
+    setDisplayedJobOutput(jobs[0]);
   }
 }
+
+jobsBody?.addEventListener("click", async (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+
+  const button = target.closest("button[data-view-job]");
+  if (!button) {
+    return;
+  }
+
+  const jobId = Number(button.getAttribute("data-view-job"));
+  if (!jobId) {
+    return;
+  }
+
+  await viewJobOutput(jobId);
+});
 
 scheduleForm?.addEventListener("submit", async (event) => {
   event.preventDefault();

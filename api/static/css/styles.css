@@ -243,6 +243,18 @@ h3 {
   min-width: 0;
 }
 
+.schedule-targets-field {
+  grid-column: 1 / -1;
+}
+
+.schedule-targets-label {
+  margin-bottom: 6px;
+}
+
+.schedules-table-wrap {
+  margin-top: 1rem;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -259,6 +271,12 @@ button {
   min-height: 42px;
   width: 100%;
   box-sizing: border-box;
+}
+
+input[type="checkbox"] {
+  width: auto;
+  min-height: auto;
+  padding: 0;
 }
 
 button {
@@ -372,6 +390,11 @@ td {
   cursor: pointer;
   color: var(--accent-2);
   font-weight: 600;
+}
+
+#selected-job-label {
+  font-weight: 700;
+  color: var(--ink);
 }
 
 pre {
