@@ -49,7 +49,7 @@ cd /opt/
 git clone https://github.com/daygle/daygle-server-manager.git
 cd daygle-server-manager
 
-# Configure (generates conf file, session secret, and SSH key pair)
+# Configure (generates conf file and session secret)
 bash setup.sh
 # Edit daygle_server_manager.conf to change DB password if needed
 
@@ -64,8 +64,49 @@ docker compose up -d --build
 ## First-Time Setup
 
 - On first launch the app redirects to `/setup` where you create the initial admin account.
-- After submitting, a **Setup Complete** screen displays your SSH public key and copy instructions one more time.
-- From there, go to the Dashboard and start adding servers.
+- After submitting, go to `/ssh-keys` to generate or import an SSH key, then copy the public key to the servers you want to manage.
+- From there, add your servers in `/servers` and start running updates.
+
+## Troubleshooting
+
+Start with the current container state:
+
+```bash
+docker compose ps
+docker compose logs api
+docker compose logs worker
+docker compose logs db
+```
+
+If you want to follow logs live:
+
+```bash
+docker compose logs -f api worker db
+```
+
+Common checks:
+
+- `daygle_server_manager.conf` missing: run `bash setup.sh` again in the repo root.
+- Web UI does not load on port `8000`: confirm nothing else is already bound to `8000` on the host.
+- `api` container keeps restarting: check `docker compose logs api` for config or dependency errors.
+- Database connection/authentication errors: make sure `DATABASE_URL` in `daygle_server_manager.conf` matches the PostgreSQL credentials in [docker-compose.yml](/workspaces/daygle-server-manager/docker-compose.yml).
+- Database fails to start: verify [db/data](/workspaces/daygle-server-manager/db/data) is writable by Docker on the host.
+- Changes to config not taking effect: restart the stack with `docker compose up -d --build` after editing the conf file.
+- SSH updates fail after login works: confirm the target server has your public key in `~/.ssh/authorized_keys`, the selected SSH key in `/ssh-keys` matches that public key, and the remote user can run `sudo` if required.
+
+Useful reset/rebuild commands:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+If you need a clean rebuild of the images:
+
+```bash
+docker compose build --no-cache
+docker compose up -d
+```
 
 ## Web Pages
 
@@ -82,10 +123,10 @@ docker compose up -d --build
 ## Update Script
 
 ```bash
-./update.sh --check
-./update.sh
-./update.sh --force
-./update.sh --skip-start
+bash update.sh --check
+bash update.sh
+bash update.sh --force
+bash update.sh --skip-start
 ```
 
 ## API Endpoints
