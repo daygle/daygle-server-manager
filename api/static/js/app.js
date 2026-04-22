@@ -14,6 +14,12 @@ const passwordLabel = document.getElementById("password_label");
 const keyLabel = document.getElementById("key_label");
 const cancelEditBtn = document.getElementById("cancel_edit_btn");
 const saveServerBtn = document.getElementById("save_server_btn");
+const userForm = document.getElementById("user-form");
+const userFormTitle = document.getElementById("user-form-title");
+const userSubmitBtn = document.getElementById("user_submit_btn");
+const userCancelBtn = document.getElementById("user_cancel_btn");
+const userPasswordInput = document.getElementById("user_password");
+const userConfirmPasswordInput = document.getElementById("user_confirm_password");
 let selectedJobId = null;
 
 if (sidebar && localStorage.getItem("sidebarCollapsed") === "true") {
@@ -169,6 +175,92 @@ cancelEditBtn?.addEventListener("click", () => {
   cancelEditBtn.classList.add("hidden");
   toggleAuthFields();
 });
+
+function setUserFormMode(editing) {
+  if (!userForm || !userSubmitBtn || !userCancelBtn || !userPasswordInput || !userConfirmPasswordInput || !userFormTitle) {
+    return;
+  }
+
+  if (editing) {
+    userFormTitle.textContent = "Edit User";
+    userSubmitBtn.textContent = "Update User";
+    userCancelBtn.classList.remove("hidden");
+    userPasswordInput.required = false;
+    userConfirmPasswordInput.required = false;
+    userPasswordInput.placeholder = "Leave blank to keep current password";
+    userConfirmPasswordInput.placeholder = "Repeat new password";
+  } else {
+    userFormTitle.textContent = "Create User";
+    userSubmitBtn.textContent = "Create User";
+    userCancelBtn.classList.add("hidden");
+    userPasswordInput.required = true;
+    userConfirmPasswordInput.required = true;
+    userPasswordInput.placeholder = "";
+    userConfirmPasswordInput.placeholder = "";
+  }
+}
+
+function setUserFieldValue(name, value) {
+  if (!userForm) {
+    return;
+  }
+  const field = userForm.querySelector(`[name="${name}"]`);
+  if (!field) {
+    return;
+  }
+
+  if (field instanceof HTMLInputElement && field.type === "checkbox") {
+    field.checked = value === true || value === "true";
+    return;
+  }
+
+  field.value = value || "";
+}
+
+document.querySelectorAll("[data-edit-user]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!userForm) {
+      return;
+    }
+
+    const row = button.closest("tr");
+    if (!row) {
+      return;
+    }
+
+    const userId = row.dataset.userId;
+    if (!userId) {
+      return;
+    }
+
+    userForm.setAttribute("action", `/users/${userId}/update`);
+    setUserFormMode(true);
+    setUserFieldValue("username", row.dataset.userUsername || "");
+    setUserFieldValue("first_name", row.dataset.userFirstName || "");
+    setUserFieldValue("last_name", row.dataset.userLastName || "");
+    setUserFieldValue("email", row.dataset.userEmail || "");
+    setUserFieldValue("is_admin", row.dataset.userIsAdmin || "false");
+    setUserFieldValue("enabled", row.dataset.userEnabled || "false");
+    setUserFieldValue("password", "");
+    setUserFieldValue("confirm_password", "");
+
+    userForm.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+});
+
+userCancelBtn?.addEventListener("click", () => {
+  if (!userForm) {
+    return;
+  }
+
+  userForm.reset();
+  userForm.setAttribute("action", "/users/create");
+  setUserFormMode(false);
+});
+
+if (userForm) {
+  setUserFormMode(false);
+}
 
 document.querySelectorAll("[data-delete-server]").forEach((button) => {
   button.addEventListener("click", async () => {

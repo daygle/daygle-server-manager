@@ -481,6 +481,82 @@ def toggle_user_enabled(user_id: int, request: Request, db: Session = Depends(ge
     return RedirectResponse(url="/users", status_code=303)
 
 
+@app.post("/users/{user_id}/update")
+def update_user(
+    user_id: int,
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(""),
+    confirm_password: str = Form(""),
+    first_name: str = Form(""),
+    last_name: str = Form(""),
+    email: str = Form(""),
+    is_admin: bool = Form(False),
+    enabled: bool = Form(False),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        set_flash(request, "User not found.", "error")
+        return RedirectResponse(url="/users", status_code=303)
+
+    clean_username = username.strip()
+    if len(clean_username) < 3:
+        set_flash(request, "Username must be at least 3 characters.", "error")
+        return RedirectResponse(url="/users", status_code=303)
+
+    existing = db.query(User).filter(User.username == clean_username, User.id != user.id).first()
+    if existing:
+        set_flash(request, "Username already exists.", "error")
+        return RedirectResponse(url="/users", status_code=303)
+
+    if password:
+        if len(password) < 8:
+            set_flash(request, "Password must be at least 8 characters.", "error")
+            return RedirectResponse(url="/users", status_code=303)
+        if password != confirm_password:
+            set_flash(request, "Passwords do not match.", "error")
+            return RedirectResponse(url="/users", status_code=303)
+    elif confirm_password:
+        set_flash(request, "Enter a new password to use password confirmation.", "error")
+        return RedirectResponse(url="/users", status_code=303)
+
+    if user.id == current_user.id and not enabled:
+        set_flash(request, "You cannot disable your own account.", "error")
+        return RedirectResponse(url="/users", status_code=303)
+
+    if user.id == current_user.id and not is_admin:
+        set_flash(request, "You cannot remove your own admin access.", "error")
+        return RedirectResponse(url="/users", status_code=303)
+
+    if user.is_admin and user.enabled and (not is_admin or not enabled):
+        enabled_admins = db.query(func.count(User.id)).filter(User.is_admin.is_(True), User.enabled.is_(True)).scalar() or 0
+        if enabled_admins <= 1:
+            set_flash(request, "At least one enabled admin must remain.", "error")
+            return RedirectResponse(url="/users", status_code=303)
+
+    user.username = clean_username
+    user.first_name = first_name.strip() or None
+    user.last_name = last_name.strip() or None
+    user.email = email.strip() or None
+    user.is_admin = is_admin
+    user.enabled = enabled
+
+    if password:
+        user.password_hash = hash_password(password)
+
+    db.commit()
+    set_flash(request, f"User '{user.username}' updated.", "success")
+    return RedirectResponse(url="/users", status_code=303)
+
+
 @app.post("/users/{user_id}/delete")
 def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)):
     current_user = get_session_user(request, db)
