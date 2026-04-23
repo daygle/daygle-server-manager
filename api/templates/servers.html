@@ -36,9 +36,14 @@
       </select>
     </label>
     <label>
-      Sudo Password (optional)
+      <span class="label-with-info">
+        <span>Sudo Password (optional)</span>
+        <span class="info-tip">
+          <button type="button" class="info-tip-btn" aria-label="Sudo password help">&#9432;</button>
+          <span class="info-tip-text">Only needed if sudo asks for a different password.</span>
+        </span>
+      </span>
       <input type="password" name="sudo_password" autocomplete="new-password" />
-      <small class="field-help">Only needed if sudo asks for a different password.</small>
     </label>
     <button type="submit" id="save_server_btn">Save Server</button>
     <button type="button" id="cancel_edit_btn" class="hidden">Cancel Edit</button>
