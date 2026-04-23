@@ -14,7 +14,7 @@ from croniter import croniter
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, or_, text
+from sqlalchemy import String, func, or_, text
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -850,7 +850,6 @@ def login_submit(
     request.session["user_id"] = user.id
     request.session["last_seen_at"] = int(datetime.utcnow().timestamp())
     log_audit(db, "user.login", request=request, actor=user)
-    set_flash(request, f"Welcome back, {user.username}.", "success")
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
@@ -969,7 +968,102 @@ def updates_jobs_page(request: Request, db: Session = Depends(get_db)):
     if not current_user:
         return RedirectResponse(url="/login", status_code=303)
 
-    jobs = db.query(UpdateJob).order_by(UpdateJob.created_at.desc()).limit(30).all()
+    raw_q = (request.query_params.get("q") or "").strip()
+    status_filter = (request.query_params.get("status") or "").strip()
+    job_type_filter = (request.query_params.get("job_type") or "").strip()
+    date_from = (request.query_params.get("date_from") or "").strip()
+    date_to = (request.query_params.get("date_to") or "").strip()
+
+    try:
+        page = int(request.query_params.get("page", "1"))
+    except ValueError:
+        page = 1
+    if page < 1:
+        page = 1
+
+    try:
+        page_size = int(request.query_params.get("page_size", "50"))
+    except ValueError:
+        page_size = 50
+    page_size = max(10, min(page_size, 200))
+
+    query = db.query(UpdateJob)
+    if status_filter and status_filter in {"pending", "running", "success", "failed"}:
+        query = query.filter(UpdateJob.status == status_filter)
+    if job_type_filter and job_type_filter in {"manual", "scheduled"}:
+        query = query.filter(UpdateJob.job_type == job_type_filter)
+
+    from_dt = None
+    to_dt_exclusive = None
+    try:
+        if date_from:
+            from_dt = datetime.strptime(date_from, "%Y-%m-%d")
+    except ValueError:
+        date_from = ""
+    try:
+        if date_to:
+            to_dt_exclusive = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+    except ValueError:
+        date_to = ""
+
+    if from_dt:
+        query = query.filter(UpdateJob.created_at >= from_dt)
+    if to_dt_exclusive:
+        query = query.filter(UpdateJob.created_at < to_dt_exclusive)
+
+    if from_dt and to_dt_exclusive and from_dt >= to_dt_exclusive:
+        set_flash(request, "Invalid date range: From date must be before To date.", "error")
+        query = query.filter(text("1=0"))
+
+    if raw_q:
+        like_term = f"%{raw_q}%"
+        query = query.filter(
+            or_(
+                UpdateJob.server_name.ilike(like_term),
+                UpdateJob.summary.ilike(like_term),
+                func.cast(UpdateJob.id, String).ilike(like_term),
+            )
+        )
+
+    total_count = query.count()
+    total_pages = max(1, (total_count + page_size - 1) // page_size)
+    if page > total_pages:
+        page = total_pages
+
+    jobs = (
+        query.order_by(UpdateJob.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    if total_count == 0:
+        showing_from = 0
+        showing_to = 0
+    else:
+        showing_from = ((page - 1) * page_size) + 1
+        showing_to = min(((page - 1) * page_size) + len(jobs), total_count)
+
+    status_options = ["pending", "running", "success", "failed"]
+    job_type_options = ["manual", "scheduled"]
+
+    base_query = {
+        "q": raw_q,
+        "status": status_filter,
+        "job_type": job_type_filter,
+        "date_from": date_from,
+        "date_to": date_to,
+        "page_size": page_size,
+    }
+
+    def build_page_url(target_page: int) -> str:
+        params = {k: v for k, v in base_query.items() if v not in (None, "")}
+        params["page"] = target_page
+        return f"/updates/jobs?{urlencode(params)}"
+
+    prev_page_url = build_page_url(page - 1) if page > 1 else None
+    next_page_url = build_page_url(page + 1) if page < total_pages else None
+
     return render_app_template(
         request,
         "updates_jobs.html",
@@ -977,6 +1071,21 @@ def updates_jobs_page(request: Request, db: Session = Depends(get_db)):
         current_user,
         db,
         jobs=jobs,
+        search_q=raw_q,
+        selected_status=status_filter,
+        selected_job_type=job_type_filter,
+        selected_date_from=date_from,
+        selected_date_to=date_to,
+        page=page,
+        page_size=page_size,
+        total_count=total_count,
+        showing_from=showing_from,
+        showing_to=showing_to,
+        total_pages=total_pages,
+        prev_page_url=prev_page_url,
+        next_page_url=next_page_url,
+        status_options=status_options,
+        job_type_options=job_type_options,
     )
 
 

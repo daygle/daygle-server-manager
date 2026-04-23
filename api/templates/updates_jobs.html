@@ -4,18 +4,107 @@
 {% block title %}Jobs{% endblock %}
 
 {% block content %}
+<!-- Filters Card (Initially Hidden) -->
+<div id="filterCard" class="card mb-4" style="display: none;">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-filter"></i>
+      <span>Search &amp; Filter</span>
+    </div>
+    <button type="button" class="btn btn-secondary btn-sm btn-icon-only" onclick="toggleFilters()" title="Close" aria-label="Close filters">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <div class="card-body">
+    <form method="get" id="filterForm">
+      <div class="grid gap-3">
+        <div>
+          <input type="text" id="q" name="q" class="form-control" 
+                 placeholder="Search by job ID, server name, or result..." 
+                 value="{{ search_q }}">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-4 gap-3 mt-3">
+        <div>
+          <select id="status" name="status" class="form-select">
+            <option value="">All Status</option>
+            {% for option in status_options %}
+            <option value="{{ option }}" {% if selected_status == option %}selected{% endif %}>{{ option|capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <select id="job_type" name="job_type" class="form-select">
+            <option value="">All Job Types</option>
+            {% for option in job_type_options %}
+            <option value="{{ option }}" {% if selected_job_type == option %}selected{% endif %}>{{ 'Scheduled' if option == 'scheduled' else 'Manual' }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <input type="date" id="date_from" name="date_from" class="form-control" 
+                 value="{{ selected_date_from }}">
+        </div>
+        <div>
+          <input type="date" id="date_to" name="date_to" class="form-control" 
+                 value="{{ selected_date_to }}">
+        </div>
+      </div>
+
+      <div class="grid gap-3 mt-3">
+        <div class="flex gap-2">
+          <button type="submit" class="btn btn-primary flex-1">
+            <i class="fas fa-search"></i>
+            <span>Search</span>
+          </button>
+          <a href="/updates/jobs" class="btn btn-secondary">
+            <i class="fas fa-times"></i>
+            <span>Clear</span>
+          </a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="card" id="jobsCard">
   <div class="card-header flex-between">
     <div class="card-title">
       <i class="fas fa-tasks"></i>
       <span>Jobs</span>
     </div>
-    <a href="/updates/scheduled" class="btn btn-secondary">
-      <i class="fas fa-calendar-alt"></i>
-      <span>Scheduled Updates</span>
-    </a>
+    <div class="flex gap-2">
+      <button id="toggleFilterBtn" class="btn btn-secondary btn-sm" onclick="toggleFilters()" title="Search &amp; Filter">
+        <i class="fas fa-filter"></i>
+        <span class="hide-mobile">Search &amp; Filter</span>
+      </button>
+      <a href="/updates/scheduled" class="btn btn-secondary btn-sm">
+        <i class="fas fa-calendar-alt"></i>
+        <span class="hide-mobile">Scheduled Updates</span>
+      </a>
+    </div>
   </div>
   <div class="card-body p-0">
+    <div class="flex-between" style="padding: 16px 20px 12px 20px; gap: 12px; flex-wrap: wrap;">
+      <p style="margin: 0;" class="text-secondary">Showing {{ showing_from }}-{{ showing_to }} of {{ total_count }} jobs</p>
+      <form method="get" action="/updates/jobs" class="flex gap-2" style="align-items: center;">
+        <input type="hidden" name="q" value="{{ search_q }}">
+        <input type="hidden" name="status" value="{{ selected_status }}">
+        <input type="hidden" name="job_type" value="{{ selected_job_type }}">
+        <input type="hidden" name="date_from" value="{{ selected_date_from }}">
+        <input type="hidden" name="date_to" value="{{ selected_date_to }}">
+        <input type="hidden" name="page" value="1">
+        <label for="page_size_inline" class="text-secondary" style="white-space: nowrap;">Rows</label>
+        <select id="page_size_inline" name="page_size" class="form-select" style="min-width: 120px;" onchange="this.form.submit()">
+          <option value="25" {% if page_size == 25 %}selected{% endif %}>25</option>
+          <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
+          <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
+          <option value="200" {% if page_size == 200 %}selected{% endif %}>200</option>
+        </select>
+      </form>
+    </div>
+
     <div class="table-container">
       <table class="table">
         <thead>
@@ -46,12 +135,67 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="9" class="text-center empty-state">No jobs yet.</td>
+            <td colspan="9" class="text-center empty-state">
+              <div>
+                <i class="fas fa-search empty-icon"></i>
+                <p>No jobs yet{% if search_q or selected_status or selected_job_type or selected_date_from or selected_date_to %} matching your filters{% endif %}.</p>
+              </div>
+            </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
+
+  <!-- Pagination -->
+  {% if prev_page_url or next_page_url %}
+  <div class="card-footer">
+    <div class="flex-between">
+      <div>
+        {% if prev_page_url %}
+        <a href="{{ prev_page_url }}" class="btn btn-secondary btn-sm">
+          <i class="fas fa-chevron-left"></i>
+          <span>Previous</span>
+        </a>
+        {% endif %}
+      </div>
+
+      <span class="text-secondary">Page {{ page }} of {{ total_pages }}</span>
+
+      <div>
+        {% if next_page_url %}
+        <a href="{{ next_page_url }}" class="btn btn-secondary btn-sm">
+          <span>Next</span>
+          <i class="fas fa-chevron-right"></i>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
+
+<script>
+  function toggleFilters() {
+    const filterCard = document.getElementById('filterCard');
+    const toggleBtn = document.getElementById('toggleFilterBtn');
+    
+    if (filterCard.style.display === 'none') {
+      filterCard.style.display = 'block';
+      toggleBtn.innerHTML = '<i class="fas fa-times"></i><span class="hide-mobile">Hide Filters</span>';
+    } else {
+      filterCard.style.display = 'none';
+      toggleBtn.innerHTML = '<i class="fas fa-filter"></i><span class="hide-mobile">Search &amp; Filter</span>';
+    }
+  }
+  
+  // Show filter card if any filters are active
+  document.addEventListener('DOMContentLoaded', function() {
+    const hasFilters = {{ 'true' if search_q or selected_status or selected_job_type or selected_date_from or selected_date_to else 'false' }};
+    if (hasFilters) {
+      toggleFilters();
+    }
+  });
+</script>
 {% endblock %}
