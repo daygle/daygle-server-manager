@@ -164,14 +164,24 @@
 
         <section class="content-container">
           {% if flash %}
-          <div class="flash-message flash-{{ flash.type }}">{{ flash.message }}</div>
+          <script>window.__initialFlash = {{ flash|tojson }};</script>
           {% endif %}
           {% block content %}{% endblock %}
         </section>
       </main>
     </div>
 
+    <script>
+      window._toastQueue = window._toastQueue || [];
+      window.showToast = function (message, type) {
+        if (window.createToast) {
+          return window.createToast(message, type);
+        }
+        window._toastQueue.push({ message: message, type: type });
+      };
+    </script>
     <script src="/static/js/app.js"></script>
+    <script src="/static/js/toast.js"></script>
     <script>
       (function () {
         function getCurrentTheme() {
