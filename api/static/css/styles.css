@@ -520,6 +520,26 @@ button:disabled {
   background: linear-gradient(135deg, #44546b, #58708d);
 }
 
+.btn-secondary-link {
+  min-height: 34px;
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #44546b, #58708d);
+  color: #fff;
+  border: 0;
+  font-weight: 600;
+  border-radius: 10px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.btn-secondary-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(68, 84, 107, 0.28);
+}
+
 td .btn-secondary,
 td .btn-danger {
   margin-right: 6px;
@@ -723,6 +743,10 @@ pre {
 .pagination-meta {
   color: var(--muted);
   font-size: 0.86rem;
+}
+
+.pagination-btn {
+  min-width: 96px;
 }
 
 .pagination-disabled {
