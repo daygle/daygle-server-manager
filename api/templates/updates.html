@@ -42,10 +42,12 @@
     <label>
       <span class="label-with-info">
         Cron Expression
-        <span class="info-tip" tabindex="0" role="button" aria-label="Cron expression help">
-          <i class="fas fa-circle-info" aria-hidden="true"></i>
+        <details class="info-tip">
+          <summary aria-label="Cron expression help">
+            <i class="fas fa-circle-info" aria-hidden="true"></i>
+          </summary>
           <span class="info-tip-text">Example: <code>0 2 * * *</code> runs daily at 02:00 in the timezone tied to this schedule. New schedules use your current timezone setting.</span>
-        </span>
+        </details>
       </span>
       <input id="cron_expression" name="cron_expression" required placeholder="0 2 * * *" />
     </label>
@@ -134,12 +136,11 @@
           <th>Started</th>
           <th>Finished</th>
           <th>Result</th>
-          <th>Action</th>
         </tr>
       </thead>
       <tbody id="jobs-body">
         {% for job in jobs %}
-        <tr data-job-id="{{ job.id }}">
+        <tr data-job-id="{{ job.id }}" class="job-row" title="Click to view output">
           <td>{{ job.id }}</td>
           <td>{{ job.server_name or ('Server #' ~ job.server_id) }}</td>
           <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
@@ -148,13 +149,10 @@
           <td>{{ format_dt(job.started_at) }}</td>
           <td>{{ format_dt(job.finished_at) }}</td>
           <td>{{ job.summary or ('-' if job.status == 'pending' or job.status == 'running' else 'Update completed') }}</td>
-          <td>
-            <button type="button" class="btn-secondary" data-view-job="{{ job.id }}">View output</button>
-          </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="9">No jobs yet.</td>
+          <td colspan="8">No jobs yet.</td>
         </tr>
         {% endfor %}
       </tbody>

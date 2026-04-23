@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Thread
 from time import sleep
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, available_timezones
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from croniter import croniter
@@ -58,23 +58,11 @@ DATE_FORMAT_OPTIONS: list[tuple[str, str, str]] = [
     ("month-name", "DD Mon YYYY HH:MM:SS", "%d %b %Y %H:%M:%S"),
 ]
 DATE_FORMAT_MAP = {key: pattern for key, _, pattern in DATE_FORMAT_OPTIONS}
-TIMEZONE_OPTIONS: list[tuple[str, str]] = [
-    ("UTC", "UTC"),
-    ("America/New_York", "America/New_York"),
-    ("America/Chicago", "America/Chicago"),
-    ("America/Denver", "America/Denver"),
-    ("America/Los_Angeles", "America/Los_Angeles"),
-    ("America/Toronto", "America/Toronto"),
-    ("Europe/London", "Europe/London"),
-    ("Europe/Berlin", "Europe/Berlin"),
-    ("Europe/Paris", "Europe/Paris"),
-    ("Europe/Amsterdam", "Europe/Amsterdam"),
-    ("Europe/Dublin", "Europe/Dublin"),
-    ("Asia/Dubai", "Asia/Dubai"),
-    ("Asia/Kolkata", "Asia/Kolkata"),
-    ("Asia/Singapore", "Asia/Singapore"),
-    ("Asia/Tokyo", "Asia/Tokyo"),
-    ("Australia/Sydney", "Australia/Sydney"),
+_ALL_TIMEZONES = sorted(available_timezones())
+if DEFAULT_TIMEZONE in _ALL_TIMEZONES:
+    _ALL_TIMEZONES.remove(DEFAULT_TIMEZONE)
+TIMEZONE_OPTIONS: list[tuple[str, str]] = [(DEFAULT_TIMEZONE, DEFAULT_TIMEZONE)] + [
+    (timezone_name, timezone_name) for timezone_name in _ALL_TIMEZONES
 ]
 
 

@@ -47,6 +47,8 @@ function toggleAuthFields() {
   }
 
   const isPassword = authMethod.value === "password";
+  const serverIdInput = serverForm?.querySelector('input[name="server_id"]');
+  const isEditingServer = Boolean(serverIdInput?.value);
   const passwordInput = passwordLabel.querySelector('input[name="password"]');
   const keySelect = keyLabel.querySelector('select[name="ssh_key_id"]');
 
@@ -54,7 +56,8 @@ function toggleAuthFields() {
   keyLabel.classList.toggle("hidden", isPassword);
 
   if (passwordInput) {
-    passwordInput.required = isPassword;
+    passwordInput.required = isPassword && !isEditingServer;
+    passwordInput.placeholder = isPassword && isEditingServer ? "Leave blank to keep current password" : "";
     if (!isPassword) {
       passwordInput.value = "";
     }
@@ -148,10 +151,6 @@ document.querySelectorAll("[data-edit-server]").forEach((button) => {
     setField("password", "");
 
     toggleAuthFields();
-    const passwordInput = serverForm.querySelector('input[name="password"]');
-    if (passwordInput && row.dataset.serverAuth === "password") {
-      passwordInput.placeholder = "Leave blank to keep current password";
-    }
 
     if (saveServerBtn) {
       saveServerBtn.textContent = "Update Server";
@@ -415,7 +414,7 @@ function escapeHtml(value) {
 
 function renderJobRow(job) {
   return `
-      <tr data-job-id="${job.id}">
+      <tr data-job-id="${job.id}" class="job-row" title="Click to view output">
         <td>${job.id}</td>
         <td>${escapeHtml(job.server_name || `Server #${job.server_id}`)}</td>
         <td>${renderStatus(job.status)}</td>
@@ -424,7 +423,6 @@ function renderJobRow(job) {
         <td>${escapeHtml(formatDateTimeForUi(job.started_at))}</td>
         <td>${escapeHtml(formatDateTimeForUi(job.finished_at))}</td>
         <td>${formatOutputPreview(job)}</td>
-        <td><button type="button" class="btn-secondary" data-view-job="${job.id}">View output</button></td>
       </tr>
     `;
 }
@@ -479,7 +477,7 @@ async function loadJobs() {
 
   const jobs = await response.json();
   if (jobs.length === 0) {
-    jobsBody.innerHTML = '<tr><td colspan="9">No jobs yet.</td></tr>';
+    jobsBody.innerHTML = '<tr><td colspan="8">No jobs yet.</td></tr>';
     latestLog.textContent = "No output loaded.";
     if (selectedJobLabel) {
       selectedJobLabel.textContent = "latest";
@@ -502,12 +500,16 @@ async function loadJobs() {
 jobsBody?.addEventListener("click", async (event) => {
   const target = event.target;
   const element = target instanceof Element ? target : target?.parentElement;
-  const button = element?.closest("button[data-view-job]");
-  if (!button) {
+  const row = element?.closest("tr[data-job-id]");
+  if (!row) {
     return;
   }
 
-  const jobId = Number(button.getAttribute("data-view-job"));
+  if (element?.closest("button, a, input, select, textarea")) {
+    return;
+  }
+
+  const jobId = Number(row.getAttribute("data-job-id"));
   if (!jobId) {
     return;
   }

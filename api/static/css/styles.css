@@ -325,11 +325,19 @@ label {
 
 .info-tip {
   position: relative;
+  display: inline-block;
+}
+
+.info-tip summary {
+  list-style: none;
   display: inline-flex;
   align-items: center;
   color: var(--accent-2);
-  cursor: help;
-  outline: none;
+  cursor: pointer;
+}
+
+.info-tip summary::-webkit-details-marker {
+  display: none;
 }
 
 .info-tip-text {
@@ -346,15 +354,36 @@ label {
   font-size: 0.82rem;
   line-height: 1.35;
   box-shadow: 0 10px 24px rgba(30, 24, 15, 0.18);
+  display: none;
   opacity: 0;
   pointer-events: none;
   transition: opacity 140ms ease;
   z-index: 10;
 }
 
-.info-tip:hover .info-tip-text,
-.info-tip:focus .info-tip-text,
-.info-tip:focus-within .info-tip-text {
+.info-tip[open] .info-tip-text {
+  display: block;
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .info-tip:hover .info-tip-text {
+    display: block;
+    opacity: 1;
+  }
+}
+
+.info-tip summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.info-tip[open] summary {
+  color: var(--accent);
+}
+
+.info-tip[open] .info-tip-text,
+.info-tip:hover .info-tip-text {
   opacity: 1;
 }
 
@@ -480,6 +509,14 @@ td {
 
 .selected-job-row td {
   background: rgba(0, 107, 107, 0.08);
+}
+
+#jobs-body .job-row {
+  cursor: pointer;
+}
+
+#jobs-body .job-row:hover td {
+  background: rgba(0, 107, 107, 0.05);
 }
 
 .status {
