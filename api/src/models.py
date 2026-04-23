@@ -20,6 +20,7 @@ class User(Base):
     date_format: Mapped[str | None] = mapped_column(String(32), nullable=True)
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     theme_preference: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    avatar_color: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 

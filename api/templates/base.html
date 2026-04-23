@@ -139,7 +139,7 @@
             {% if current_user %}
             <div class="user-menu">
               <button type="button" class="user-menu-button" id="userMenuButton">
-                <div class="user-avatar">
+                <div class="user-avatar" style="background-color: {{ avatar_color }};">
                   {{ current_user.username[0]|upper }}
                 </div>
                 <span class="user-name">{{ current_user.username }}</span>

@@ -147,7 +147,7 @@ serverForm?.addEventListener("submit", async (event) => {
 
   if (!response.ok) {
     const error = await response.json();
-    alert(error.detail || "Failed to save server");
+    notify(error.detail || "Failed to save server", "error");
     return;
   }
 
@@ -161,6 +161,9 @@ serverForm?.addEventListener("submit", async (event) => {
   }
   if (saveServerBtn) {
     saveServerBtn.innerHTML = '<i class="fas fa-save"></i><span>Save Server</span>';
+  }
+  if (typeof window.showToastAfterReload === "function") {
+    window.showToastAfterReload(serverId ? "Server updated successfully." : "Server created successfully.", "success");
   }
   window.location.reload();
 });
@@ -425,8 +428,12 @@ document.querySelectorAll("[data-delete-server]").forEach((button) => {
 
     const response = await fetch(`/api/servers/${serverId}`, { method: "DELETE" });
     if (!response.ok) {
-      alert("Failed to delete server");
+      notify("Failed to delete server", "error");
       return;
+    }
+
+    if (typeof window.showToastAfterReload === "function") {
+      window.showToastAfterReload("Server deleted successfully.", "success");
     }
 
     window.location.reload();

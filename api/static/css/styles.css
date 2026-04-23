@@ -1268,7 +1268,7 @@ textarea.form-control {
     font-weight: 600;
     font-size: 0.875rem;
     flex-shrink: 0;
-    box-shadow: 0 2px 4px rgba(139, 92, 246, 0.3);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .user-name {

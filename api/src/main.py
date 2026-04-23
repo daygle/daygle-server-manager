@@ -74,6 +74,20 @@ THEME_OPTIONS = {"system", "light", "dark"}
 USER_DATE_FORMAT_GLOBAL = "global"
 USER_TIMEZONE_GLOBAL = "global"
 USER_THEME_GLOBAL = "global"
+DEFAULT_AVATAR_COLOR = "#007bff"
+AVATAR_COLOR_OPTIONS: list[tuple[str, str]] = [
+    ("#007bff", "Blue"),
+    ("#28a745", "Green"),
+    ("#dc3545", "Red"),
+    ("#ffc107", "Yellow"),
+    ("#6f42c1", "Purple"),
+    ("#e83e8c", "Pink"),
+    ("#fd7e14", "Orange"),
+    ("#20c997", "Teal"),
+    ("#6c757d", "Gray"),
+    ("#17a2b8", "Cyan"),
+]
+AVATAR_COLOR_OPTION_KEYS = {value.lower() for value, _ in AVATAR_COLOR_OPTIONS}
 DATE_FORMAT_OPTIONS: list[tuple[str, str, str]] = [
     ("iso-24", "YYYY-MM-DD HH:MM:SS", "%Y-%m-%d %H:%M:%S"),
     ("us-24", "MM/DD/YYYY HH:MM:SS", "%m/%d/%Y %H:%M:%S"),
@@ -132,6 +146,7 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format VARCHAR(32)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(16)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color VARCHAR(16)",
         (
             "CREATE TABLE IF NOT EXISTS audit_logs ("
             "id SERIAL PRIMARY KEY, "
@@ -235,6 +250,13 @@ def normalize_theme(value: str | None) -> str | None:
         return None
     clean_value = value.strip().lower()
     return clean_value if clean_value in THEME_OPTIONS else None
+
+
+def normalize_avatar_color(value: str | None) -> str | None:
+    if not value:
+        return None
+    clean_value = value.strip().lower()
+    return clean_value if clean_value in AVATAR_COLOR_OPTION_KEYS else None
 
 
 def normalize_history_retention_days(value: str | int | None) -> int | None:
@@ -643,6 +665,7 @@ def render_app_template(
     effective_theme = get_effective_theme(current_user)
     global_theme = get_active_default_theme()
     user_theme_preference = normalize_theme(current_user.theme_preference) or DEFAULT_THEME
+    avatar_color = normalize_avatar_color(current_user.avatar_color) or DEFAULT_AVATAR_COLOR
     global_timezone_name = get_active_timezone()
 
     template_context = {
@@ -654,9 +677,11 @@ def render_app_template(
         "effective_theme": effective_theme,
         "global_theme": global_theme,
         "user_theme_preference": user_theme_preference,
+        "avatar_color": avatar_color,
         "global_timezone": global_timezone_name,
         "date_format_options": DATE_FORMAT_OPTIONS,
         "timezone_options": TIMEZONE_OPTIONS,
+        "avatar_color_options": AVATAR_COLOR_OPTIONS,
         "format_dt": lambda value: format_datetime_value(value, date_format, timezone_name),
         "unacknowledged_alert_count": (
             db.query(func.count(Alert.id)).filter(Alert.acknowledged_at.is_(None)).scalar() or 0
@@ -970,6 +995,7 @@ def user_settings_page(request: Request, db: Session = Depends(get_db)):
         selected_user_date_format=current_user.date_format or USER_DATE_FORMAT_GLOBAL,
         selected_user_timezone=current_user.timezone or USER_TIMEZONE_GLOBAL,
         selected_user_theme=current_user.theme_preference or USER_THEME_GLOBAL,
+        selected_user_avatar_color=normalize_avatar_color(current_user.avatar_color) or DEFAULT_AVATAR_COLOR,
     )
 
 
@@ -979,6 +1005,7 @@ def save_user_settings(
     date_format: str = Form(...),
     timezone_name: str = Form(...),
     theme: str = Form(USER_THEME_GLOBAL),
+    avatar_color: str = Form(DEFAULT_AVATAR_COLOR),
     db: Session = Depends(get_db),
 ):
     current_user = get_session_user(request, db)
@@ -1025,6 +1052,16 @@ def save_user_settings(
         current_user.theme_preference = normalized_theme
     if current_user.theme_preference != prev_theme:
         changed.append("theme")
+
+    # Avatar color
+    prev_avatar_color = normalize_avatar_color(current_user.avatar_color) or DEFAULT_AVATAR_COLOR
+    normalized_avatar_color = normalize_avatar_color(avatar_color)
+    if not normalized_avatar_color:
+        set_flash(request, "Invalid avatar color selection.", "error")
+        return RedirectResponse(url="/user-settings", status_code=303)
+    current_user.avatar_color = normalized_avatar_color
+    if normalized_avatar_color != prev_avatar_color:
+        changed.append("avatar color")
 
     db.commit()
 
