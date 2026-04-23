@@ -4,6 +4,7 @@
 {% block title %}Servers{% endblock %}
 
 {% block content %}
+{% if current_user.is_admin %}
 <div class="card mb-4 hidden" id="serverFormCard">
   <div class="card-header flex-between">
     <div class="card-title">
@@ -89,6 +90,7 @@
     </form>
   </div>
 </div>
+{% endif %}
 
 <div class="card" id="serversListCard">
   <div class="card-header flex-between">
@@ -96,10 +98,14 @@
       <i class="fas fa-server"></i>
       <span>Configured Servers</span>
     </div>
+    {% if current_user.is_admin %}
     <button type="button" id="create_server_btn" class="btn btn-primary">
       <i class="fas fa-plus"></i>
       <span>Add Server</span>
     </button>
+    {% else %}
+    <span class="badge badge-secondary">Read-only</span>
+    {% endif %}
   </div>
   <div class="card-body p-0">
     <div class="table-container">
@@ -112,7 +118,7 @@
           <th>User</th>
           <th class="hide-mobile">Auth</th>
           <th class="hide-mobile">Sudo</th>
-          <th>Actions</th>
+          {% if current_user.is_admin %}<th>Actions</th>{% endif %}
         </tr>
       </thead>
       <tbody>
@@ -132,6 +138,7 @@
           <td>{{ server.username }}</td>
           <td class="hide-mobile">{{ 'Password' if server.auth_method == 'password' else 'Key' }}</td>
           <td class="hide-mobile">{{ 'set' if server.sudo_password else 'N/A' }}</td>
+          {% if current_user.is_admin %}
           <td>
             <div class="flex-gap-8">
               <button class="btn btn-secondary btn-sm btn-icon-only" type="button" title="Test Connection" data-test-server="{{ server.id }}"><i class="fas fa-plug"></i></button>
@@ -139,17 +146,20 @@
               <button class="btn btn-danger btn-sm btn-icon-only" type="button" title="Delete" data-delete-server="{{ server.id }}"><i class="fas fa-trash"></i></button>
             </div>
           </td>
+          {% endif %}
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="text-center empty-state">
+          <td colspan="{% if current_user.is_admin %}7{% else %}6{% endif %}" class="text-center empty-state">
             <div>
               <i class="fas fa-server empty-icon"></i>
               <p>No servers configured yet.</p>
+              {% if current_user.is_admin %}
               <button type="button" class="btn btn-primary mt-3" id="create_server_btn_empty">
                 <i class="fas fa-plus"></i>
                 <span>Add Server</span>
               </button>
+              {% endif %}
             </div>
           </td>
         </tr>

@@ -954,7 +954,16 @@ def servers_page(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/updates", response_class=HTMLResponse)
 def updates_page(request: Request, db: Session = Depends(get_db)):
-    return RedirectResponse(url="/updates/manual", status_code=303)
+    if not users_exist(db):
+        return RedirectResponse(url="/setup", status_code=303)
+
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if current_user.is_admin:
+        return RedirectResponse(url="/updates/manual", status_code=303)
+    return RedirectResponse(url="/updates/jobs", status_code=303)
 
 
 @app.get("/updates/manual", response_class=HTMLResponse)
@@ -965,6 +974,10 @@ def updates_manual_page(request: Request, db: Session = Depends(get_db)):
     current_user = get_session_user(request, db)
     if not current_user:
         return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
 
     servers = db.query(Server).order_by(Server.name.asc()).all()
     return render_app_template(
