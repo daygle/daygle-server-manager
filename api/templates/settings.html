@@ -32,4 +32,16 @@
   </form>
   <p class="field-help">These settings apply globally to all users and pages.</p>
 </section>
+
+<section class="panel">
+  <h2>History Retention</h2>
+  <form method="post" action="/settings/history-retention" class="grid-form">
+    <label>
+      Keep job &amp; audit records for (days)
+      <input name="retention_days" type="number" min="0" max="3650" step="1" required value="{{ selected_retention_days }}" />
+    </label>
+    <button type="submit">Save</button>
+  </form>
+  <p class="field-help">Enter the number of days to retain records. Use 0 to keep history forever. Update job records and audit log entries older than this will be automatically deleted. Purging runs once per hour.</p>
+</section>
 {% endblock %}

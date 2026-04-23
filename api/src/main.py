@@ -47,8 +47,11 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 DATE_FORMAT_SETTING_KEY = "date_format"
 TIMEZONE_SETTING_KEY = "timezone"
+HISTORY_RETENTION_SETTING_KEY = "history_retention_days"
 DEFAULT_DATE_FORMAT = "iso-24"
 DEFAULT_TIMEZONE = "UTC"
+DEFAULT_HISTORY_RETENTION_DAYS = 90
+MAX_HISTORY_RETENTION_DAYS = 3650
 USER_DATE_FORMAT_GLOBAL = "global"
 USER_TIMEZONE_GLOBAL = "global"
 DATE_FORMAT_OPTIONS: list[tuple[str, str, str]] = [
@@ -178,6 +181,18 @@ def normalize_timezone(value: str | None) -> str | None:
     return clean_value
 
 
+def normalize_history_retention_days(value: str | int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        retention_days = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if retention_days < 0 or retention_days > MAX_HISTORY_RETENTION_DAYS:
+        return None
+    return retention_days
+
+
 def get_app_setting(db: Session, key: str, default: str) -> str:
     setting = db.query(AppSetting).filter(AppSetting.key == key).first()
     if not setting:
@@ -243,6 +258,22 @@ def get_effective_timezone(current_user: User) -> str:
     return get_active_timezone()
 
 
+def get_history_retention_days(db: Session) -> int:
+    raw = get_app_setting(db, HISTORY_RETENTION_SETTING_KEY, str(DEFAULT_HISTORY_RETENTION_DAYS))
+    normalized = normalize_history_retention_days(raw)
+    return normalized if normalized is not None else DEFAULT_HISTORY_RETENTION_DAYS
+
+
+def purge_old_history(db: Session) -> None:
+    days = get_history_retention_days(db)
+    if days <= 0:
+        return
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    db.query(UpdateJob).filter(UpdateJob.created_at < cutoff).delete(synchronize_session=False)
+    db.query(AuditLog).filter(AuditLog.timestamp < cutoff).delete(synchronize_session=False)
+    db.commit()
+
+
 def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str) -> list[int]:
     created_jobs: list[int] = []
     for server in servers:
@@ -264,6 +295,7 @@ def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str
 
 
 def run_schedule_loop() -> None:
+    tick = 0
     while True:
         db = SessionLocal()
         try:
@@ -282,6 +314,12 @@ def run_schedule_loop() -> None:
                 schedule.last_run_at = now
                 schedule.next_run_at = get_next_schedule_run(schedule, now)
                 db.commit()
+
+            # Purge old history once per hour (every 120 × 30-second ticks)
+            tick += 1
+            if tick >= 120:
+                tick = 0
+                purge_old_history(db)
         except Exception as exc:
             print(f"[schedule-worker] error: {type(exc).__name__}: {exc}")
         finally:
@@ -683,6 +721,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         db,
         selected_date_format=get_active_date_format(),
         selected_timezone=get_active_timezone(),
+        selected_retention_days=get_history_retention_days(db),
     )
 
 
@@ -705,9 +744,16 @@ def update_date_format(
         set_flash(request, "Invalid date format selection.", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
+    previous_value = get_date_format_setting(db)
     set_app_setting(db, DATE_FORMAT_SETTING_KEY, normalized)
     app.state.date_format = normalized
-    log_audit(db, "settings.date_format", request=request, actor=current_user, detail=f"Set to {normalized}")
+    log_audit(
+        db,
+        "settings.date_format",
+        request=request,
+        actor=current_user,
+        detail=f"Changed from {previous_value} to {normalized}",
+    )
     set_flash(request, "Global date format updated.", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
@@ -731,10 +777,51 @@ def update_timezone(
         set_flash(request, "Invalid timezone selection.", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
+    previous_value = get_timezone_setting(db)
     set_app_setting(db, TIMEZONE_SETTING_KEY, normalized)
     app.state.timezone = normalized
-    log_audit(db, "settings.timezone", request=request, actor=current_user, detail=f"Set to {normalized}")
+    log_audit(
+        db,
+        "settings.timezone",
+        request=request,
+        actor=current_user,
+        detail=f"Changed from {previous_value} to {normalized}",
+    )
     set_flash(request, "Global timezone updated.", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@app.post("/settings/history-retention")
+def update_history_retention(
+    request: Request,
+    retention_days: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    normalized = normalize_history_retention_days(retention_days)
+    if normalized is None:
+        set_flash(request, "Invalid retention period.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    previous_value = get_history_retention_days(db)
+    set_app_setting(db, HISTORY_RETENTION_SETTING_KEY, str(normalized))
+    old_label = "keep forever" if previous_value == 0 else f"{previous_value} days"
+    new_label = "keep forever" if normalized == 0 else f"{normalized} days"
+    log_audit(
+        db,
+        "settings.history_retention",
+        request=request,
+        actor=current_user,
+        detail=f"Changed from {old_label} to {new_label}",
+    )
+    set_flash(request, "History retention period updated.", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
 
