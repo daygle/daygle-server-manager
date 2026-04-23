@@ -46,6 +46,14 @@ const appDateFormat = document.body?.dataset.dateFormat || "iso-24";
 const appTimezone = document.body?.dataset.timezone || "UTC";
 let selectedJobId = null;
 
+function notify(message, type = "info") {
+  if (typeof window.showToast === "function") {
+    window.showToast(message, type);
+    return;
+  }
+  window.alert(message);
+}
+
 if (sidebar && localStorage.getItem("sidebarCollapsed") === "true") {
   sidebar.classList.add("collapsed");
 }
@@ -420,7 +428,7 @@ runForm?.addEventListener("submit", async (event) => {
   const checkedServers = [...document.querySelectorAll("#server-checks input:checked")].map((x) => Number(x.value));
 
   if (checkedServers.length === 0) {
-    alert("Select at least one server");
+    notify("Select at least one server", "warning");
     return;
   }
 
@@ -438,10 +446,11 @@ runForm?.addEventListener("submit", async (event) => {
 
   if (!response.ok) {
     const error = await response.json();
-    alert(error.detail || "Failed to run updates");
+    notify(error.detail || "Failed to run updates", "error");
     return;
   }
 
+  notify("Manual update started. Jobs are now running.", "success");
   loadJobs();
 });
 
@@ -607,7 +616,7 @@ async function viewJobOutput(jobId) {
 
   const response = await fetch(`/api/updates/${jobId}`);
   if (!response.ok) {
-    alert("Failed to load job output");
+    notify("Failed to load job output", "error");
     return;
   }
 
@@ -667,7 +676,7 @@ scheduleForm?.addEventListener("submit", async (event) => {
 
   const scheduleServers = [...document.querySelectorAll("#schedule-server-checks input:checked")].map((x) => Number(x.value));
   if (scheduleServers.length === 0) {
-    alert("Select at least one server for this schedule");
+    notify("Select at least one server for this schedule", "warning");
     return;
   }
 
@@ -690,10 +699,16 @@ scheduleForm?.addEventListener("submit", async (event) => {
 
   if (!response.ok) {
     const error = await response.json();
-    alert(error.detail || (editingScheduleId ? "Failed to update schedule" : "Failed to create schedule"));
+    notify(error.detail || (editingScheduleId ? "Failed to update schedule" : "Failed to create schedule"), "error");
     return;
   }
 
+  if (typeof window.showToastAfterReload === "function") {
+    window.showToastAfterReload(
+      editingScheduleId ? "Schedule updated successfully." : "Schedule created successfully.",
+      "success"
+    );
+  }
   window.location.reload();
 });
 
@@ -821,8 +836,11 @@ document.querySelectorAll("[data-toggle-schedule]").forEach((button) => {
     const response = await fetch(`/api/schedules/${scheduleId}/toggle`, { method: "POST" });
     if (!response.ok) {
       const error = await response.json();
-      alert(error.detail || "Failed to toggle schedule");
+      notify(error.detail || "Failed to toggle schedule", "error");
       return;
+    }
+    if (typeof window.showToastAfterReload === "function") {
+      window.showToastAfterReload("Schedule status updated.", "success");
     }
     window.location.reload();
   });
@@ -842,8 +860,11 @@ document.querySelectorAll("[data-delete-schedule]").forEach((button) => {
     const response = await fetch(`/api/schedules/${scheduleId}`, { method: "DELETE" });
     if (!response.ok) {
       const error = await response.json();
-      alert(error.detail || "Failed to delete schedule");
+      notify(error.detail || "Failed to delete schedule", "error");
       return;
+    }
+    if (typeof window.showToastAfterReload === "function") {
+      window.showToastAfterReload("Schedule deleted successfully.", "success");
     }
     window.location.reload();
   });

@@ -876,8 +876,6 @@ def updates_manual_page(request: Request, db: Session = Depends(get_db)):
     if not current_user:
         return RedirectResponse(url="/login", status_code=303)
 
-    log_audit(db, "update.check", request=request, actor=current_user, detail="Opened manual updates page")
-
     servers = db.query(Server).order_by(Server.name.asc()).all()
     return render_app_template(
         request,
@@ -897,8 +895,6 @@ def updates_scheduled_page(request: Request, db: Session = Depends(get_db)):
     current_user = get_session_user(request, db)
     if not current_user:
         return RedirectResponse(url="/login", status_code=303)
-
-    log_audit(db, "update.check", request=request, actor=current_user, detail="Opened scheduled updates page")
 
     servers = db.query(Server).order_by(Server.name.asc()).all()
     schedules = db.query(UpdateSchedule).order_by(UpdateSchedule.created_at.desc()).all()
@@ -923,8 +919,6 @@ def updates_jobs_page(request: Request, db: Session = Depends(get_db)):
     current_user = get_session_user(request, db)
     if not current_user:
         return RedirectResponse(url="/login", status_code=303)
-
-    log_audit(db, "update.check", request=request, actor=current_user, detail="Opened update jobs page")
 
     jobs = db.query(UpdateJob).order_by(UpdateJob.created_at.desc()).limit(30).all()
     return render_app_template(
@@ -2489,8 +2483,10 @@ def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session
     db.add(schedule)
     db.commit()
     db.refresh(schedule)
+    server_names = ", ".join(server.name for server in servers)
     log_audit(db, "schedule.create", request=request, actor=current_user,
-              target_type="schedule", target_id=schedule.id, target_label=schedule.name)
+              target_type="schedule", target_id=schedule.id, target_label=schedule.name,
+              detail=f"Servers: {server_names}; cron: {schedule.cron_expression}; package_manager: {schedule.package_manager}")
     return schedule
 
 
@@ -2531,8 +2527,10 @@ def update_schedule(schedule_id: int, payload: UpdateScheduleUpdate, request: Re
 
     db.commit()
     db.refresh(schedule)
+    server_names = ", ".join(server.name for server in servers)
     log_audit(db, "schedule.update", request=request, actor=current_user,
-              target_type="schedule", target_id=schedule.id, target_label=schedule.name)
+              target_type="schedule", target_id=schedule.id, target_label=schedule.name,
+              detail=f"Servers: {server_names}; cron: {schedule.cron_expression}; package_manager: {schedule.package_manager}; enabled: {schedule.enabled}")
     return schedule
 
 

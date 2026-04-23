@@ -3,6 +3,8 @@
     return;
   }
 
+  const PENDING_TOAST_STORAGE_KEY = "dsm.pendingToast";
+
   function getContainer() {
     let container = document.getElementById("toastContainer");
     if (!container) {
@@ -74,15 +76,54 @@
     window._toastQueue = [];
   }
 
+  function processPendingToast() {
+    let raw = null;
+    try {
+      raw = window.sessionStorage.getItem(PENDING_TOAST_STORAGE_KEY);
+      if (raw) {
+        window.sessionStorage.removeItem(PENDING_TOAST_STORAGE_KEY);
+      }
+    } catch (error) {
+      raw = null;
+    }
+
+    if (!raw) {
+      return;
+    }
+
+    try {
+      const pending = JSON.parse(raw);
+      if (pending && pending.message) {
+        _createToast(pending.message, pending.type || "info");
+      }
+    } catch (error) {
+      // Ignore invalid pending toast payloads.
+    }
+  }
+
   window.createToast = _createToast;
   window.showToast = function (message, type) {
     return window.createToast(message, type);
   };
+  window.showToastAfterReload = function (message, type) {
+    try {
+      window.sessionStorage.setItem(
+        PENDING_TOAST_STORAGE_KEY,
+        JSON.stringify({ message: String(message || ""), type: normalizeType(type) })
+      );
+    } catch (error) {
+      // Ignore storage failures.
+    }
+  };
 
   if (document.readyState === "complete" || document.readyState === "interactive") {
+    processPendingToast();
     processQueue();
   } else {
-    document.addEventListener("DOMContentLoaded", processQueue);
+    document.addEventListener("DOMContentLoaded", function () {
+      processPendingToast();
+      processQueue();
+    });
   }
 
   if (window.__initialFlash) {
