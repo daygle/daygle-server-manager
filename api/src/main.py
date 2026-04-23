@@ -60,16 +60,20 @@ SMTP_USERNAME_SETTING_KEY = "smtp_username"
 SMTP_PASSWORD_SETTING_KEY = "smtp_password"
 SMTP_USE_TLS_SETTING_KEY = "smtp_use_tls"
 SMTP_FROM_SETTING_KEY = "smtp_from"
+DEFAULT_THEME_SETTING_KEY = "default_theme"
 DEFAULT_DATE_FORMAT = "iso-24"
 DEFAULT_TIMEZONE = "UTC"
+DEFAULT_THEME = "system"
 DEFAULT_HISTORY_RETENTION_DAYS = 90
 MAX_HISTORY_RETENTION_DAYS = 3650
 DEFAULT_LOGIN_TIMEOUT_MINUTES = 480
 MAX_LOGIN_TIMEOUT_MINUTES = 43200
 DEFAULT_EMAIL_ALERTS_ENABLED = True
 ALERT_LEVELS = {"info", "warning", "error"}
+THEME_OPTIONS = {"system", "light", "dark"}
 USER_DATE_FORMAT_GLOBAL = "global"
 USER_TIMEZONE_GLOBAL = "global"
+USER_THEME_GLOBAL = "global"
 DATE_FORMAT_OPTIONS: list[tuple[str, str, str]] = [
     ("iso-24", "YYYY-MM-DD HH:MM:SS", "%Y-%m-%d %H:%M:%S"),
     ("us-24", "MM/DD/YYYY HH:MM:SS", "%m/%d/%Y %H:%M:%S"),
@@ -105,6 +109,7 @@ def on_startup() -> None:
     try:
         app.state.date_format = get_date_format_setting(db)
         app.state.timezone = get_timezone_setting(db)
+        app.state.default_theme = get_default_theme_setting(db)
         app.state.login_timeout_minutes = get_login_timeout_minutes(db)
         app.state.email_alerts_enabled = get_email_alerts_enabled(db)
     finally:
@@ -124,6 +129,7 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS summary VARCHAR(255)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format VARCHAR(32)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(16)",
         (
             "CREATE TABLE IF NOT EXISTS audit_logs ("
             "id SERIAL PRIMARY KEY, "
@@ -222,6 +228,13 @@ def normalize_timezone(value: str | None) -> str | None:
     return clean_value
 
 
+def normalize_theme(value: str | None) -> str | None:
+    if not value:
+        return None
+    clean_value = value.strip().lower()
+    return clean_value if clean_value in THEME_OPTIONS else None
+
+
 def normalize_history_retention_days(value: str | int | None) -> int | None:
     if value is None:
         return None
@@ -277,6 +290,12 @@ def get_timezone_setting(db: Session) -> str:
     return DEFAULT_TIMEZONE
 
 
+def get_default_theme_setting(db: Session) -> str:
+    stored_value = get_app_setting(db, DEFAULT_THEME_SETTING_KEY, DEFAULT_THEME)
+    normalized = normalize_theme(stored_value)
+    return normalized or DEFAULT_THEME
+
+
 def format_datetime_value(value: datetime | None, date_format: str, timezone_name: str) -> str:
     if value is None:
         return "-"
@@ -299,6 +318,10 @@ def get_active_timezone() -> str:
     return getattr(app.state, "timezone", DEFAULT_TIMEZONE)
 
 
+def get_active_default_theme() -> str:
+    return getattr(app.state, "default_theme", DEFAULT_THEME)
+
+
 def get_effective_date_format(current_user: User) -> str:
     user_format = normalize_date_format(current_user.date_format)
     if user_format:
@@ -311,6 +334,13 @@ def get_effective_timezone(current_user: User) -> str:
     if user_timezone and user_timezone in TIMEZONE_OPTION_KEYS:
         return user_timezone
     return get_active_timezone()
+
+
+def get_effective_theme(current_user: User) -> str:
+    user_theme = normalize_theme(current_user.theme_preference)
+    if user_theme and user_theme != DEFAULT_THEME:
+        return user_theme
+    return get_active_default_theme()
 
 
 def get_history_retention_days(db: Session) -> int:
@@ -606,6 +636,9 @@ def render_app_template(
 ):
     date_format = get_effective_date_format(current_user)
     timezone_name = get_effective_timezone(current_user)
+    effective_theme = get_effective_theme(current_user)
+    global_theme = get_active_default_theme()
+    user_theme_preference = normalize_theme(current_user.theme_preference) or DEFAULT_THEME
     global_timezone_name = get_active_timezone()
 
     template_context = {
@@ -614,6 +647,9 @@ def render_app_template(
         "flash": pop_flash(request),
         "date_format": date_format,
         "timezone": timezone_name,
+        "effective_theme": effective_theme,
+        "global_theme": global_theme,
+        "user_theme_preference": user_theme_preference,
         "global_timezone": global_timezone_name,
         "date_format_options": DATE_FORMAT_OPTIONS,
         "timezone_options": TIMEZONE_OPTIONS,
@@ -935,6 +971,7 @@ def user_settings_page(request: Request, db: Session = Depends(get_db)):
         db,
         selected_user_date_format=current_user.date_format or USER_DATE_FORMAT_GLOBAL,
         selected_user_timezone=current_user.timezone or USER_TIMEZONE_GLOBAL,
+        selected_user_theme=current_user.theme_preference or USER_THEME_GLOBAL,
     )
 
 
@@ -943,6 +980,7 @@ def save_user_settings(
     request: Request,
     date_format: str = Form(...),
     timezone_name: str = Form(...),
+    theme: str = Form(USER_THEME_GLOBAL),
     db: Session = Depends(get_db),
 ):
     current_user = get_session_user(request, db)
@@ -976,6 +1014,19 @@ def save_user_settings(
         current_user.timezone = normalized_timezone
     if current_user.timezone != prev_timezone:
         changed.append("timezone")
+
+    # Theme
+    prev_theme = current_user.theme_preference
+    if theme == USER_THEME_GLOBAL:
+        current_user.theme_preference = None
+    else:
+        normalized_theme = normalize_theme(theme)
+        if not normalized_theme:
+            set_flash(request, "Invalid theme selection.", "error")
+            return RedirectResponse(url="/user-settings", status_code=303)
+        current_user.theme_preference = normalized_theme
+    if current_user.theme_preference != prev_theme:
+        changed.append("theme")
 
     db.commit()
 
@@ -1068,6 +1119,40 @@ def update_user_timezone(
     return update_my_timezone(request=request, timezone_name=timezone_name, db=db)
 
 
+@app.post("/user-settings/theme")
+def update_user_theme_preference(
+    request: Request,
+    theme: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    normalized_theme = normalize_theme(theme)
+    if not normalized_theme:
+        set_flash(request, "Invalid theme selection.", "error")
+        return RedirectResponse(url=request.headers.get("referer", "/user-settings"), status_code=303)
+
+    previous_theme = normalize_theme(current_user.theme_preference) or DEFAULT_THEME
+    current_user.theme_preference = None if normalized_theme == DEFAULT_THEME else normalized_theme
+    db.commit()
+
+    if previous_theme != normalized_theme:
+        log_audit(
+            db,
+            "user.theme",
+            request=request,
+            actor=current_user,
+            target_type="user",
+            target_id=current_user.id,
+            target_label=current_user.username,
+            detail=f"Changed theme preference from {previous_theme} to {normalized_theme}",
+        )
+
+    return RedirectResponse(url=request.headers.get("referer", "/user-settings"), status_code=303)
+
+
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, db: Session = Depends(get_db)):
     if not users_exist(db):
@@ -1089,6 +1174,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         db,
         selected_date_format=get_active_date_format(),
         selected_timezone=get_active_timezone(),
+        selected_default_theme=get_active_default_theme(),
         selected_retention_days=get_history_retention_days(db),
         selected_login_timeout_minutes=get_active_login_timeout_minutes(),
         selected_email_alerts_enabled=get_active_email_alerts_enabled(),
@@ -1106,6 +1192,7 @@ def save_all_settings(
     request: Request,
     date_format: str = Form(...),
     timezone_name: str = Form(...),
+    default_theme: str = Form(DEFAULT_THEME),
     retention_days: int = Form(...),
     login_timeout_minutes: int = Form(...),
     email_alerts_enabled: str | None = Form(None),
@@ -1134,6 +1221,11 @@ def save_all_settings(
     normalized_timezone = normalize_timezone(timezone_name)
     if not normalized_timezone or normalized_timezone not in TIMEZONE_OPTION_KEYS:
         set_flash(request, "Invalid timezone selection.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    normalized_default_theme = normalize_theme(default_theme)
+    if not normalized_default_theme:
+        set_flash(request, "Invalid default theme selection.", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
     normalized_retention = normalize_history_retention_days(retention_days)
@@ -1190,6 +1282,19 @@ def save_all_settings(
             detail=f"Changed from {prev_timezone} to {normalized_timezone}",
         )
         changed.append("timezone")
+
+    prev_default_theme = get_default_theme_setting(db)
+    if normalized_default_theme != prev_default_theme:
+        set_app_setting(db, DEFAULT_THEME_SETTING_KEY, normalized_default_theme)
+        app.state.default_theme = normalized_default_theme
+        log_audit(
+            db,
+            "settings.default_theme",
+            request=request,
+            actor=current_user,
+            detail=f"Changed from {prev_default_theme} to {normalized_default_theme}",
+        )
+        changed.append("default theme")
 
     prev_retention = get_history_retention_days(db)
     if normalized_retention != prev_retention:

@@ -4,11 +4,32 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block page_title %}Daygle Server Manager{% endblock %}</title>
+    <script>
+      (function () {
+        const userTheme = "{{ user_theme_preference or 'system' }}";
+        const globalTheme = "{{ global_theme or 'system' }}";
+
+        let localTheme = null;
+        try {
+          localTheme = localStorage.getItem("theme");
+        } catch (error) {
+          localTheme = null;
+        }
+
+        const preferredTheme =
+          (userTheme && userTheme !== "system" && userTheme) ||
+          (globalTheme && globalTheme !== "system" && globalTheme) ||
+          (localTheme && localTheme !== "system" && localTheme) ||
+          "light";
+
+        document.documentElement.setAttribute("data-theme", preferredTheme);
+      })();
+    </script>
     <link rel="icon" type="image/png" href="/static/daygle.png" />
     <link rel="stylesheet" href="/static/vendor/fontawesome/all.min.css" />
     <link rel="stylesheet" href="/static/css/styles.css" />
   </head>
-  <body data-date-format="{{ date_format or 'iso-24' }}" data-timezone="{{ timezone or 'UTC' }}">
+  <body data-date-format="{{ date_format or 'iso-24' }}" data-timezone="{{ timezone or 'UTC' }}" data-user-theme="{{ user_theme_preference or 'system' }}" data-global-theme="{{ global_theme or 'system' }}">
     <div class="app-container">
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -125,6 +146,11 @@
                   <i class="fas fa-sliders"></i>
                   <span>User Settings</span>
                 </a>
+                <a href="#" class="dropdown-item" id="themeToggle" role="button" title="Toggle Theme">
+                  <i class="fas fa-sun" id="themeIconLight"></i>
+                  <i class="fas fa-moon" id="themeIconDark" style="display: none;"></i>
+                  <span>Toggle Theme</span>
+                </a>
                 <div class="dropdown-divider"></div>
                 <a href="/logout" class="dropdown-item">
                   <i class="fas fa-right-from-bracket"></i>
@@ -148,8 +174,48 @@
     <script src="/static/js/app.js"></script>
     <script>
       (function () {
+        function getCurrentTheme() {
+          return document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light";
+        }
+
+        function setTheme(theme) {
+          const safeTheme = theme === "dark" ? "dark" : "light";
+          document.documentElement.setAttribute("data-theme", safeTheme);
+          try {
+            localStorage.setItem("theme", safeTheme);
+          } catch (error) {
+            // Ignore localStorage failures.
+          }
+
+          const iconLight = document.getElementById("themeIconLight");
+          const iconDark = document.getElementById("themeIconDark");
+          if (iconLight && iconDark) {
+            const isDark = safeTheme === "dark";
+            iconLight.style.display = isDark ? "none" : "inline-block";
+            iconDark.style.display = isDark ? "inline-block" : "none";
+          }
+        }
+
+        async function persistThemePreference(theme) {
+          const formData = new FormData();
+          formData.append("theme", theme);
+          try {
+            await fetch("/user-settings/theme", {
+              method: "POST",
+              body: formData,
+              credentials: "same-origin",
+            });
+          } catch (error) {
+            // Theme should still work client-side if persistence fails.
+          }
+        }
+
         const userMenuButton = document.getElementById("userMenuButton");
         const userMenuDropdown = document.getElementById("userMenuDropdown");
+        const themeToggle = document.getElementById("themeToggle");
+
+        setTheme(getCurrentTheme());
+
         if (userMenuButton && userMenuDropdown) {
           userMenuButton.addEventListener("click", function (event) {
             event.stopPropagation();
@@ -159,6 +225,17 @@
             if (!userMenuButton.contains(event.target) && !userMenuDropdown.contains(event.target)) {
               userMenuDropdown.classList.remove("show");
             }
+          });
+        }
+
+        if (themeToggle) {
+          themeToggle.addEventListener("click", async function (event) {
+            event.preventDefault();
+            const nextTheme = getCurrentTheme() === "dark" ? "light" : "dark";
+            setTheme(nextTheme);
+            await persistThemePreference(nextTheme);
+
+            window.dispatchEvent(new CustomEvent("theme-changed", { detail: { theme: nextTheme } }));
           });
         }
       })();
