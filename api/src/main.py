@@ -891,7 +891,16 @@ def login_submit(
 
     request.session["user_id"] = user.id
     request.session["last_seen_at"] = int(datetime.utcnow().timestamp())
-    log_audit(db, "user.login", request=request, actor=user)
+    log_audit(
+        db,
+        "user.login",
+        request=request,
+        actor=user,
+        target_type="user",
+        target_id=user.id,
+        target_label=user.username,
+        detail="User logged in successfully",
+    )
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
@@ -899,7 +908,16 @@ def login_submit(
 def logout(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
     current_user = get_session_user(request, db)
     if current_user:
-        log_audit(db, "user.logout", request=request, actor=current_user)
+        log_audit(
+            db,
+            "user.logout",
+            request=request,
+            actor=current_user,
+            target_type="user",
+            target_id=current_user.id,
+            target_label=current_user.username,
+            detail="User logged out",
+        )
     request.session.clear()
     return RedirectResponse(url="/login", status_code=303)
 
@@ -2022,7 +2040,8 @@ def create_user(
     db.commit()
 
     log_audit(db, "user.create", request=request, actor=current_user,
-              target_type="user", target_id=user.id, target_label=clean_username)
+              target_type="user", target_id=user.id, target_label=clean_username,
+              detail=f"Created user role={'admin' if user.is_admin else 'standard'}; enabled={user.enabled}")
     set_flash(request, f"User '{clean_username}' created.", "success")
     return RedirectResponse(url="/users", status_code=303)
 
@@ -2055,7 +2074,8 @@ def toggle_user_enabled(user_id: int, request: Request, db: Session = Depends(ge
     user.enabled = new_enabled
     db.commit()
     log_audit(db, "user.enable" if new_enabled else "user.disable", request=request, actor=current_user,
-              target_type="user", target_id=user.id, target_label=user.username)
+              target_type="user", target_id=user.id, target_label=user.username,
+              detail=f"Set enabled={new_enabled}")
     set_flash(request, f"User '{user.username}' updated.", "success")
     return RedirectResponse(url="/users", status_code=303)
 
@@ -2121,6 +2141,13 @@ def update_user(
             set_flash(request, "At least one enabled admin must remain.", "error")
             return RedirectResponse(url="/users", status_code=303)
 
+    old_username = user.username
+    old_is_admin = user.is_admin
+    old_enabled = user.enabled
+    old_first_name = user.first_name
+    old_last_name = user.last_name
+    old_email = user.email
+
     user.username = clean_username
     user.first_name = first_name.strip() or None
     user.last_name = last_name.strip() or None
@@ -2132,8 +2159,24 @@ def update_user(
         user.password_hash = hash_password(password)
 
     db.commit()
+    changes: list[str] = []
+    if old_username != user.username:
+        changes.append(f"username {old_username}->{user.username}")
+    if old_is_admin != user.is_admin:
+        changes.append(f"role {'admin' if old_is_admin else 'standard'}->{'admin' if user.is_admin else 'standard'}")
+    if old_enabled != user.enabled:
+        changes.append(f"enabled {old_enabled}->{user.enabled}")
+    if old_first_name != user.first_name:
+        changes.append("first_name updated")
+    if old_last_name != user.last_name:
+        changes.append("last_name updated")
+    if old_email != user.email:
+        changes.append("email updated")
+    if password:
+        changes.append("password updated")
     log_audit(db, "user.update", request=request, actor=current_user,
-              target_type="user", target_id=user.id, target_label=user.username)
+              target_type="user", target_id=user.id, target_label=user.username,
+              detail=("; ".join(changes) if changes else "No effective field changes"))
     set_flash(request, f"User '{user.username}' updated.", "success")
     return RedirectResponse(url="/users", status_code=303)
 
@@ -2165,7 +2208,8 @@ def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)):
     db.delete(user)
     db.commit()
     log_audit(db, "user.delete", request=request, actor=current_user,
-              target_type="user", target_id=user_id, target_label=user.username)
+              target_type="user", target_id=user_id, target_label=user.username,
+              detail=f"Deleted user role={'admin' if user.is_admin else 'standard'}; enabled={user.enabled}")
     set_flash(request, "User deleted.", "success")
     return RedirectResponse(url="/users", status_code=303)
 
@@ -2495,6 +2539,7 @@ def acknowledge_alert(alert_id: int, request: Request, db: Session = Depends(get
             target_type="alert",
             target_id=alert.id,
             target_label=alert.title,
+            detail=f"Acknowledged alert level={alert.level}",
         )
 
     return RedirectResponse(url=request.headers.get("referer", "/alerts"), status_code=303)
@@ -2525,6 +2570,7 @@ def dismiss_alert(alert_id: int, request: Request, db: Session = Depends(get_db)
         target_type="alert",
         target_id=alert_id,
         target_label=alert_title,
+        detail=f"Dismissed alert level={alert.level}",
     )
     return RedirectResponse(url=request.headers.get("referer", "/alerts"), status_code=303)
 
@@ -2587,7 +2633,8 @@ def create_ssh_key(payload: SSHKeyCreate, request: Request, db: Session = Depend
     db.refresh(ssh_key)
     actor = get_session_user(request, db)
     log_audit(db, "ssh_key.create", request=request, actor=actor,
-              target_type="ssh_key", target_id=ssh_key.id, target_label=ssh_key.name)
+              target_type="ssh_key", target_id=ssh_key.id, target_label=ssh_key.name,
+              detail=f"Imported SSH key type={ssh_key.key_type}")
     return ssh_key
 
 
@@ -2630,7 +2677,8 @@ def generate_ssh_key(
     db.refresh(ssh_key)
     actor = get_session_user(request, db)
     log_audit(db, "ssh_key.generate", request=request, actor=actor,
-              target_type="ssh_key", target_id=ssh_key.id, target_label=ssh_key.name)
+              target_type="ssh_key", target_id=ssh_key.id, target_label=ssh_key.name,
+              detail="Generated new Ed25519 SSH key")
     return ssh_key
 
 
@@ -2658,7 +2706,8 @@ def delete_ssh_key(key_id: int, request: Request, db: Session = Depends(get_db))
     db.commit()
     actor = get_session_user(request, db)
     log_audit(db, "ssh_key.delete", request=request, actor=actor,
-              target_type="ssh_key", target_id=key_id, target_label=ssh_key.name)
+              target_type="ssh_key", target_id=key_id, target_label=ssh_key.name,
+              detail=f"Deleted SSH key type={ssh_key.key_type}")
     return {"message": "SSH key deleted"}
 
 
@@ -2756,7 +2805,8 @@ def create_server(server_data: ServerCreate, request: Request, db: Session = Dep
     db.refresh(server)
     actor = get_session_user(request, db)
     log_audit(db, "server.create", request=request, actor=actor,
-              target_type="server", target_id=server.id, target_label=server.name)
+              target_type="server", target_id=server.id, target_label=server.name,
+              detail=f"host={server.host}:{server.port}; user={server.username}; auth={server.auth_method}")
     return server
 
 
@@ -2808,11 +2858,16 @@ def update_server(server_id: int, payload: ServerUpdate, request: Request, db: S
     if "sudo_password" in updates:
         server.sudo_password = updates.get("sudo_password") or None
 
+    changed_fields = sorted(updates.keys())
     db.commit()
     db.refresh(server)
     actor = get_session_user(request, db)
     log_audit(db, "server.update", request=request, actor=actor,
-              target_type="server", target_id=server.id, target_label=server.name)
+              target_type="server", target_id=server.id, target_label=server.name,
+              detail=(
+                  f"fields={', '.join(changed_fields) if changed_fields else 'none'}; "
+                  f"host={server.host}:{server.port}; user={server.username}; auth={server.auth_method}"
+              ))
     return server
 
 
@@ -2849,7 +2904,8 @@ def delete_server(server_id: int, request: Request, db: Session = Depends(get_db
     db.commit()
     actor = get_session_user(request, db)
     log_audit(db, "server.delete", request=request, actor=actor,
-              target_type="server", target_id=server_id, target_label=server.name)
+              target_type="server", target_id=server_id, target_label=server.name,
+              detail=f"Deleted server host={server.host}:{server.port}; user={server.username}")
     return {"message": "Server deleted"}
 
 
@@ -2971,7 +3027,8 @@ def toggle_schedule(schedule_id: int, request: Request, db: Session = Depends(ge
     db.refresh(schedule)
     actor = get_session_user(request, db)
     log_audit(db, "schedule.enable" if schedule.enabled else "schedule.disable", request=request, actor=actor,
-              target_type="schedule", target_id=schedule.id, target_label=schedule.name)
+              target_type="schedule", target_id=schedule.id, target_label=schedule.name,
+              detail=f"enabled={schedule.enabled}; next_run_at={schedule.next_run_at}")
     return schedule
 
 
@@ -2987,7 +3044,8 @@ def delete_schedule(schedule_id: int, request: Request, db: Session = Depends(ge
     db.commit()
     actor = get_session_user(request, db)
     log_audit(db, "schedule.delete", request=request, actor=actor,
-              target_type="schedule", target_id=schedule_id, target_label=schedule.name)
+              target_type="schedule", target_id=schedule_id, target_label=schedule.name,
+              detail=f"Deleted schedule cron={schedule.cron_expression}; package_manager={schedule.package_manager}")
     return {"message": "Schedule deleted"}
 
 
@@ -3015,5 +3073,6 @@ def get_update_job(job_id: int, request: Request, db: Session = Depends(get_db))
         target_type="update_job",
         target_id=job.id,
         target_label=f"Job #{job.id}",
+        detail=f"Viewed job output status={job.status}; server_id={job.server_id}",
     )
     return job
