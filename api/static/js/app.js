@@ -14,6 +14,12 @@ const passwordLabel = document.getElementById("password_label");
 const keyLabel = document.getElementById("key_label");
 const cancelEditBtn = document.getElementById("cancel_edit_btn");
 const saveServerBtn = document.getElementById("save_server_btn");
+const serverFormTitle = document.getElementById("server-form-title");
+const serverFormCard = document.getElementById("serverFormCard");
+const serversListCard = document.getElementById("serversListCard");
+const createServerBtn = document.getElementById("create_server_btn");
+const createServerBtnEmpty = document.getElementById("create_server_btn_empty");
+const serverFormCloseBtn = document.getElementById("server_form_close_btn");
 const userForm = document.getElementById("user-form");
 const userFormTitle = document.getElementById("user-form-title");
 const userFormIcon = document.getElementById("user-form-icon");
@@ -126,10 +132,54 @@ serverForm?.addEventListener("submit", async (event) => {
     cancelEditBtn.classList.add("hidden");
   }
   if (saveServerBtn) {
-    saveServerBtn.innerHTML = '<i class="fas fa-floppy-disk"></i>Save Server';
+    saveServerBtn.innerHTML = '<i class="fas fa-save"></i><span>Save Server</span>';
   }
   window.location.reload();
 });
+
+function setServerFormVisibility(showForm) {
+  if (!serverFormCard || !serversListCard) {
+    return;
+  }
+  serverFormCard.classList.toggle("hidden", !showForm);
+  serversListCard.classList.toggle("hidden", showForm);
+}
+
+function resetServerFormToCreateMode() {
+  if (!serverForm) {
+    return;
+  }
+  serverForm.reset();
+  const serverIdInput = serverForm.querySelector('input[name="server_id"]');
+  if (serverIdInput) {
+    serverIdInput.value = "";
+  }
+  if (serverFormTitle) {
+    serverFormTitle.textContent = "Add Server";
+  }
+  if (saveServerBtn) {
+    saveServerBtn.innerHTML = '<i class="fas fa-save"></i><span>Save Server</span>';
+  }
+  if (cancelEditBtn) {
+    cancelEditBtn.classList.add("hidden");
+  }
+  toggleAuthFields();
+}
+
+function showCreateServerForm() {
+  resetServerFormToCreateMode();
+  setServerFormVisibility(true);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function hideServerFormAndReset() {
+  resetServerFormToCreateMode();
+  setServerFormVisibility(false);
+}
+
+createServerBtn?.addEventListener("click", showCreateServerForm);
+createServerBtnEmpty?.addEventListener("click", showCreateServerForm);
+serverFormCloseBtn?.addEventListener("click", hideServerFormAndReset);
 
 document.querySelectorAll("[data-edit-server]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -158,30 +208,26 @@ document.querySelectorAll("[data-edit-server]").forEach((button) => {
     toggleAuthFields();
 
     if (saveServerBtn) {
-      saveServerBtn.innerHTML = '<i class="fas fa-pen"></i>Update Server';
+      saveServerBtn.innerHTML = '<i class="fas fa-pen"></i><span>Update Server</span>';
+    }
+    if (serverFormTitle) {
+      serverFormTitle.textContent = "Edit Server";
     }
     if (cancelEditBtn) {
       cancelEditBtn.classList.remove("hidden");
     }
+    setServerFormVisibility(true);
     serverForm.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 });
 
-cancelEditBtn?.addEventListener("click", () => {
-  if (!serverForm) {
-    return;
-  }
-  serverForm.reset();
-  const serverIdInput = serverForm.querySelector('input[name="server_id"]');
-  if (serverIdInput) {
-    serverIdInput.value = "";
-  }
-  if (saveServerBtn) {
-    saveServerBtn.innerHTML = '<i class="fas fa-floppy-disk"></i>Save Server';
-  }
-  cancelEditBtn.classList.add("hidden");
-  toggleAuthFields();
-});
+cancelEditBtn?.addEventListener("click", hideServerFormAndReset);
+
+if (serverForm && serverFormCard && serversListCard) {
+  setServerFormVisibility(false);
+  serverFormCard.classList.add("visible");
+  serversListCard.classList.add("visible");
+}
 
 function setUserFormMode(editing) {
   if (!userForm || !userSubmitBtn || !userCancelBtn || !userPasswordInput || !userConfirmPasswordInput || !userFormTitle) {

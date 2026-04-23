@@ -4,72 +4,111 @@
 {% block title %}Servers{% endblock %}
 
 {% block content %}
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">Add Server</h3>
+<div class="card mb-4 hidden" id="serverFormCard">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-server"></i>
+      <span id="server-form-title">Add Server</span>
+    </div>
+    <button type="button" id="server_form_close_btn" class="btn btn-secondary btn-sm btn-icon-only" title="Cancel">
+      <i class="fas fa-times"></i>
+    </button>
   </div>
   <div class="card-body">
-  <form id="server-form" class="grid-form">
-    <input type="hidden" name="server_id" id="server_id" />
-    <label>Name <input name="name" required /></label>
-    <label>Host <input name="host" required placeholder="192.168.1.100" /></label>
-    <label>Port <input type="number" name="port" value="22" required /></label>
-    <label>Username <input name="username" required /></label>
-    <label>
-      Auth Method
-      <select name="auth_method" id="auth_method">
-        <option value="key" selected>SSH Key</option>
-        <option value="password">Password</option>
-      </select>
-    </label>
-    <label id="password_label" class="hidden">
-      SSH Password
-      <input type="password" name="password" autocomplete="new-password" />
-      <small class="field-help">Used to log into the server over SSH.</small>
-    </label>
-    <label id="key_label">
-      SSH Key
-      <select name="ssh_key_id" id="ssh_key_id">
-        <option value="">-- Select a key --</option>
-        {% for key in ssh_keys %}
-        <option value="{{ key.id }}">{{ key.name }} ({{ key.key_type }})</option>
-        {% else %}
-        <option disabled>No SSH keys stored — add one on the SSH Keys page</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      <span class="label-with-info">
-        <span>Sudo Password (optional)</span>
-        <span class="info-tip">
-          <button type="button" class="info-tip-btn" aria-label="Sudo password help">&#9432;</button>
-          <span class="info-tip-text">Only needed if sudo asks for a different password.</span>
-        </span>
-      </span>
-      <input type="password" name="sudo_password" autocomplete="new-password" />
-    </label>
-    <button type="submit" id="save_server_btn"><i class="fas fa-floppy-disk"></i>Save Server</button>
-    <button type="button" id="cancel_edit_btn" class="hidden"><i class="fas fa-xmark"></i>Cancel Edit</button>
-  </form>
-  </div>
-</section>
+    <form id="server-form">
+      <input type="hidden" name="server_id" id="server_id" />
 
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">Configured Servers</h3>
+      <div class="two-col-grid">
+        <div class="form-group">
+          <label for="server_name" class="form-label">Name</label>
+          <input id="server_name" class="form-control" name="name" required />
+        </div>
+        <div class="form-group">
+          <label for="server_host" class="form-label">Host</label>
+          <input id="server_host" class="form-control" name="host" required placeholder="192.168.1.100" />
+        </div>
+      </div>
+
+      <div class="two-col-grid">
+        <div class="form-group">
+          <label for="server_port" class="form-label">Port</label>
+          <input id="server_port" class="form-control" type="number" name="port" value="22" required />
+        </div>
+        <div class="form-group">
+          <label for="server_username" class="form-label">Username</label>
+          <input id="server_username" class="form-control" name="username" required />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="auth_method" class="form-label">Auth Method</label>
+        <select class="form-select" name="auth_method" id="auth_method">
+          <option value="key" selected>SSH Key</option>
+          <option value="password">Password</option>
+        </select>
+      </div>
+
+      <div class="form-group hidden" id="password_label">
+        <label for="server_password" class="form-label">SSH Password</label>
+        <input id="server_password" class="form-control" type="password" name="password" autocomplete="new-password" />
+        <small class="form-text">Used to log into the server over SSH.</small>
+      </div>
+
+      <div class="form-group" id="key_label">
+        <label for="ssh_key_id" class="form-label">SSH Key</label>
+        <select class="form-select" name="ssh_key_id" id="ssh_key_id">
+          <option value="">-- Select a key --</option>
+          {% for key in ssh_keys %}
+          <option value="{{ key.id }}">{{ key.name }} ({{ key.key_type }})</option>
+          {% else %}
+          <option disabled>No SSH keys stored - add one on the SSH Keys page</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="server_sudo_password" class="form-label">Sudo Password (optional)</label>
+        <input id="server_sudo_password" class="form-control" type="password" name="sudo_password" autocomplete="new-password" />
+        <small class="form-text">Only needed if sudo asks for a different password.</small>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" id="cancel_edit_btn" class="btn btn-secondary hidden">
+          <i class="fas fa-times"></i>
+          <span>Cancel</span>
+        </button>
+        <button type="submit" id="save_server_btn" class="btn btn-primary">
+          <i class="fas fa-save"></i>
+          <span>Save Server</span>
+        </button>
+      </div>
+    </form>
   </div>
-  <div class="card-body">
-  <div class="table-wrap">
-    <table class="table table-striped">
+</div>
+
+<div class="card" id="serversListCard">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-server"></i>
+      <span>Configured Servers</span>
+    </div>
+    <button type="button" id="create_server_btn" class="btn btn-primary">
+      <i class="fas fa-plus"></i>
+      <span>Add Server</span>
+    </button>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-container">
+    <table class="table">
       <thead>
         <tr>
           <th>ID</th>
           <th>Name</th>
           <th>Host</th>
           <th>User</th>
-          <th>Auth</th>
-          <th>Sudo</th>
-          <th>Action</th>
+          <th class="hide-mobile">Auth</th>
+          <th class="hide-mobile">Sudo</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -84,25 +123,36 @@
           data-server-ssh-key-id="{{ server.ssh_key_id or '' }}"
         >
           <td>{{ server.id }}</td>
-          <td>{{ server.name }}</td>
+          <td><strong>{{ server.name }}</strong></td>
           <td>{{ server.host }}:{{ server.port }}</td>
           <td>{{ server.username }}</td>
-          <td>{{ server.auth_method }}</td>
-          <td>{{ 'set' if server.sudo_password else 'not set' }}</td>
+          <td class="hide-mobile">{{ server.auth_method }}</td>
+          <td class="hide-mobile">{{ 'set' if server.sudo_password else 'not set' }}</td>
           <td>
-            <button class="btn-secondary" type="button" data-edit-server="{{ server.id }}"><i class="fas fa-pen"></i>Edit</button>
-            <button class="btn-danger" type="button" data-delete-server="{{ server.id }}"><i class="fas fa-trash"></i>Delete</button>
+            <div class="flex-gap-8">
+              <button class="btn btn-secondary btn-sm btn-icon-only" type="button" title="Edit" data-edit-server="{{ server.id }}"><i class="fas fa-pen"></i></button>
+              <button class="btn btn-danger btn-sm btn-icon-only" type="button" title="Delete" data-delete-server="{{ server.id }}"><i class="fas fa-trash"></i></button>
+            </div>
           </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="7">No servers configured yet.</td>
+          <td colspan="7" class="text-center empty-state">
+            <div>
+              <i class="fas fa-server empty-icon"></i>
+              <p>No servers configured yet.</p>
+              <button type="button" class="btn btn-primary mt-3" id="create_server_btn_empty">
+                <i class="fas fa-plus"></i>
+                <span>Add Server</span>
+              </button>
+            </div>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </div>
-  </div>
-</section>
+</div>
 {% endblock %}
 
