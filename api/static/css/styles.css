@@ -283,7 +283,7 @@ body {
 }
 
 .content-container {
-  padding: 0 24px 24px;
+  padding: 24px;
   display: grid;
   gap: 18px;
 }
