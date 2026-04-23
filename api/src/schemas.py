@@ -92,6 +92,7 @@ class UpdateScheduleRead(BaseModel):
     server_ids: list[int]
     package_manager: str
     cron_expression: str | None
+    timezone: str | None
     interval_minutes: int
     enabled: bool
     next_run_at: datetime

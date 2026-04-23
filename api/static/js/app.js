@@ -22,6 +22,7 @@ const userPasswordInput = document.getElementById("user_password");
 const userConfirmPasswordInput = document.getElementById("user_confirm_password");
 const currentUserId = userForm?.dataset.currentUserId || "";
 const appDateFormat = document.body?.dataset.dateFormat || "iso-24";
+const appTimezone = document.body?.dataset.timezone || "UTC";
 let selectedJobId = null;
 
 if (sidebar && localStorage.getItem("sidebarCollapsed") === "true") {
@@ -348,12 +349,32 @@ function formatDateTimeForUi(value) {
     return "-";
   }
 
-  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/);
-  if (!match) {
+  const rawValue = String(value);
+  const normalized = rawValue.includes("T") ? rawValue : rawValue.replace(" ", "T");
+  const hasTimezoneSuffix = /Z$|[+-]\d{2}:?\d{2}$/.test(normalized);
+  const timestamp = new Date(hasTimezoneSuffix ? normalized : `${normalized}Z`);
+  if (Number.isNaN(timestamp.getTime())) {
     return String(value);
   }
 
-  const [, year, month, day, hour, minute, second] = match;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: appTimezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(timestamp);
+
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || "00";
+  const year = getPart("year");
+  const month = getPart("month");
+  const day = getPart("day");
+  const hour = getPart("hour");
+  const minute = getPart("minute");
+  const second = getPart("second");
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   if (appDateFormat === "us-24") {
@@ -365,7 +386,7 @@ function formatDateTimeForUi(value) {
   }
 
   if (appDateFormat === "month-name") {
-    return `${day} ${monthNames[Number(month) - 1]} ${year} ${hour}:${minute}:${second}`;
+    return `${day} ${monthNames[Math.max(0, Number(month) - 1)]} ${year} ${hour}:${minute}:${second}`;
   }
 
   return `${year}-${month}-${day} ${hour}:${minute}:${second}`;

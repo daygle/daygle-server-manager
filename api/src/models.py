@@ -18,6 +18,7 @@ class User(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     date_format: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     last_login: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -82,6 +83,7 @@ class UpdateSchedule(Base):
     server_ids_raw: Mapped[str] = mapped_column("server_ids", Text, nullable=False)
     package_manager: Mapped[str] = mapped_column(String(20), nullable=False, default="auto")
     cron_expression: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     next_run_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)

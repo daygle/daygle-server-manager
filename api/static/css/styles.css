@@ -317,6 +317,47 @@ label {
   font-size: 0.94rem;
 }
 
+.label-with-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.info-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--accent-2);
+  cursor: help;
+  outline: none;
+}
+
+.info-tip-text {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%);
+  width: min(300px, 78vw);
+  background: #fff8eb;
+  border: 1px solid #dfd3bf;
+  border-radius: 10px;
+  padding: 8px 10px;
+  color: var(--ink);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  box-shadow: 0 10px 24px rgba(30, 24, 15, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+  z-index: 10;
+}
+
+.info-tip:hover .info-tip-text,
+.info-tip:focus .info-tip-text,
+.info-tip:focus-within .info-tip-text {
+  opacity: 1;
+}
+
 input,
 select,
 button {

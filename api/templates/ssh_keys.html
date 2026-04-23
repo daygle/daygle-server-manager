@@ -68,14 +68,35 @@
 
 <script>
 const keyDateFormat = document.body?.dataset.dateFormat || 'iso-24';
+const keyTimezone = document.body?.dataset.timezone || 'UTC';
 
 function formatDateForUi(value) {
-  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/);
-  if (!match) {
+  const rawValue = String(value || '');
+  const normalized = rawValue.includes('T') ? rawValue : rawValue.replace(' ', 'T');
+  const hasTimezoneSuffix = /Z$|[+-]\d{2}:?\d{2}$/.test(normalized);
+  const timestamp = new Date(hasTimezoneSuffix ? normalized : `${normalized}Z`);
+  if (Number.isNaN(timestamp.getTime())) {
     return String(value || '-');
   }
 
-  const [, year, month, day, hour, minute, second] = match;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: keyTimezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(timestamp);
+
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || '00';
+  const year = getPart('year');
+  const month = getPart('month');
+  const day = getPart('day');
+  const hour = getPart('hour');
+  const minute = getPart('minute');
+  const second = getPart('second');
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   if (keyDateFormat === 'us-24') {
@@ -87,7 +108,7 @@ function formatDateForUi(value) {
   }
 
   if (keyDateFormat === 'month-name') {
-    return `${day} ${monthNames[Number(month) - 1]} ${year} ${hour}:${minute}:${second}`;
+    return `${day} ${monthNames[Math.max(0, Number(month) - 1)]} ${year} ${hour}:${minute}:${second}`;
   }
 
   return `${year}-${month}-${day} ${hour}:${minute}:${second}`;

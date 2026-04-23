@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Thread
 from time import sleep
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from croniter import croniter
@@ -45,8 +46,11 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 DATE_FORMAT_SETTING_KEY = "date_format"
+TIMEZONE_SETTING_KEY = "timezone"
 DEFAULT_DATE_FORMAT = "iso-24"
+DEFAULT_TIMEZONE = "UTC"
 USER_DATE_FORMAT_GLOBAL = "global"
+USER_TIMEZONE_GLOBAL = "global"
 DATE_FORMAT_OPTIONS: list[tuple[str, str, str]] = [
     ("iso-24", "YYYY-MM-DD HH:MM:SS", "%Y-%m-%d %H:%M:%S"),
     ("us-24", "MM/DD/YYYY HH:MM:SS", "%m/%d/%Y %H:%M:%S"),
@@ -54,6 +58,24 @@ DATE_FORMAT_OPTIONS: list[tuple[str, str, str]] = [
     ("month-name", "DD Mon YYYY HH:MM:SS", "%d %b %Y %H:%M:%S"),
 ]
 DATE_FORMAT_MAP = {key: pattern for key, _, pattern in DATE_FORMAT_OPTIONS}
+TIMEZONE_OPTIONS: list[tuple[str, str]] = [
+    ("UTC", "UTC"),
+    ("America/New_York", "America/New_York"),
+    ("America/Chicago", "America/Chicago"),
+    ("America/Denver", "America/Denver"),
+    ("America/Los_Angeles", "America/Los_Angeles"),
+    ("America/Toronto", "America/Toronto"),
+    ("Europe/London", "Europe/London"),
+    ("Europe/Berlin", "Europe/Berlin"),
+    ("Europe/Paris", "Europe/Paris"),
+    ("Europe/Amsterdam", "Europe/Amsterdam"),
+    ("Europe/Dublin", "Europe/Dublin"),
+    ("Asia/Dubai", "Asia/Dubai"),
+    ("Asia/Kolkata", "Asia/Kolkata"),
+    ("Asia/Singapore", "Asia/Singapore"),
+    ("Asia/Tokyo", "Asia/Tokyo"),
+    ("Australia/Sydney", "Australia/Sydney"),
+]
 
 
 @app.on_event("startup")
@@ -63,6 +85,7 @@ def on_startup() -> None:
     db = SessionLocal()
     try:
         app.state.date_format = get_date_format_setting(db)
+        app.state.timezone = get_timezone_setting(db)
     finally:
         db.close()
     if not getattr(app.state, "schedule_worker_started", False):
@@ -75,9 +98,11 @@ def ensure_schema_columns() -> None:
     # Add compatibility columns/types on existing databases without requiring migrations.
     statements = [
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS cron_expression VARCHAR(120)",
+        "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
         "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS summary VARCHAR(255)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format VARCHAR(32)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
     ]
     with engine.begin() as conn:
         for statement in statements:
@@ -85,10 +110,25 @@ def ensure_schema_columns() -> None:
 
 
 def get_next_schedule_run(schedule: UpdateSchedule, from_time: datetime | None = None) -> datetime:
-    base_time = from_time or datetime.utcnow()
+    schedule_timezone_name = normalize_timezone(getattr(schedule, "timezone", None)) or get_active_timezone()
+    schedule_timezone = ZoneInfo(schedule_timezone_name)
+
+    if from_time is None:
+        base_utc = datetime.utcnow().replace(tzinfo=timezone.utc)
+    elif from_time.tzinfo is None:
+        base_utc = from_time.replace(tzinfo=timezone.utc)
+    else:
+        base_utc = from_time.astimezone(timezone.utc)
+
+    base_local = base_utc.astimezone(schedule_timezone)
     if schedule.cron_expression:
-        return croniter(schedule.cron_expression, base_time).get_next(datetime)
-    return base_time + timedelta(minutes=schedule.interval_minutes)
+        next_local = croniter(schedule.cron_expression, base_local).get_next(datetime)
+    else:
+        next_local = base_local + timedelta(minutes=schedule.interval_minutes)
+
+    if next_local.tzinfo is None:
+        next_local = next_local.replace(tzinfo=schedule_timezone)
+    return next_local.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def normalize_date_format(value: str | None) -> str | None:
@@ -96,6 +136,17 @@ def normalize_date_format(value: str | None) -> str | None:
         return None
     clean_value = value.strip()
     return clean_value if clean_value in DATE_FORMAT_MAP else None
+
+
+def normalize_timezone(value: str | None) -> str | None:
+    if not value:
+        return None
+    clean_value = value.strip()
+    try:
+        ZoneInfo(clean_value)
+    except Exception:
+        return None
+    return clean_value
 
 
 def get_app_setting(db: Session, key: str, default: str) -> str:
@@ -121,15 +172,32 @@ def get_date_format_setting(db: Session) -> str:
     return normalized or DEFAULT_DATE_FORMAT
 
 
-def format_datetime_value(value: datetime | None, date_format: str) -> str:
+def get_timezone_setting(db: Session) -> str:
+    stored_value = get_app_setting(db, TIMEZONE_SETTING_KEY, DEFAULT_TIMEZONE)
+    normalized = normalize_timezone(stored_value)
+    return normalized or DEFAULT_TIMEZONE
+
+
+def format_datetime_value(value: datetime | None, date_format: str, timezone_name: str) -> str:
     if value is None:
         return "-"
+
+    if value.tzinfo is None:
+        value_utc = value.replace(tzinfo=timezone.utc)
+    else:
+        value_utc = value.astimezone(timezone.utc)
+
+    local_value = value_utc.astimezone(ZoneInfo(timezone_name))
     pattern = DATE_FORMAT_MAP.get(date_format, DATE_FORMAT_MAP[DEFAULT_DATE_FORMAT])
-    return value.strftime(pattern)
+    return local_value.strftime(pattern)
 
 
 def get_active_date_format() -> str:
     return getattr(app.state, "date_format", DEFAULT_DATE_FORMAT)
+
+
+def get_active_timezone() -> str:
+    return getattr(app.state, "timezone", DEFAULT_TIMEZONE)
 
 
 def get_effective_date_format(current_user: User) -> str:
@@ -137,6 +205,13 @@ def get_effective_date_format(current_user: User) -> str:
     if user_format:
         return user_format
     return get_active_date_format()
+
+
+def get_effective_timezone(current_user: User) -> str:
+    user_timezone = normalize_timezone(current_user.timezone)
+    if user_timezone:
+        return user_timezone
+    return get_active_timezone()
 
 
 def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str) -> list[int]:
@@ -227,14 +302,19 @@ def render_app_template(
     **context,
 ):
     date_format = get_effective_date_format(current_user)
+    timezone_name = get_effective_timezone(current_user)
+    global_timezone_name = get_active_timezone()
 
     template_context = {
         "active_page": active_page,
         "current_user": current_user,
         "flash": pop_flash(request),
         "date_format": date_format,
+        "timezone": timezone_name,
+        "global_timezone": global_timezone_name,
         "date_format_options": DATE_FORMAT_OPTIONS,
-        "format_dt": lambda value: format_datetime_value(value, date_format),
+        "timezone_options": TIMEZONE_OPTIONS,
+        "format_dt": lambda value: format_datetime_value(value, date_format, timezone_name),
     }
     template_context.update(context)
     return templates.TemplateResponse(request=request, name=name, context=template_context)
@@ -489,6 +569,7 @@ def my_settings_page(request: Request, db: Session = Depends(get_db)):
         current_user,
         db,
         selected_user_date_format=current_user.date_format or USER_DATE_FORMAT_GLOBAL,
+        selected_user_timezone=current_user.timezone or USER_TIMEZONE_GLOBAL,
     )
 
 
@@ -519,6 +600,33 @@ def update_my_date_format(
     return RedirectResponse(url="/my-settings", status_code=303)
 
 
+@app.post("/my-settings/timezone")
+def update_my_timezone(
+    request: Request,
+    timezone_name: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if timezone_name == USER_TIMEZONE_GLOBAL:
+        current_user.timezone = None
+        db.commit()
+        set_flash(request, "Your timezone now follows the global setting.", "success")
+        return RedirectResponse(url="/my-settings", status_code=303)
+
+    normalized = normalize_timezone(timezone_name)
+    if not normalized:
+        set_flash(request, "Invalid timezone selection.", "error")
+        return RedirectResponse(url="/my-settings", status_code=303)
+
+    current_user.timezone = normalized
+    db.commit()
+    set_flash(request, "Your personal timezone was updated.", "success")
+    return RedirectResponse(url="/my-settings", status_code=303)
+
+
 @app.get("/settings", response_class=HTMLResponse)
 def settings_page(request: Request, db: Session = Depends(get_db)):
     if not users_exist(db):
@@ -539,6 +647,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         current_user,
         db,
         selected_date_format=get_active_date_format(),
+        selected_timezone=get_active_timezone(),
     )
 
 
@@ -564,6 +673,31 @@ def update_date_format(
     set_app_setting(db, DATE_FORMAT_SETTING_KEY, normalized)
     app.state.date_format = normalized
     set_flash(request, "Global date format updated.", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@app.post("/settings/timezone")
+def update_timezone(
+    request: Request,
+    timezone_name: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    normalized = normalize_timezone(timezone_name)
+    if not normalized:
+        set_flash(request, "Invalid timezone selection.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    set_app_setting(db, TIMEZONE_SETTING_KEY, normalized)
+    app.state.timezone = normalized
+    set_flash(request, "Global timezone updated.", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
 
@@ -1015,7 +1149,7 @@ def run_updates(payload: UpdateRequest, request: Request, db: Session = Depends(
 
 @app.post("/api/schedules", response_model=UpdateScheduleRead)
 def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session = Depends(get_db)):
-    require_api_user(request, db, admin=True)
+    current_user = require_api_user(request, db, admin=True)
 
     if db.query(UpdateSchedule).filter(UpdateSchedule.name == payload.name).first():
         raise HTTPException(status_code=400, detail="Schedule name already exists")
@@ -1032,11 +1166,13 @@ def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session
         name=payload.name.strip(),
         package_manager=payload.package_manager,
         cron_expression=cron_expr,
+        timezone=get_effective_timezone(current_user),
         interval_minutes=payload.interval_minutes or 60,
         enabled=payload.enabled,
-        next_run_at=croniter(cron_expr, datetime.utcnow()).get_next(datetime),
+        next_run_at=datetime.utcnow(),
     )
     schedule.server_ids = sorted(set(payload.server_ids))
+    schedule.next_run_at = get_next_schedule_run(schedule, datetime.utcnow())
 
     db.add(schedule)
     db.commit()

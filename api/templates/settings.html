@@ -19,6 +19,17 @@
     </label>
     <button type="submit">Save Settings</button>
   </form>
+  <form method="post" action="/settings/timezone" class="grid-form" style="margin-top: 12px;">
+    <label>
+      Timezone
+      <select name="timezone_name" required>
+        {% for tz_value, tz_label in timezone_options %}
+        <option value="{{ tz_value }}" {% if selected_timezone == tz_value %}selected{% endif %}>{{ tz_label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Save Timezone</button>
+  </form>
   <p class="field-help">These settings apply globally to all users and pages.</p>
 </section>
 {% endblock %}

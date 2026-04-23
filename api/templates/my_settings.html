@@ -20,6 +20,18 @@
     </label>
     <button type="submit">Save My Settings</button>
   </form>
-  <p class="field-help">Your personal setting overrides the global format only for your account.</p>
+  <form method="post" action="/my-settings/timezone" class="grid-form" style="margin-top: 12px;">
+    <label>
+      Timezone
+      <select name="timezone_name" required>
+        <option value="global" {% if selected_user_timezone == 'global' %}selected{% endif %}>Use global default</option>
+        {% for tz_value, tz_label in timezone_options %}
+        <option value="{{ tz_value }}" {% if selected_user_timezone == tz_value %}selected{% endif %}>{{ tz_label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Save My Timezone</button>
+  </form>
+  <p class="field-help">Your personal settings override the global date format and timezone only for your account.</p>
 </section>
 {% endblock %}
