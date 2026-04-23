@@ -1132,6 +1132,16 @@ def updates_jobs_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@app.get("/updates/jobs/running", response_class=HTMLResponse)
+def updates_jobs_running_page(request: Request):
+    return RedirectResponse(url="/updates/jobs?status=running", status_code=303)
+
+
+@app.get("/updates/jobs/failed", response_class=HTMLResponse)
+def updates_jobs_failed_page(request: Request):
+    return RedirectResponse(url="/updates/jobs?status=failed", status_code=303)
+
+
 @app.get("/users", response_class=HTMLResponse)
 def users_page(request: Request, db: Session = Depends(get_db)):
     if not users_exist(db):
