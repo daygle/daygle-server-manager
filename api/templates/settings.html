@@ -58,11 +58,19 @@
       </div>
     </div>
     <div class="card-body">
-      <div class="form-group">
-        <label for="retention_days" class="form-label">Keep job &amp; audit records for (days)</label>
-        <input id="retention_days" class="form-control" type="number" name="retention_days" min="0" max="3650" step="1" required value="{{ selected_retention_days }}" />
-        <small class="form-text text-secondary">Enter the number of days to retain records. Use 0 to keep history forever. Update job records and audit log entries older than this will be automatically deleted. Purging runs once per hour.</small>
+      <div class="two-col-grid">
+        <div class="form-group">
+          <label for="job_retention_days" class="form-label">Keep update jobs for (days)</label>
+          <input id="job_retention_days" class="form-control" type="number" name="job_retention_days" min="0" max="3650" step="1" required value="{{ selected_job_retention_days }}" />
+          <small class="form-text text-secondary">Use 0 to keep job and alert history forever.</small>
+        </div>
+        <div class="form-group">
+          <label for="audit_retention_days" class="form-label">Keep audit log records for (days)</label>
+          <input id="audit_retention_days" class="form-control" type="number" name="audit_retention_days" min="0" max="3650" step="1" required value="{{ selected_audit_retention_days }}" />
+          <small class="form-text text-secondary">Use 0 to keep audit history forever.</small>
+        </div>
       </div>
+      <small class="form-text text-secondary">Purging runs once per hour.</small>
     </div>
   </div>
 

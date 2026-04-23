@@ -52,6 +52,8 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 DATE_FORMAT_SETTING_KEY = "date_format"
 TIMEZONE_SETTING_KEY = "timezone"
 HISTORY_RETENTION_SETTING_KEY = "history_retention_days"
+UPDATE_JOB_RETENTION_SETTING_KEY = "update_job_retention_days"
+AUDIT_RETENTION_SETTING_KEY = "audit_retention_days"
 LOGIN_TIMEOUT_SETTING_KEY = "login_timeout_minutes"
 EMAIL_ALERTS_ENABLED_SETTING_KEY = "email_alerts_enabled"
 SMTP_HOST_SETTING_KEY = "smtp_host"
@@ -373,6 +375,20 @@ def get_history_retention_days(db: Session) -> int:
     return normalized if normalized is not None else DEFAULT_HISTORY_RETENTION_DAYS
 
 
+def get_update_job_retention_days(db: Session) -> int:
+    legacy_value = get_history_retention_days(db)
+    raw = get_app_setting(db, UPDATE_JOB_RETENTION_SETTING_KEY, str(legacy_value))
+    normalized = normalize_history_retention_days(raw)
+    return normalized if normalized is not None else legacy_value
+
+
+def get_audit_retention_days(db: Session) -> int:
+    legacy_value = get_history_retention_days(db)
+    raw = get_app_setting(db, AUDIT_RETENTION_SETTING_KEY, str(legacy_value))
+    normalized = normalize_history_retention_days(raw)
+    return normalized if normalized is not None else legacy_value
+
+
 def get_login_timeout_minutes(db: Session) -> int:
     raw = get_app_setting(db, LOGIN_TIMEOUT_SETTING_KEY, str(DEFAULT_LOGIN_TIMEOUT_MINUTES))
     normalized = normalize_login_timeout_minutes(raw)
@@ -517,13 +533,17 @@ def create_alert(
 
 
 def purge_old_history(db: Session) -> None:
-    days = get_history_retention_days(db)
-    if days <= 0:
-        return
-    cutoff = datetime.utcnow() - timedelta(days=days)
-    db.query(UpdateJob).filter(UpdateJob.created_at < cutoff).delete(synchronize_session=False)
-    db.query(AuditLog).filter(AuditLog.timestamp < cutoff).delete(synchronize_session=False)
-    db.query(Alert).filter(Alert.created_at < cutoff).delete(synchronize_session=False)
+    job_days = get_update_job_retention_days(db)
+    if job_days > 0:
+        job_cutoff = datetime.utcnow() - timedelta(days=job_days)
+        db.query(UpdateJob).filter(UpdateJob.created_at < job_cutoff).delete(synchronize_session=False)
+        db.query(Alert).filter(Alert.created_at < job_cutoff).delete(synchronize_session=False)
+
+    audit_days = get_audit_retention_days(db)
+    if audit_days > 0:
+        audit_cutoff = datetime.utcnow() - timedelta(days=audit_days)
+        db.query(AuditLog).filter(AuditLog.timestamp < audit_cutoff).delete(synchronize_session=False)
+
     db.commit()
 
 
@@ -1210,7 +1230,8 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         selected_date_format=get_active_date_format(),
         selected_timezone=get_active_timezone(),
         selected_default_theme=get_active_default_theme(),
-        selected_retention_days=get_history_retention_days(db),
+        selected_job_retention_days=get_update_job_retention_days(db),
+        selected_audit_retention_days=get_audit_retention_days(db),
         selected_login_timeout_minutes=get_active_login_timeout_minutes(),
         selected_email_alerts_enabled=get_active_email_alerts_enabled(),
         selected_smtp_host=get_smtp_setting(db, SMTP_HOST_SETTING_KEY, "SMTP_HOST", "localhost"),
@@ -1228,7 +1249,8 @@ def save_all_settings(
     date_format: str = Form(...),
     timezone_name: str = Form(...),
     default_theme: str = Form(DEFAULT_THEME),
-    retention_days: int = Form(...),
+    job_retention_days: int = Form(...),
+    audit_retention_days: int = Form(...),
     login_timeout_minutes: int = Form(...),
     email_alerts_enabled: str | None = Form(None),
     smtp_host: str = Form(...),
@@ -1263,9 +1285,14 @@ def save_all_settings(
         set_flash(request, "Invalid default theme selection.", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
-    normalized_retention = normalize_history_retention_days(retention_days)
-    if normalized_retention is None:
-        set_flash(request, "Invalid retention period.", "error")
+    normalized_job_retention = normalize_history_retention_days(job_retention_days)
+    if normalized_job_retention is None:
+        set_flash(request, "Invalid jobs retention period.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    normalized_audit_retention = normalize_history_retention_days(audit_retention_days)
+    if normalized_audit_retention is None:
+        set_flash(request, "Invalid audit retention period.", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
     normalized_timeout = normalize_login_timeout_minutes(login_timeout_minutes)
@@ -1331,19 +1358,33 @@ def save_all_settings(
         )
         changed.append("default theme")
 
-    prev_retention = get_history_retention_days(db)
-    if normalized_retention != prev_retention:
-        set_app_setting(db, HISTORY_RETENTION_SETTING_KEY, str(normalized_retention))
-        old_label = "keep forever" if prev_retention == 0 else f"{prev_retention} days"
-        new_label = "keep forever" if normalized_retention == 0 else f"{normalized_retention} days"
+    prev_job_retention = get_update_job_retention_days(db)
+    if normalized_job_retention != prev_job_retention:
+        set_app_setting(db, UPDATE_JOB_RETENTION_SETTING_KEY, str(normalized_job_retention))
+        old_label = "keep forever" if prev_job_retention == 0 else f"{prev_job_retention} days"
+        new_label = "keep forever" if normalized_job_retention == 0 else f"{normalized_job_retention} days"
         log_audit(
             db,
-            "settings.history_retention",
+            "settings.job_retention",
             request=request,
             actor=current_user,
             detail=f"Changed from {old_label} to {new_label}",
         )
-        changed.append("history retention")
+        changed.append("job retention")
+
+    prev_audit_retention = get_audit_retention_days(db)
+    if normalized_audit_retention != prev_audit_retention:
+        set_app_setting(db, AUDIT_RETENTION_SETTING_KEY, str(normalized_audit_retention))
+        old_label = "keep forever" if prev_audit_retention == 0 else f"{prev_audit_retention} days"
+        new_label = "keep forever" if normalized_audit_retention == 0 else f"{normalized_audit_retention} days"
+        log_audit(
+            db,
+            "settings.audit_retention",
+            request=request,
+            actor=current_user,
+            detail=f"Changed from {old_label} to {new_label}",
+        )
+        changed.append("audit retention")
 
     prev_timeout = get_login_timeout_minutes(db)
     if normalized_timeout != prev_timeout:
@@ -1516,18 +1557,24 @@ def update_history_retention(
         set_flash(request, "Invalid retention period.", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
-    previous_value = get_history_retention_days(db)
-    set_app_setting(db, HISTORY_RETENTION_SETTING_KEY, str(normalized))
-    old_label = "keep forever" if previous_value == 0 else f"{previous_value} days"
+    previous_job_value = get_update_job_retention_days(db)
+    previous_audit_value = get_audit_retention_days(db)
+    set_app_setting(db, UPDATE_JOB_RETENTION_SETTING_KEY, str(normalized))
+    set_app_setting(db, AUDIT_RETENTION_SETTING_KEY, str(normalized))
+    old_label = (
+        "keep forever"
+        if previous_job_value == 0 and previous_audit_value == 0
+        else f"jobs={previous_job_value} days, audit={previous_audit_value} days"
+    )
     new_label = "keep forever" if normalized == 0 else f"{normalized} days"
     log_audit(
         db,
         "settings.history_retention",
         request=request,
         actor=current_user,
-        detail=f"Changed from {old_label} to {new_label}",
+        detail=f"Changed both job and audit retention from {old_label} to {new_label}",
     )
-    set_flash(request, "History retention period updated.", "success")
+    set_flash(request, "Job and audit retention periods updated.", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
 
