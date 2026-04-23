@@ -44,4 +44,67 @@
   </form>
   <p class="field-help">Enter the number of days to retain records. Use 0 to keep history forever. Update job records and audit log entries older than this will be automatically deleted. Purging runs once per hour.</p>
 </section>
+
+<section class="panel">
+  <h2>Session Security</h2>
+  <form method="post" action="/settings/login-timeout" class="grid-form">
+    <label>
+      Login timeout (minutes)
+      <input name="login_timeout_minutes" type="number" min="1" max="43200" step="1" required value="{{ selected_login_timeout_minutes }}" />
+    </label>
+    <button type="submit">Save</button>
+  </form>
+  <p class="field-help">Users are logged out after this many minutes of inactivity.</p>
+</section>
+
+<section class="panel">
+  <h2>Alert Notifications</h2>
+  <form method="post" action="/settings/email-alerts" class="grid-form">
+    <label class="checkbox-field">
+      <input type="checkbox" name="email_alerts_enabled" {% if selected_email_alerts_enabled %}checked{% endif %} />
+      <span>Email admins when alerts are generated</span>
+    </label>
+    <button type="submit">Save</button>
+  </form>
+  <p class="field-help">When enabled, failed update alerts are emailed to enabled admin users with an email address.</p>
+</section>
+
+<section class="panel">
+  <h2>SMTP Settings</h2>
+  <form method="post" action="/settings/smtp" class="grid-form">
+    <label>
+      SMTP Host
+      <input name="smtp_host" required value="{{ selected_smtp_host }}" />
+    </label>
+    <label>
+      SMTP Port
+      <input name="smtp_port" type="number" min="1" max="65535" required value="{{ selected_smtp_port }}" />
+    </label>
+    <label>
+      SMTP Username
+      <input name="smtp_username" value="{{ selected_smtp_username }}" autocomplete="off" />
+    </label>
+    <label>
+      SMTP Password
+      <input name="smtp_password" type="password" placeholder="Leave blank to keep current password" autocomplete="new-password" />
+      {% if smtp_password_set %}
+      <small class="field-help">A password is currently saved.</small>
+      {% endif %}
+    </label>
+    <label>
+      From Address
+      <input name="smtp_from" type="email" required value="{{ selected_smtp_from }}" />
+    </label>
+    <label class="checkbox-field">
+      <input type="checkbox" name="smtp_use_tls" {% if selected_smtp_use_tls %}checked{% endif %} />
+      <span>Use TLS</span>
+    </label>
+    <label class="checkbox-field">
+      <input type="checkbox" name="clear_smtp_password" />
+      <span>Clear saved SMTP password</span>
+    </label>
+    <button type="submit">Save SMTP Settings</button>
+  </form>
+  <p class="field-help">These credentials are used for admin alert emails.</p>
+</section>
 {% endblock %}

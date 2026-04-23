@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+
+{% block page_title %}Alerts - Daygle Server Manager{% endblock %}
+{% block title %}Alerts{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Alerts</h2>
+  <p class="section-description">Track active and acknowledged alerts. Failed update jobs create alerts and optionally send admin email notifications.</p>
+
+  <form method="get" action="/alerts" class="grid-form" style="margin-bottom: 12px;">
+    <label>
+      Search
+      <input type="text" name="q" value="{{ search_q }}" placeholder="Title, message, source" />
+    </label>
+    <label>
+      Level
+      <select name="level">
+        <option value="" {% if not selected_level %}selected{% endif %}>All levels</option>
+        <option value="error" {% if selected_level == 'error' %}selected{% endif %}>error</option>
+        <option value="warning" {% if selected_level == 'warning' %}selected{% endif %}>warning</option>
+        <option value="info" {% if selected_level == 'info' %}selected{% endif %}>info</option>
+      </select>
+    </label>
+    <label>
+      State
+      <select name="state">
+        <option value="open" {% if selected_state == 'open' %}selected{% endif %}>Open</option>
+        <option value="ack" {% if selected_state == 'ack' %}selected{% endif %}>Acknowledged</option>
+        <option value="all" {% if selected_state == 'all' %}selected{% endif %}>All</option>
+      </select>
+    </label>
+    <label>
+      Page Size
+      <select name="page_size">
+        <option value="25" {% if page_size == 25 %}selected{% endif %}>25</option>
+        <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
+        <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
+        <option value="200" {% if page_size == 200 %}selected{% endif %}>200</option>
+      </select>
+    </label>
+    <button type="submit">Apply Filters</button>
+    <a href="/alerts" class="btn-secondary" style="display:inline-flex;align-items:center;justify-content:center;padding:0 16px;min-height:42px;text-decoration:none;">Reset</a>
+  </form>
+
+  <p class="section-description">Showing {{ alerts|length }} of {{ total_count }} alerts.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Level</th>
+          <th>Title</th>
+          <th>Message</th>
+          <th>Source</th>
+          <th>State</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for alert in alerts %}
+        <tr class="{% if alert.acknowledged_at %}alert-row-ack{% endif %}">
+          <td>{{ format_dt(alert.created_at) }}</td>
+          <td><span class="status status-{{ 'failed' if alert.level == 'error' else ('running' if alert.level == 'warning' else 'pending') }}">{{ alert.level }}</span></td>
+          <td>{{ alert.title }}</td>
+          <td>{{ alert.message }}</td>
+          <td>{{ alert.source_type or '-' }}{% if alert.source_id %} #{{ alert.source_id }}{% endif %}</td>
+          <td>{{ 'acknowledged' if alert.acknowledged_at else 'open' }}</td>
+          <td>
+            {% if not alert.acknowledged_at %}
+            <form method="post" action="/alerts/{{ alert.id }}/ack" style="display:inline;">
+              <button class="btn-secondary" type="submit">Acknowledge</button>
+            </form>
+            {% endif %}
+            <form method="post" action="/alerts/{{ alert.id }}/dismiss" style="display:inline;">
+              <button class="btn-danger" type="submit">Dismiss</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7">No alerts found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination-row">
+    {% if prev_page_url %}
+    <a class="btn-secondary" href="{{ prev_page_url }}">Previous</a>
+    {% else %}
+    <span class="btn-secondary pagination-disabled">Previous</span>
+    {% endif %}
+
+    <span class="pagination-meta">Page {{ page }} of {{ total_pages }}</span>
+
+    {% if next_page_url %}
+    <a class="btn-secondary" href="{{ next_page_url }}">Next</a>
+    {% else %}
+    <span class="btn-secondary pagination-disabled">Next</span>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

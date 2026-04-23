@@ -6,7 +6,54 @@
 {% block content %}
 <section class="panel">
   <h2>Audit Log</h2>
-  <p class="section-description">Last 500 recorded actions, newest first.</p>
+  <p class="section-description">Search, filter, and page through audit events.</p>
+
+  <form method="get" action="/audit-log" class="grid-form" style="margin-bottom: 12px;">
+    <label>
+      Search
+      <input type="text" name="q" value="{{ search_q }}" placeholder="Action, user, target, detail, IP" />
+    </label>
+    <label>
+      Action
+      <select name="action">
+        <option value="">All actions</option>
+        {% for action in action_options %}
+        <option value="{{ action }}" {% if selected_action == action %}selected{% endif %}>{{ action }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      User
+      <select name="actor">
+        <option value="">All users</option>
+        {% for actor in actor_options %}
+        <option value="{{ actor }}" {% if selected_actor == actor %}selected{% endif %}>{{ actor }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>
+      From Date
+      <input type="date" name="date_from" value="{{ selected_date_from }}" />
+    </label>
+    <label>
+      To Date
+      <input type="date" name="date_to" value="{{ selected_date_to }}" />
+    </label>
+    <label>
+      Page Size
+      <select name="page_size">
+        <option value="25" {% if page_size == 25 %}selected{% endif %}>25</option>
+        <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
+        <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
+        <option value="200" {% if page_size == 200 %}selected{% endif %}>200</option>
+      </select>
+    </label>
+    <button type="submit">Apply Filters</button>
+    <a href="/audit-log" class="btn-secondary" style="display:inline-flex;align-items:center;justify-content:center;padding:0 16px;min-height:42px;text-decoration:none;">Reset</a>
+  </form>
+
+  <p class="section-description">Showing {{ entries|length }} of {{ total_count }} entries.</p>
+
   <div class="table-wrap">
     <table>
       <thead>
@@ -43,6 +90,22 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
+
+  <div class="pagination-row">
+    {% if prev_page_url %}
+    <a class="btn-secondary" href="{{ prev_page_url }}">Previous</a>
+    {% else %}
+    <span class="btn-secondary pagination-disabled">Previous</span>
+    {% endif %}
+
+    <span class="pagination-meta">Page {{ page }} of {{ total_pages }}</span>
+
+    {% if next_page_url %}
+    <a class="btn-secondary" href="{{ next_page_url }}">Next</a>
+    {% else %}
+    <span class="btn-secondary pagination-disabled">Next</span>
+    {% endif %}
   </div>
 </section>
 {% endblock %}

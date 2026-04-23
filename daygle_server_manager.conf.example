@@ -5,3 +5,11 @@
 SESSION_SECRET=replace-with-long-random-secret
 POSTGRES_PASSWORD=replace-with-db-password
 DATABASE_URL=postgresql+psycopg2://daygle_server_manager:change_me@db:5432/daygle_server_manager
+
+# Optional SMTP settings for alert email delivery
+SMTP_HOST=localhost
+SMTP_PORT=25
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_USE_TLS=false
+SMTP_FROM=daygle-server-manager@localhost

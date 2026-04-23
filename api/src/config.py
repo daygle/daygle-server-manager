@@ -6,6 +6,12 @@ DEFAULTS = {
     "SESSION_SECRET": "change-me-in-production",
     "DATABASE_URL": "postgresql+psycopg2://daygle_server_manager:change_me@db:5432/daygle_server_manager",
     "SSH_KEYS_PATH": "/ssh_keys/id_rsa",
+    "SMTP_HOST": "localhost",
+    "SMTP_PORT": "25",
+    "SMTP_USERNAME": "",
+    "SMTP_PASSWORD": "",
+    "SMTP_USE_TLS": "false",
+    "SMTP_FROM": "daygle-server-manager@localhost",
 }
 
 

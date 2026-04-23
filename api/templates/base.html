@@ -62,6 +62,12 @@
               <a href="/audit-log" class="nav-link {% if active_page == 'audit-log' %}active{% endif %}">
                 <i class="fas fa-list-check"></i><span>Audit Log</span>
               </a>
+              <a href="/alerts" class="nav-link {% if active_page == 'alerts' %}active{% endif %}">
+                <i class="fas fa-triangle-exclamation"></i><span>Alerts</span>
+                {% if unacknowledged_alert_count > 0 %}
+                <span class="alert-count-badge">{{ unacknowledged_alert_count }}</span>
+                {% endif %}
+              </a>
           </div>
           {% endif %}
 
@@ -86,6 +92,12 @@
             <h1 class="page-title">{% block title %}Daygle Server Manager{% endblock %}</h1>
           </div>
           <div class="topbar-right">
+            {% if current_user and current_user.is_admin and unacknowledged_alert_count > 0 %}
+            <a href="/alerts" class="topbar-alert-link" title="Open alerts">
+              <i class="fas fa-bell"></i>
+              <span class="alert-count-badge">{{ unacknowledged_alert_count }}</span>
+            </a>
+            {% endif %}
             <details class="user-menu">
               <summary class="user-chip">
                 <i class="fas fa-user"></i>

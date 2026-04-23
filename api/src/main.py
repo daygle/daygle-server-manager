@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 from pathlib import Path
+import smtplib
 from threading import Thread
 from time import sleep
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo, available_timezones
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
@@ -11,13 +14,13 @@ from croniter import croniter
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func, text
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
 from .config import get_setting
 from .database import Base, SessionLocal, engine, get_db
-from .models import AppSetting, AuditLog, SSHKey, Server, UpdateJob, UpdateSchedule, User
+from .models import Alert, AppSetting, AuditLog, SSHKey, Server, UpdateJob, UpdateSchedule, User
 from .schemas import (
     SSHKeyCreate,
     SSHKeyRead,
@@ -39,7 +42,7 @@ app = FastAPI(title="Daygle Server Manager", version="0.1.0")
 app.add_middleware(
     SessionMiddleware,
     secret_key=get_setting("SESSION_SECRET"),
-    max_age=60 * 60 * 8,
+    max_age=60 * 60 * 24 * 30,
 )
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
@@ -48,10 +51,22 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 DATE_FORMAT_SETTING_KEY = "date_format"
 TIMEZONE_SETTING_KEY = "timezone"
 HISTORY_RETENTION_SETTING_KEY = "history_retention_days"
+LOGIN_TIMEOUT_SETTING_KEY = "login_timeout_minutes"
+EMAIL_ALERTS_ENABLED_SETTING_KEY = "email_alerts_enabled"
+SMTP_HOST_SETTING_KEY = "smtp_host"
+SMTP_PORT_SETTING_KEY = "smtp_port"
+SMTP_USERNAME_SETTING_KEY = "smtp_username"
+SMTP_PASSWORD_SETTING_KEY = "smtp_password"
+SMTP_USE_TLS_SETTING_KEY = "smtp_use_tls"
+SMTP_FROM_SETTING_KEY = "smtp_from"
 DEFAULT_DATE_FORMAT = "iso-24"
 DEFAULT_TIMEZONE = "UTC"
 DEFAULT_HISTORY_RETENTION_DAYS = 90
 MAX_HISTORY_RETENTION_DAYS = 3650
+DEFAULT_LOGIN_TIMEOUT_MINUTES = 480
+MAX_LOGIN_TIMEOUT_MINUTES = 43200
+DEFAULT_EMAIL_ALERTS_ENABLED = True
+ALERT_LEVELS = {"info", "warning", "error"}
 USER_DATE_FORMAT_GLOBAL = "global"
 USER_TIMEZONE_GLOBAL = "global"
 DATE_FORMAT_OPTIONS: list[tuple[str, str, str]] = [
@@ -61,12 +76,24 @@ DATE_FORMAT_OPTIONS: list[tuple[str, str, str]] = [
     ("month-name", "DD Mon YYYY HH:MM:SS", "%d %b %Y %H:%M:%S"),
 ]
 DATE_FORMAT_MAP = {key: pattern for key, _, pattern in DATE_FORMAT_OPTIONS}
-_ALL_TIMEZONES = sorted(available_timezones())
+
+
+def is_country_city_timezone(timezone_name: str) -> bool:
+    if timezone_name == DEFAULT_TIMEZONE:
+        return True
+    if "/" not in timezone_name:
+        return False
+    excluded_prefixes = ("Etc/", "posix/", "right/", "SystemV/")
+    return not timezone_name.startswith(excluded_prefixes)
+
+
+_ALL_TIMEZONES = sorted(tz for tz in available_timezones() if is_country_city_timezone(tz))
 if DEFAULT_TIMEZONE in _ALL_TIMEZONES:
     _ALL_TIMEZONES.remove(DEFAULT_TIMEZONE)
 TIMEZONE_OPTIONS: list[tuple[str, str]] = [(DEFAULT_TIMEZONE, DEFAULT_TIMEZONE)] + [
     (timezone_name, timezone_name) for timezone_name in _ALL_TIMEZONES
 ]
+TIMEZONE_OPTION_KEYS = {value for value, _ in TIMEZONE_OPTIONS}
 
 
 @app.on_event("startup")
@@ -77,6 +104,8 @@ def on_startup() -> None:
     try:
         app.state.date_format = get_date_format_setting(db)
         app.state.timezone = get_timezone_setting(db)
+        app.state.login_timeout_minutes = get_login_timeout_minutes(db)
+        app.state.email_alerts_enabled = get_email_alerts_enabled(db)
     finally:
         db.close()
     if not getattr(app.state, "schedule_worker_started", False):
@@ -106,6 +135,17 @@ def ensure_schema_columns() -> None:
             "target_label VARCHAR(255), "
             "detail TEXT, "
             "ip_address VARCHAR(60))"
+        ),
+        (
+            "CREATE TABLE IF NOT EXISTS alerts ("
+            "id SERIAL PRIMARY KEY, "
+            "level VARCHAR(20) NOT NULL DEFAULT 'error', "
+            "title VARCHAR(255) NOT NULL, "
+            "message TEXT NOT NULL, "
+            "source_type VARCHAR(60), "
+            "source_id VARCHAR(120), "
+            "created_at TIMESTAMP NOT NULL DEFAULT NOW(), "
+            "acknowledged_at TIMESTAMP NULL)"
         ),
     ]
     with engine.begin() as conn:
@@ -193,6 +233,18 @@ def normalize_history_retention_days(value: str | int | None) -> int | None:
     return retention_days
 
 
+def normalize_login_timeout_minutes(value: str | int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        timeout_minutes = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if timeout_minutes < 1 or timeout_minutes > MAX_LOGIN_TIMEOUT_MINUTES:
+        return None
+    return timeout_minutes
+
+
 def get_app_setting(db: Session, key: str, default: str) -> str:
     setting = db.query(AppSetting).filter(AppSetting.key == key).first()
     if not setting:
@@ -219,7 +271,9 @@ def get_date_format_setting(db: Session) -> str:
 def get_timezone_setting(db: Session) -> str:
     stored_value = get_app_setting(db, TIMEZONE_SETTING_KEY, DEFAULT_TIMEZONE)
     normalized = normalize_timezone(stored_value)
-    return normalized or DEFAULT_TIMEZONE
+    if normalized and normalized in TIMEZONE_OPTION_KEYS:
+        return normalized
+    return DEFAULT_TIMEZONE
 
 
 def format_datetime_value(value: datetime | None, date_format: str, timezone_name: str) -> str:
@@ -253,7 +307,7 @@ def get_effective_date_format(current_user: User) -> str:
 
 def get_effective_timezone(current_user: User) -> str:
     user_timezone = normalize_timezone(current_user.timezone)
-    if user_timezone:
+    if user_timezone and user_timezone in TIMEZONE_OPTION_KEYS:
         return user_timezone
     return get_active_timezone()
 
@@ -264,6 +318,139 @@ def get_history_retention_days(db: Session) -> int:
     return normalized if normalized is not None else DEFAULT_HISTORY_RETENTION_DAYS
 
 
+def get_login_timeout_minutes(db: Session) -> int:
+    raw = get_app_setting(db, LOGIN_TIMEOUT_SETTING_KEY, str(DEFAULT_LOGIN_TIMEOUT_MINUTES))
+    normalized = normalize_login_timeout_minutes(raw)
+    return normalized if normalized is not None else DEFAULT_LOGIN_TIMEOUT_MINUTES
+
+
+def get_active_login_timeout_minutes() -> int:
+    return getattr(app.state, "login_timeout_minutes", DEFAULT_LOGIN_TIMEOUT_MINUTES)
+
+
+def parse_bool_setting(value: str | bool | None, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def normalize_alert_level(value: str | None) -> str:
+    if not value:
+        return "error"
+    clean = value.strip().lower()
+    return clean if clean in ALERT_LEVELS else "error"
+
+
+def get_smtp_setting(db: Session, key: str, config_key: str, fallback: str = "") -> str:
+    setting = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if setting is not None:
+        return setting.value
+    return get_setting(config_key, fallback)
+
+
+def get_email_alerts_enabled(db: Session) -> bool:
+    raw = get_app_setting(
+        db,
+        EMAIL_ALERTS_ENABLED_SETTING_KEY,
+        "true" if DEFAULT_EMAIL_ALERTS_ENABLED else "false",
+    )
+    return parse_bool_setting(raw, DEFAULT_EMAIL_ALERTS_ENABLED)
+
+
+def get_active_email_alerts_enabled() -> bool:
+    return getattr(app.state, "email_alerts_enabled", DEFAULT_EMAIL_ALERTS_ENABLED)
+
+
+def send_admin_alert_email(db: Session, alert: Alert) -> None:
+    if not get_active_email_alerts_enabled():
+        return
+
+    recipients = [
+        row[0]
+        for row in db.query(User.email)
+        .filter(
+            User.is_admin.is_(True),
+            User.enabled.is_(True),
+            User.email.is_not(None),
+            User.email != "",
+        )
+        .all()
+    ]
+    if not recipients:
+        return
+
+    host = get_smtp_setting(db, SMTP_HOST_SETTING_KEY, "SMTP_HOST", "localhost")
+    port = int(get_smtp_setting(db, SMTP_PORT_SETTING_KEY, "SMTP_PORT", "25") or "25")
+    username = get_smtp_setting(db, SMTP_USERNAME_SETTING_KEY, "SMTP_USERNAME", "")
+    password = get_smtp_setting(db, SMTP_PASSWORD_SETTING_KEY, "SMTP_PASSWORD", "")
+    use_tls = parse_bool_setting(get_smtp_setting(db, SMTP_USE_TLS_SETTING_KEY, "SMTP_USE_TLS", "false"), False)
+    sender = get_smtp_setting(db, SMTP_FROM_SETTING_KEY, "SMTP_FROM", "daygle-server-manager@localhost")
+
+    msg = EmailMessage()
+    msg["Subject"] = f"[Daygle Alert] {alert.title}"
+    msg["From"] = sender
+    msg["To"] = ", ".join(recipients)
+    msg.set_content(
+        f"A server alert was generated.\n\n"
+        f"Level: {alert.level}\n"
+        f"Title: {alert.title}\n"
+        f"Message: {alert.message}\n"
+        f"Source: {alert.source_type or '-'} {alert.source_id or ''}\n"
+        f"Time (UTC): {alert.created_at.isoformat()}\n"
+    )
+
+    with smtplib.SMTP(host=host, port=port, timeout=15) as smtp:
+        smtp.ehlo()
+        if use_tls:
+            smtp.starttls()
+            smtp.ehlo()
+        if username and password:
+            smtp.login(username, password)
+        smtp.send_message(msg)
+
+
+def create_alert(
+    db: Session,
+    *,
+    level: str,
+    title: str,
+    message: str,
+    source_type: str | None = None,
+    source_id: str | int | None = None,
+    send_email: bool = True,
+) -> Alert:
+    level = normalize_alert_level(level)
+    alert = Alert(
+        level=level,
+        title=title,
+        message=message,
+        source_type=source_type,
+        source_id=str(source_id) if source_id is not None else None,
+    )
+    db.add(alert)
+    db.commit()
+    db.refresh(alert)
+
+    if send_email:
+        try:
+            send_admin_alert_email(db, alert)
+        except Exception as exc:
+            print(f"[alert-email] error: {type(exc).__name__}: {exc}")
+            delivery_alert = Alert(
+                level="warning",
+                title="Alert email delivery failed",
+                message=f"Could not send alert email: {type(exc).__name__}: {exc}",
+                source_type="smtp",
+                source_id=None,
+            )
+            db.add(delivery_alert)
+            db.commit()
+
+    return alert
+
+
 def purge_old_history(db: Session) -> None:
     days = get_history_retention_days(db)
     if days <= 0:
@@ -271,6 +458,7 @@ def purge_old_history(db: Session) -> None:
     cutoff = datetime.utcnow() - timedelta(days=days)
     db.query(UpdateJob).filter(UpdateJob.created_at < cutoff).delete(synchronize_session=False)
     db.query(AuditLog).filter(AuditLog.timestamp < cutoff).delete(synchronize_session=False)
+    db.query(Alert).filter(Alert.created_at < cutoff).delete(synchronize_session=False)
     db.commit()
 
 
@@ -332,6 +520,29 @@ def process_job_async(job_id: int) -> None:
     db = SessionLocal()
     try:
         run_update_job(db, job_id)
+
+        job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
+        if not job or job.status != "failed":
+            return
+
+        existing = (
+            db.query(Alert)
+            .filter(Alert.source_type == "update_job", Alert.source_id == str(job.id))
+            .first()
+        )
+        if existing:
+            return
+
+        server_label = job.server_name or f"Server #{job.server_id}"
+        create_alert(
+            db,
+            level="error",
+            title=f"Update failed on {server_label}",
+            message=job.summary or "Update job failed.",
+            source_type="update_job",
+            source_id=job.id,
+            send_email=True,
+        )
     finally:
         db.close()
 
@@ -345,10 +556,24 @@ def get_session_user(request: Request, db: Session) -> User | None:
     if not user_id:
         return None
 
+    timeout_minutes = get_active_login_timeout_minutes()
+    now_ts = int(datetime.utcnow().timestamp())
+    last_seen_raw = request.session.get("last_seen_at")
+    try:
+        last_seen_ts = int(last_seen_raw) if last_seen_raw is not None else None
+    except (TypeError, ValueError):
+        last_seen_ts = None
+
+    if last_seen_ts is not None and now_ts - last_seen_ts > timeout_minutes * 60:
+        request.session.clear()
+        return None
+
     user = db.query(User).filter(User.id == user_id, User.enabled.is_(True)).first()
     if not user:
         request.session.clear()
         return None
+
+    request.session["last_seen_at"] = now_ts
     return user
 
 
@@ -382,6 +607,11 @@ def render_app_template(
         "date_format_options": DATE_FORMAT_OPTIONS,
         "timezone_options": TIMEZONE_OPTIONS,
         "format_dt": lambda value: format_datetime_value(value, date_format, timezone_name),
+        "unacknowledged_alert_count": (
+            db.query(func.count(Alert.id)).filter(Alert.acknowledged_at.is_(None)).scalar() or 0
+        )
+        if current_user and current_user.is_admin
+        else 0,
     }
     template_context.update(context)
     return templates.TemplateResponse(request=request, name=name, context=template_context)
@@ -466,6 +696,7 @@ def setup_submit(
     db.refresh(user)
 
     request.session["user_id"] = user.id
+    request.session["last_seen_at"] = int(datetime.utcnow().timestamp())
     return RedirectResponse(url="/setup/complete", status_code=303)
 
 
@@ -521,6 +752,7 @@ def login_submit(
     db.commit()
 
     request.session["user_id"] = user.id
+    request.session["last_seen_at"] = int(datetime.utcnow().timestamp())
     log_audit(db, "user.login", request=request, actor=user)
     set_flash(request, f"Welcome back, {user.username}.", "success")
     return RedirectResponse(url="/dashboard", status_code=303)
@@ -692,7 +924,7 @@ def update_my_timezone(
         return RedirectResponse(url="/my-settings", status_code=303)
 
     normalized = normalize_timezone(timezone_name)
-    if not normalized:
+    if not normalized or normalized not in TIMEZONE_OPTION_KEYS:
         set_flash(request, "Invalid timezone selection.", "error")
         return RedirectResponse(url="/my-settings", status_code=303)
 
@@ -724,6 +956,14 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         selected_date_format=get_active_date_format(),
         selected_timezone=get_active_timezone(),
         selected_retention_days=get_history_retention_days(db),
+        selected_login_timeout_minutes=get_active_login_timeout_minutes(),
+        selected_email_alerts_enabled=get_active_email_alerts_enabled(),
+        selected_smtp_host=get_smtp_setting(db, SMTP_HOST_SETTING_KEY, "SMTP_HOST", "localhost"),
+        selected_smtp_port=get_smtp_setting(db, SMTP_PORT_SETTING_KEY, "SMTP_PORT", "25"),
+        selected_smtp_username=get_smtp_setting(db, SMTP_USERNAME_SETTING_KEY, "SMTP_USERNAME", ""),
+        selected_smtp_use_tls=parse_bool_setting(get_smtp_setting(db, SMTP_USE_TLS_SETTING_KEY, "SMTP_USE_TLS", "false"), False),
+        selected_smtp_from=get_smtp_setting(db, SMTP_FROM_SETTING_KEY, "SMTP_FROM", "daygle-server-manager@localhost"),
+        smtp_password_set=bool(get_smtp_setting(db, SMTP_PASSWORD_SETTING_KEY, "SMTP_PASSWORD", "")),
     )
 
 
@@ -775,7 +1015,7 @@ def update_timezone(
         return RedirectResponse(url="/dashboard", status_code=303)
 
     normalized = normalize_timezone(timezone_name)
-    if not normalized:
+    if not normalized or normalized not in TIMEZONE_OPTION_KEYS:
         set_flash(request, "Invalid timezone selection.", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
@@ -824,6 +1064,129 @@ def update_history_retention(
         detail=f"Changed from {old_label} to {new_label}",
     )
     set_flash(request, "History retention period updated.", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@app.post("/settings/login-timeout")
+def update_login_timeout(
+    request: Request,
+    login_timeout_minutes: int = Form(...),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    normalized = normalize_login_timeout_minutes(login_timeout_minutes)
+    if normalized is None:
+        set_flash(request, "Invalid login timeout. Enter between 1 and 43200 minutes.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    previous_value = get_login_timeout_minutes(db)
+    set_app_setting(db, LOGIN_TIMEOUT_SETTING_KEY, str(normalized))
+    app.state.login_timeout_minutes = normalized
+    log_audit(
+        db,
+        "settings.login_timeout",
+        request=request,
+        actor=current_user,
+        detail=f"Changed from {previous_value} minutes to {normalized} minutes",
+    )
+    set_flash(request, "Login timeout updated.", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@app.post("/settings/email-alerts")
+def update_email_alerts(
+    request: Request,
+    email_alerts_enabled: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    normalized = parse_bool_setting(email_alerts_enabled, False)
+    previous_value = get_email_alerts_enabled(db)
+    set_app_setting(db, EMAIL_ALERTS_ENABLED_SETTING_KEY, "true" if normalized else "false")
+    app.state.email_alerts_enabled = normalized
+    log_audit(
+        db,
+        "settings.email_alerts",
+        request=request,
+        actor=current_user,
+        detail=f"Changed from {'enabled' if previous_value else 'disabled'} to {'enabled' if normalized else 'disabled'}",
+    )
+    set_flash(request, "Email alert preference updated.", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@app.post("/settings/smtp")
+def update_smtp_settings(
+    request: Request,
+    smtp_host: str = Form(...),
+    smtp_port: int = Form(...),
+    smtp_username: str = Form(""),
+    smtp_password: str = Form(""),
+    clear_smtp_password: str | None = Form(None),
+    smtp_use_tls: str | None = Form(None),
+    smtp_from: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    host = smtp_host.strip()
+    sender = smtp_from.strip()
+    if not host:
+        set_flash(request, "SMTP host is required.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+    if smtp_port < 1 or smtp_port > 65535:
+        set_flash(request, "SMTP port must be between 1 and 65535.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+    if not sender or "@" not in sender:
+        set_flash(request, "SMTP from address must be a valid email.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    set_app_setting(db, SMTP_HOST_SETTING_KEY, host)
+    set_app_setting(db, SMTP_PORT_SETTING_KEY, str(smtp_port))
+    set_app_setting(db, SMTP_USERNAME_SETTING_KEY, smtp_username.strip())
+    set_app_setting(db, SMTP_USE_TLS_SETTING_KEY, "true" if parse_bool_setting(smtp_use_tls, False) else "false")
+    set_app_setting(db, SMTP_FROM_SETTING_KEY, sender)
+
+    password_updated = False
+    if parse_bool_setting(clear_smtp_password, False):
+        set_app_setting(db, SMTP_PASSWORD_SETTING_KEY, "")
+        password_updated = True
+    elif smtp_password:
+        set_app_setting(db, SMTP_PASSWORD_SETTING_KEY, smtp_password)
+        password_updated = True
+
+    log_audit(
+        db,
+        "settings.smtp",
+        request=request,
+        actor=current_user,
+        detail=(
+            f"Updated SMTP host={host}, port={smtp_port}, user={'set' if smtp_username.strip() else 'empty'}, "
+            f"tls={'enabled' if parse_bool_setting(smtp_use_tls, False) else 'disabled'}, from={sender}, "
+            f"password={'updated' if password_updated else 'unchanged'}"
+        ),
+    )
+    set_flash(request, "SMTP settings updated.", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
 
@@ -1079,8 +1442,283 @@ def audit_log_page(request: Request, db: Session = Depends(get_db)):
         set_flash(request, "Admin access required.", "error")
         return RedirectResponse(url="/dashboard", status_code=303)
 
-    entries = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(500).all()
-    return render_app_template(request, "audit_log.html", "audit-log", current_user, db, entries=entries)
+    raw_q = (request.query_params.get("q") or "").strip()
+    action_filter = (request.query_params.get("action") or "").strip()
+    actor_filter = (request.query_params.get("actor") or "").strip()
+    date_from = (request.query_params.get("date_from") or "").strip()
+    date_to = (request.query_params.get("date_to") or "").strip()
+
+    try:
+        page = int(request.query_params.get("page", "1"))
+    except ValueError:
+        page = 1
+    if page < 1:
+        page = 1
+
+    try:
+        page_size = int(request.query_params.get("page_size", "50"))
+    except ValueError:
+        page_size = 50
+    page_size = max(10, min(page_size, 200))
+
+    query = db.query(AuditLog)
+    if action_filter:
+        query = query.filter(AuditLog.action == action_filter)
+    if actor_filter:
+        query = query.filter(AuditLog.actor_username == actor_filter)
+
+    from_dt = None
+    to_dt_exclusive = None
+    try:
+        if date_from:
+            from_dt = datetime.strptime(date_from, "%Y-%m-%d")
+    except ValueError:
+        date_from = ""
+    try:
+        if date_to:
+            to_dt_exclusive = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+    except ValueError:
+        date_to = ""
+
+    if from_dt:
+        query = query.filter(AuditLog.timestamp >= from_dt)
+    if to_dt_exclusive:
+        query = query.filter(AuditLog.timestamp < to_dt_exclusive)
+
+    if from_dt and to_dt_exclusive and from_dt >= to_dt_exclusive:
+        set_flash(request, "Invalid date range: From date must be before To date.", "error")
+        query = query.filter(text("1=0"))
+
+    if raw_q:
+        like_term = f"%{raw_q}%"
+        query = query.filter(
+            or_(
+                AuditLog.action.ilike(like_term),
+                AuditLog.actor_username.ilike(like_term),
+                AuditLog.target_type.ilike(like_term),
+                AuditLog.target_id.ilike(like_term),
+                AuditLog.target_label.ilike(like_term),
+                AuditLog.detail.ilike(like_term),
+                AuditLog.ip_address.ilike(like_term),
+            )
+        )
+
+    total_count = query.count()
+    total_pages = max(1, (total_count + page_size - 1) // page_size)
+    if page > total_pages:
+        page = total_pages
+
+    entries = (
+        query.order_by(AuditLog.timestamp.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    action_options = [
+        row[0]
+        for row in db.query(AuditLog.action)
+        .filter(AuditLog.action.is_not(None))
+        .distinct()
+        .order_by(AuditLog.action.asc())
+        .all()
+    ]
+    actor_options = [
+        row[0]
+        for row in db.query(AuditLog.actor_username)
+        .filter(AuditLog.actor_username.is_not(None))
+        .distinct()
+        .order_by(AuditLog.actor_username.asc())
+        .all()
+    ]
+
+    base_query = {
+        "q": raw_q,
+        "action": action_filter,
+        "actor": actor_filter,
+        "date_from": date_from,
+        "date_to": date_to,
+        "page_size": page_size,
+    }
+
+    def build_page_url(target_page: int) -> str:
+        params = {k: v for k, v in base_query.items() if v not in (None, "")}
+        params["page"] = target_page
+        return f"/audit-log?{urlencode(params)}"
+
+    prev_page_url = build_page_url(page - 1) if page > 1 else None
+    next_page_url = build_page_url(page + 1) if page < total_pages else None
+
+    return render_app_template(
+        request,
+        "audit_log.html",
+        "audit-log",
+        current_user,
+        db,
+        entries=entries,
+        search_q=raw_q,
+        selected_action=action_filter,
+        selected_actor=actor_filter,
+        selected_date_from=date_from,
+        selected_date_to=date_to,
+        page=page,
+        page_size=page_size,
+        total_count=total_count,
+        total_pages=total_pages,
+        prev_page_url=prev_page_url,
+        next_page_url=next_page_url,
+        action_options=action_options,
+        actor_options=actor_options,
+    )
+
+
+@app.get("/alerts", response_class=HTMLResponse)
+def alerts_page(request: Request, db: Session = Depends(get_db)):
+    if not users_exist(db):
+        return RedirectResponse(url="/setup", status_code=303)
+
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    q = (request.query_params.get("q") or "").strip()
+    level_filter = normalize_alert_level(request.query_params.get("level", "")) if request.query_params.get("level") else ""
+    state_filter = (request.query_params.get("state") or "open").strip().lower()
+    if state_filter not in {"open", "ack", "all"}:
+        state_filter = "open"
+
+    try:
+        page = int(request.query_params.get("page", "1"))
+    except ValueError:
+        page = 1
+    page = max(1, page)
+
+    try:
+        page_size = int(request.query_params.get("page_size", "50"))
+    except ValueError:
+        page_size = 50
+    page_size = max(10, min(page_size, 200))
+
+    query = db.query(Alert)
+    if level_filter:
+        query = query.filter(Alert.level == level_filter)
+    if state_filter == "open":
+        query = query.filter(Alert.acknowledged_at.is_(None))
+    elif state_filter == "ack":
+        query = query.filter(Alert.acknowledged_at.is_not(None))
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            or_(
+                Alert.title.ilike(like),
+                Alert.message.ilike(like),
+                Alert.source_type.ilike(like),
+                Alert.source_id.ilike(like),
+            )
+        )
+
+    total_count = query.count()
+    total_pages = max(1, (total_count + page_size - 1) // page_size)
+    if page > total_pages:
+        page = total_pages
+
+    alerts = query.order_by(Alert.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+
+    base_query = {
+        "q": q,
+        "level": level_filter,
+        "state": state_filter,
+        "page_size": page_size,
+    }
+
+    def build_page_url(target_page: int) -> str:
+        params = {k: v for k, v in base_query.items() if v not in (None, "")}
+        params["page"] = target_page
+        return f"/alerts?{urlencode(params)}"
+
+    prev_page_url = build_page_url(page - 1) if page > 1 else None
+    next_page_url = build_page_url(page + 1) if page < total_pages else None
+
+    return render_app_template(
+        request,
+        "alerts.html",
+        "alerts",
+        current_user,
+        db,
+        alerts=alerts,
+        page=page,
+        page_size=page_size,
+        total_count=total_count,
+        total_pages=total_pages,
+        prev_page_url=prev_page_url,
+        next_page_url=next_page_url,
+        search_q=q,
+        selected_level=level_filter,
+        selected_state=state_filter,
+    )
+
+
+@app.post("/alerts/{alert_id}/ack")
+def acknowledge_alert(alert_id: int, request: Request, db: Session = Depends(get_db)):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    if not alert:
+        set_flash(request, "Alert not found.", "error")
+        return RedirectResponse(url="/alerts", status_code=303)
+
+    if alert.acknowledged_at is None:
+        alert.acknowledged_at = datetime.utcnow()
+        db.commit()
+        log_audit(
+            db,
+            "alert.acknowledge",
+            request=request,
+            actor=current_user,
+            target_type="alert",
+            target_id=alert.id,
+            target_label=alert.title,
+        )
+
+    return RedirectResponse(url=request.headers.get("referer", "/alerts"), status_code=303)
+
+
+@app.post("/alerts/{alert_id}/dismiss")
+def dismiss_alert(alert_id: int, request: Request, db: Session = Depends(get_db)):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    if not alert:
+        set_flash(request, "Alert not found.", "error")
+        return RedirectResponse(url="/alerts", status_code=303)
+
+    alert_title = alert.title
+    db.delete(alert)
+    db.commit()
+    log_audit(
+        db,
+        "alert.dismiss",
+        request=request,
+        actor=current_user,
+        target_type="alert",
+        target_id=alert_id,
+        target_label=alert_title,
+    )
+    return RedirectResponse(url=request.headers.get("referer", "/alerts"), status_code=303)
 
 
 @app.post("/api/ssh-keys", response_model=SSHKeyRead)
