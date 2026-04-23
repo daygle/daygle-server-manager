@@ -19,7 +19,7 @@
     />
     <link rel="stylesheet" href="/static/css/styles.css" />
   </head>
-  <body>
+  <body data-date-format="{{ date_format or 'iso-24' }}">
     <div class="bg-pattern"></div>
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
@@ -55,6 +55,9 @@
             </a>
               <a href="/ssh-keys" class="nav-link {% if active_page == 'ssh-keys' %}active{% endif %}">
                 <i class="fas fa-key"></i><span>SSH Keys</span>
+              </a>
+              <a href="/settings" class="nav-link {% if active_page == 'settings' %}active{% endif %}">
+                <i class="fas fa-sliders"></i><span>Global Settings</span>
               </a>
           </div>
           {% endif %}

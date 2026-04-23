@@ -54,8 +54,8 @@
           <td>{{ user.email or '-' }}</td>
           <td>{{ 'Admin' if user.is_admin else 'User' }}</td>
           <td>{{ 'Enabled' if user.enabled else 'Disabled' }}</td>
-          <td>{{ user.created_at }}</td>
-          <td>{{ user.last_login or '-' }}</td>
+          <td>{{ format_dt(user.created_at) }}</td>
+          <td>{{ format_dt(user.last_login) }}</td>
           <td>
             <button type="button" class="btn-secondary" data-edit-user="{{ user.id }}">Edit</button>
             <form method="post" action="/users/{{ user.id }}/toggle-enabled" style="display:inline;">

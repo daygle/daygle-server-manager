@@ -94,3 +94,11 @@ class UpdateSchedule(Base):
     @server_ids.setter
     def server_ids(self, values: list[int]) -> None:
         self.server_ids_raw = ",".join(str(value) for value in values)
+
+
+class AppSetting(Base):
+    __tablename__ = "app_settings"
+
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

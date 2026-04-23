@@ -40,7 +40,7 @@
           <td>{{ job.server_id }}</td>
           <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
           <td>{{ job.package_manager }}</td>
-          <td>{{ job.created_at }}</td>
+          <td>{{ format_dt(job.created_at) }}</td>
           <td>{{ job.summary or ('-' if job.status == 'pending' or job.status == 'running' else 'Update completed') }}</td>
         </tr>
         {% else %}

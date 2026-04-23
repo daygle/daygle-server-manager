@@ -89,8 +89,8 @@
           <td>{{ schedule.name }}</td>
           <td>{{ schedule.server_ids|join(', ') }}</td>
           <td>{{ schedule.cron_expression or ('every ' ~ schedule.interval_minutes ~ ' min (legacy)') }}</td>
-          <td>{{ schedule.next_run_at }}</td>
-          <td>{{ schedule.last_run_at or '-' }}</td>
+          <td>{{ format_dt(schedule.next_run_at) }}</td>
+          <td>{{ format_dt(schedule.last_run_at) }}</td>
           <td>
             <span class="status {% if schedule.enabled %}status-success{% else %}status-failed{% endif %}">
               {{ 'enabled' if schedule.enabled else 'disabled' }}
@@ -137,9 +137,9 @@
           <td>{{ job.server_name or ('Server #' ~ job.server_id) }}</td>
           <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
           <td>{{ job.package_manager }}</td>
-          <td>{{ job.created_at }}</td>
-          <td>{{ job.started_at or '-' }}</td>
-          <td>{{ job.finished_at or '-' }}</td>
+          <td>{{ format_dt(job.created_at) }}</td>
+          <td>{{ format_dt(job.started_at) }}</td>
+          <td>{{ format_dt(job.finished_at) }}</td>
           <td>{{ job.summary or ('-' if job.status == 'pending' or job.status == 'running' else 'Update completed') }}</td>
           <td>
             <button type="button" class="btn-secondary" data-view-job="{{ job.id }}">View output</button>

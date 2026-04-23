@@ -20,6 +20,7 @@ const userSubmitBtn = document.getElementById("user_submit_btn");
 const userCancelBtn = document.getElementById("user_cancel_btn");
 const userPasswordInput = document.getElementById("user_password");
 const userConfirmPasswordInput = document.getElementById("user_confirm_password");
+const appDateFormat = document.body?.dataset.dateFormat || "iso-24";
 let selectedJobId = null;
 
 if (sidebar && localStorage.getItem("sidebarCollapsed") === "true") {
@@ -317,6 +318,34 @@ function renderStatus(status) {
   return `<span class="status status-${status}">${status}</span>`;
 }
 
+function formatDateTimeForUi(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/);
+  if (!match) {
+    return String(value);
+  }
+
+  const [, year, month, day, hour, minute, second] = match;
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  if (appDateFormat === "us-24") {
+    return `${month}/${day}/${year} ${hour}:${minute}:${second}`;
+  }
+
+  if (appDateFormat === "eu-24") {
+    return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
+  }
+
+  if (appDateFormat === "month-name") {
+    return `${day} ${monthNames[Number(month) - 1]} ${year} ${hour}:${minute}:${second}`;
+  }
+
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
 function formatOutputPreview(job) {
   if (job.summary) {
     return escapeHtml(job.summary);
@@ -345,9 +374,9 @@ function renderJobRow(job) {
         <td>${escapeHtml(job.server_name || `Server #${job.server_id}`)}</td>
         <td>${renderStatus(job.status)}</td>
         <td>${escapeHtml(job.package_manager)}</td>
-        <td>${escapeHtml(job.created_at)}</td>
-        <td>${escapeHtml(job.started_at || "-")}</td>
-        <td>${escapeHtml(job.finished_at || "-")}</td>
+        <td>${escapeHtml(formatDateTimeForUi(job.created_at))}</td>
+        <td>${escapeHtml(formatDateTimeForUi(job.started_at))}</td>
+        <td>${escapeHtml(formatDateTimeForUi(job.finished_at))}</td>
         <td>${formatOutputPreview(job)}</td>
         <td><button type="button" class="btn-secondary" data-view-job="${job.id}">View output</button></td>
       </tr>

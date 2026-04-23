@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block page_title %}Global Settings - Daygle Server Manager{% endblock %}
+{% block title %}Global Settings{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Display Preferences</h2>
+  <form method="post" action="/settings/date-format" class="grid-form">
+    <label>
+      Date and Time Format
+      <select name="date_format" required>
+        {% for option_key, option_label, _ in date_format_options %}
+        <option value="{{ option_key }}" {% if selected_date_format == option_key %}selected{% endif %}>
+          {{ option_label }}
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">Save Settings</button>
+  </form>
+  <p class="field-help">These settings apply globally to all users and pages.</p>
+</section>
+{% endblock %}

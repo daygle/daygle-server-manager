@@ -16,7 +16,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import get_setting
 from .database import Base, SessionLocal, engine, get_db
-from .models import SSHKey, Server, UpdateJob, UpdateSchedule, User
+from .models import AppSetting, SSHKey, Server, UpdateJob, UpdateSchedule, User
 from .schemas import (
     SSHKeyCreate,
     SSHKeyRead,
@@ -44,11 +44,26 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+DATE_FORMAT_SETTING_KEY = "date_format"
+DEFAULT_DATE_FORMAT = "iso-24"
+DATE_FORMAT_OPTIONS: list[tuple[str, str, str]] = [
+    ("iso-24", "YYYY-MM-DD HH:MM:SS", "%Y-%m-%d %H:%M:%S"),
+    ("us-24", "MM/DD/YYYY HH:MM:SS", "%m/%d/%Y %H:%M:%S"),
+    ("eu-24", "DD/MM/YYYY HH:MM:SS", "%d/%m/%Y %H:%M:%S"),
+    ("month-name", "DD Mon YYYY HH:MM:SS", "%d %b %Y %H:%M:%S"),
+]
+DATE_FORMAT_MAP = {key: pattern for key, _, pattern in DATE_FORMAT_OPTIONS}
+
 
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
     ensure_schema_columns()
+    db = SessionLocal()
+    try:
+        app.state.date_format = get_date_format_setting(db)
+    finally:
+        db.close()
     if not getattr(app.state, "schedule_worker_started", False):
         app.state.schedule_worker_started = True
         thread = Thread(target=run_schedule_loop, daemon=True)
@@ -72,6 +87,47 @@ def get_next_schedule_run(schedule: UpdateSchedule, from_time: datetime | None =
     if schedule.cron_expression:
         return croniter(schedule.cron_expression, base_time).get_next(datetime)
     return base_time + timedelta(minutes=schedule.interval_minutes)
+
+
+def normalize_date_format(value: str | None) -> str | None:
+    if not value:
+        return None
+    clean_value = value.strip()
+    return clean_value if clean_value in DATE_FORMAT_MAP else None
+
+
+def get_app_setting(db: Session, key: str, default: str) -> str:
+    setting = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if not setting:
+        return default
+    return setting.value
+
+
+def set_app_setting(db: Session, key: str, value: str) -> None:
+    setting = db.query(AppSetting).filter(AppSetting.key == key).first()
+    if setting:
+        setting.value = value
+    else:
+        setting = AppSetting(key=key, value=value)
+        db.add(setting)
+    db.commit()
+
+
+def get_date_format_setting(db: Session) -> str:
+    stored_value = get_app_setting(db, DATE_FORMAT_SETTING_KEY, DEFAULT_DATE_FORMAT)
+    normalized = normalize_date_format(stored_value)
+    return normalized or DEFAULT_DATE_FORMAT
+
+
+def format_datetime_value(value: datetime | None, date_format: str) -> str:
+    if value is None:
+        return "-"
+    pattern = DATE_FORMAT_MAP.get(date_format, DATE_FORMAT_MAP[DEFAULT_DATE_FORMAT])
+    return value.strftime(pattern)
+
+
+def get_active_date_format() -> str:
+    return getattr(app.state, "date_format", DEFAULT_DATE_FORMAT)
 
 
 def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str) -> list[int]:
@@ -158,12 +214,18 @@ def render_app_template(
     name: str,
     active_page: str,
     current_user: User,
+    db: Session,
     **context,
 ):
+    date_format = get_active_date_format()
+
     template_context = {
         "active_page": active_page,
         "current_user": current_user,
         "flash": pop_flash(request),
+        "date_format": date_format,
+        "date_format_options": DATE_FORMAT_OPTIONS,
+        "format_dt": lambda value: format_datetime_value(value, date_format),
     }
     template_context.update(context)
     return templates.TemplateResponse(request=request, name=name, context=template_context)
@@ -265,6 +327,7 @@ def setup_complete(request: Request, db: Session = Depends(get_db)):
         "setup_complete.html",
         active_page="dashboard",
         current_user=current_user,
+        db=db,
     )
 
 
@@ -331,6 +394,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         "dashboard.html",
         "dashboard",
         current_user,
+        db,
         total_servers=total_servers,
         running_jobs=running_jobs,
         failed_jobs=failed_jobs,
@@ -353,6 +417,7 @@ def servers_page(request: Request, db: Session = Depends(get_db)):
         "servers.html",
         "servers",
         current_user,
+        db,
         servers=servers,
         ssh_keys=db.query(SSHKey).order_by(SSHKey.name.asc()).all(),
     )
@@ -375,6 +440,7 @@ def updates_page(request: Request, db: Session = Depends(get_db)):
         "updates.html",
         "updates",
         current_user,
+        db,
         servers=servers,
         jobs=jobs,
         schedules=schedules,
@@ -395,7 +461,55 @@ def users_page(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/dashboard", status_code=303)
 
     users = db.query(User).order_by(User.created_at.desc()).all()
-    return render_app_template(request, "users.html", "users", current_user, users=users)
+    return render_app_template(request, "users.html", "users", current_user, db, users=users)
+
+
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(request: Request, db: Session = Depends(get_db)):
+    if not users_exist(db):
+        return RedirectResponse(url="/setup", status_code=303)
+
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    return render_app_template(
+        request,
+        "settings.html",
+        "settings",
+        current_user,
+        db,
+        selected_date_format=get_active_date_format(),
+    )
+
+
+@app.post("/settings/date-format")
+def update_date_format(
+    request: Request,
+    date_format: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    normalized = normalize_date_format(date_format)
+    if not normalized:
+        set_flash(request, "Invalid date format selection.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    set_app_setting(db, DATE_FORMAT_SETTING_KEY, normalized)
+    app.state.date_format = normalized
+    set_flash(request, "Global date format updated.", "success")
+    return RedirectResponse(url="/settings", status_code=303)
 
 
 @app.post("/users/create")
@@ -602,7 +716,7 @@ def ssh_keys_page(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/dashboard", status_code=303)
 
     ssh_keys = db.query(SSHKey).order_by(SSHKey.name.asc()).all()
-    return render_app_template(request, "ssh_keys.html", "ssh-keys", current_user, ssh_keys=ssh_keys)
+    return render_app_template(request, "ssh_keys.html", "ssh-keys", current_user, db, ssh_keys=ssh_keys)
 
 
 @app.get("/help", response_class=HTMLResponse)
@@ -614,7 +728,7 @@ def help_page(request: Request, db: Session = Depends(get_db)):
     if not current_user:
         return RedirectResponse(url="/login", status_code=303)
 
-    return render_app_template(request, "help.html", "help", current_user)
+    return render_app_template(request, "help.html", "help", current_user, db)
 
 
 @app.get("/about", response_class=HTMLResponse)
@@ -626,7 +740,7 @@ def about_page(request: Request, db: Session = Depends(get_db)):
     if not current_user:
         return RedirectResponse(url="/login", status_code=303)
 
-    return render_app_template(request, "about.html", "about", current_user)
+    return render_app_template(request, "about.html", "about", current_user, db)
 
 
 @app.post("/api/ssh-keys", response_model=SSHKeyRead)

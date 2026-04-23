@@ -51,7 +51,7 @@
             <code style="font-size: 0.78rem; word-break: break-all;">{{ key.public_key[:60] }}…</code>
             <button class="btn-small" onclick="copyPubKey({{ key.id }}, `{{ key.public_key }}`)">Copy</button>
           </td>
-          <td>{{ key.created_at.strftime('%Y-%m-%d') }}</td>
+          <td>{{ format_dt(key.created_at) }}</td>
           <td>
             <button class="btn-danger" type="button" data-delete-key="{{ key.id }}">Delete</button>
           </td>
@@ -67,6 +67,32 @@
 </section>
 
 <script>
+const keyDateFormat = document.body?.dataset.dateFormat || 'iso-24';
+
+function formatDateForUi(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/);
+  if (!match) {
+    return String(value || '-');
+  }
+
+  const [, year, month, day, hour, minute, second] = match;
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  if (keyDateFormat === 'us-24') {
+    return `${month}/${day}/${year} ${hour}:${minute}:${second}`;
+  }
+
+  if (keyDateFormat === 'eu-24') {
+    return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
+  }
+
+  if (keyDateFormat === 'month-name') {
+    return `${day} ${monthNames[Number(month) - 1]} ${year} ${hour}:${minute}:${second}`;
+  }
+
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+}
+
 async function copyPubKey(id, pubKey) {
   await navigator.clipboard.writeText(pubKey);
   const btns = document.querySelectorAll(`#key-row-${id} .btn-small`);
@@ -117,7 +143,7 @@ function addKeyRow(key) {
       <code style="font-size:0.78rem;word-break:break-all;">${preview}</code>
       <button class="btn-small" onclick="copyPubKey(${key.id}, \`${key.public_key}\`)">Copy</button>
     </td>
-    <td>${key.created_at.substring(0, 10)}</td>
+    <td>${formatDateForUi(key.created_at)}</td>
     <td><button class="btn-danger" type="button" data-delete-key="${key.id}">Delete</button></td>
   `;
   tbody.appendChild(tr);
