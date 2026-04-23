@@ -3466,6 +3466,18 @@ a:hover {
     box-shadow: var(--shadow-sm);
 }
 
+.panel h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.875rem;
+}
+
+.panel .section-description {
+    color: var(--text-secondary);
+    margin-bottom: 0.875rem;
+}
+
 .prose p,
 .prose li {
     color: var(--text-primary);
@@ -3474,6 +3486,77 @@ a:hover {
 .table-wrap {
     width: 100%;
     overflow-x: auto;
+}
+
+.table-wrap table,
+.panel > table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-primary);
+}
+
+.table-wrap thead,
+.panel > table thead {
+    background: var(--bg-secondary);
+}
+
+.table-wrap th,
+.panel > table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: middle;
+}
+
+.table-wrap td,
+.panel > table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+.table-wrap tbody tr,
+.panel > table tbody tr {
+    transition: background-color var(--transition-fast);
+}
+
+.table-wrap tbody tr:nth-child(odd),
+.panel > table tbody tr:nth-child(odd) {
+    background: var(--table-row-odd);
+}
+
+.table-wrap tbody tr:hover,
+.panel > table tbody tr:hover {
+    background: var(--bg-hover);
+}
+
+.table-wrap tbody tr:last-child td,
+.panel > table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.table-wrap td .btn-secondary,
+.table-wrap td .btn-danger,
+.table-wrap td .btn-secondary-link,
+.panel > table td .btn-secondary,
+.panel > table td .btn-danger,
+.panel > table td .btn-secondary-link {
+    margin-right: 6px;
+}
+
+.table-wrap td .btn-secondary:last-child,
+.table-wrap td .btn-danger:last-child,
+.table-wrap td .btn-secondary-link:last-child,
+.panel > table td .btn-secondary:last-child,
+.panel > table td .btn-danger:last-child,
+.panel > table td .btn-secondary-link:last-child {
+    margin-right: 0;
 }
 
 .grid-form {
