@@ -319,7 +319,7 @@ label {
 
 .label-with-info {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 6px;
 }
 
@@ -435,6 +435,31 @@ button:disabled {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.info-tip-btn,
+.info-tip-btn:hover,
+.info-tip-btn:focus,
+.info-tip-btn:disabled {
+  width: auto;
+  min-height: auto;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--accent-2);
+  box-shadow: none;
+  transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.info-tip-btn:focus {
+  outline: none;
 }
 
 .grid-form button[type="submit"] {
