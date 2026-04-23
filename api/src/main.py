@@ -1893,8 +1893,6 @@ def audit_log_page(request: Request, db: Session = Depends(get_db)):
     if page > total_pages:
         page = total_pages
 
-    unacknowledged_count = db.query(func.count(Alert.id)).filter(Alert.acknowledged_at.is_(None)).scalar() or 0
-
     entries = (
         query.order_by(AuditLog.timestamp.desc())
         .offset((page - 1) * page_size)
@@ -2021,6 +2019,8 @@ def alerts_page(request: Request, db: Session = Depends(get_db)):
     total_pages = max(1, (total_count + page_size - 1) // page_size)
     if page > total_pages:
         page = total_pages
+
+    unacknowledged_count = db.query(func.count(Alert.id)).filter(Alert.acknowledged_at.is_(None)).scalar() or 0
 
     alerts = query.order_by(Alert.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
 
