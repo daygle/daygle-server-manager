@@ -592,6 +592,8 @@ def updates_page(request: Request, db: Session = Depends(get_db)):
     if not current_user:
         return RedirectResponse(url="/login", status_code=303)
 
+    log_audit(db, "update.check", request=request, actor=current_user, detail="Opened updates page")
+
     servers = db.query(Server).order_by(Server.name.asc()).all()
     jobs = db.query(UpdateJob).order_by(UpdateJob.created_at.desc()).limit(30).all()
     schedules = db.query(UpdateSchedule).order_by(UpdateSchedule.created_at.desc()).all()
@@ -1404,9 +1406,18 @@ def list_update_jobs(request: Request, limit: int = 50, db: Session = Depends(ge
 
 @app.get("/api/updates/{job_id}", response_model=UpdateJobRead)
 def get_update_job(job_id: int, request: Request, db: Session = Depends(get_db)):
-    require_api_user(request, db)
+    current_user = require_api_user(request, db)
 
     job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Update job not found")
+    log_audit(
+        db,
+        "update.check.output",
+        request=request,
+        actor=current_user,
+        target_type="update_job",
+        target_id=job.id,
+        target_label=f"Job #{job.id}",
+    )
     return job
