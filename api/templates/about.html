@@ -4,52 +4,35 @@
 {% block title %}About{% endblock %}
 
 {% block content %}
+<div class="docs-layout">
 <section class="card prose">
   <div class="card-header">
     <h3 class="card-title">Daygle Server Manager</h3>
   </div>
   <div class="card-body">
   <p>Daygle Server Manager is a self-hosted web application for remotely patching and maintaining Linux servers over SSH. It provides a central dashboard to trigger package manager updates, schedule recurring maintenance windows, track job outcomes, and receive email alerts when something goes wrong.</p>
-  <p>The application is built with Python (FastAPI) and deployed exclusively via Docker Compose. All configuration lives in a single <code>daygle_server_manager.conf</code> file — no per-container environment files or secrets scattered across the project.</p>
-  </div>
-</section>
+  <p>The application is built with Python (FastAPI) and deployed exclusively via Docker Compose. All configuration lives in a single <code>daygle_server_manager.conf</code> file and avoids scattered environment files and secrets.</p>
 
-<section class="card prose">
-  <div class="card-header">
-    <h3 class="card-title">Key Features</h3>
-  </div>
-  <div class="card-body">
+  <h3>Key Features</h3>
   <ul>
-    <li><strong>SSH-based updates</strong> — Connect to any Linux server using stored SSH keys and run package manager updates (<code>apt</code>, <code>dnf</code>, <code>yum</code>, or auto-detected).</li>
-    <li><strong>Scheduled updates</strong> — Define cron-based schedules with per-schedule timezone support to automate recurring patch windows across your fleet.</li>
-    <li><strong>Job history</strong> — Every update run is recorded with its status, output summary, and timestamps for full auditability.</li>
-    <li><strong>Alerts</strong> — Failed jobs automatically generate alerts visible in the UI. Optionally configure SMTP to email all admin users when an alert is raised.</li>
-    <li><strong>Audit log</strong> — Administrative actions such as server changes, user management, and settings updates are logged for traceability.</li>
-    <li><strong>SSH key management</strong> — Generate or import SSH key pairs directly in the UI. Public keys can be copied and deployed to target servers without leaving the interface.</li>
-    <li><strong>Multi-user support</strong> — Create multiple user accounts with optional admin privileges. Per-user date format and timezone preferences are supported.</li>
+    <li><strong>SSH-based updates</strong>: Run package manager updates using stored SSH credentials (<code>apt</code>, <code>dnf</code>, <code>yum</code>, or auto-detected).</li>
+    <li><strong>Scheduled updates</strong>: Define cron-based schedules with timezone support for recurring maintenance windows.</li>
+    <li><strong>Job history</strong>: Track run status, output summary, and timestamps for every update operation.</li>
+    <li><strong>Alerts</strong>: Failed jobs create alerts in the UI and can optionally send SMTP notifications to admin users.</li>
+    <li><strong>Audit log</strong>: Records administrative and configuration actions for traceability.</li>
+    <li><strong>SSH key management</strong>: Generate or import key pairs directly in the UI.</li>
+    <li><strong>Multi-user support</strong>: Manage multiple users with optional admin privileges and per-user display preferences.</li>
   </ul>
-  </div>
-</section>
 
-<section class="card prose">
-  <div class="card-header">
-    <h3 class="card-title">Technology Stack</h3>
-  </div>
-  <div class="card-body">
+  <h3>Technology Stack</h3>
   <ul>
     <li><strong>API</strong> — Python 3, FastAPI, SQLAlchemy, Jinja2</li>
     <li><strong>Worker</strong> — Python background process handling SSH update jobs and schedule execution</li>
     <li><strong>Database</strong> — PostgreSQL</li>
     <li><strong>Deployment</strong> — Docker Compose</li>
   </ul>
-  </div>
-</section>
 
-<section class="card prose">
-  <div class="card-header">
-    <h3 class="card-title">Getting Started</h3>
-  </div>
-  <div class="card-body">
+  <h3>Getting Started</h3>
   <p>After the initial setup wizard (<code>/setup</code>), the recommended workflow is:</p>
   <ol>
     <li>Go to <a href="/ssh-keys">SSH Keys</a> and generate or import an SSH key pair.</li>
@@ -59,4 +42,5 @@
   </ol>
   </div>
 </section>
+</div>
 {% endblock %}
