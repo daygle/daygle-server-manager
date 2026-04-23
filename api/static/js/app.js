@@ -10,6 +10,8 @@ const schedulesBody = document.getElementById("schedules-body");
 const serverStatusBody = document.getElementById("server-status-body");
 const refreshAllServerStatusBtn = document.getElementById("refresh_all_server_status_btn");
 const serverStatusLastUpdated = document.getElementById("server_status_last_updated");
+const serverStatusAutoCheckToggle = document.getElementById("server_status_auto_check_toggle");
+const serverStatusAutoCheckInterval = document.getElementById("server_status_auto_check_interval");
 const latestLog = document.getElementById("latest-log");
 const selectedJobLabel = document.getElementById("selected-job-label");
 const scheduleFormCard = document.getElementById("scheduleFormCard");
@@ -63,6 +65,10 @@ const deepLinkedJobId = (() => {
 let pendingAutoOpenJobId = deepLinkedJobId;
 let selectedJobId = null;
 let syncJobsLiveRefreshState = null;
+let serverStatusAutoCheckTimerId = null;
+let serverStatusAutoCheckInFlight = false;
+const SERVER_STATUS_AUTO_CHECK_ENABLED_KEY = "serverStatusAutoCheckEnabled";
+const SERVER_STATUS_AUTO_CHECK_INTERVAL_KEY = "serverStatusAutoCheckInterval";
 
 function notify(message, type = "info") {
   if (typeof window.showToast === "function") {
@@ -559,10 +565,16 @@ document.querySelectorAll("[data-test-server]").forEach((button) => {
   });
 });
 
-refreshAllServerStatusBtn?.addEventListener("click", async () => {
+async function refreshAllServerStatus({ silent = false } = {}) {
+  if (!refreshAllServerStatusBtn) {
+    return;
+  }
+
   const originalButtonHtml = refreshAllServerStatusBtn.innerHTML;
-  refreshAllServerStatusBtn.disabled = true;
-  refreshAllServerStatusBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Checking...</span>';
+  if (!silent) {
+    refreshAllServerStatusBtn.disabled = true;
+    refreshAllServerStatusBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Checking...</span>';
+  }
 
   try {
     const response = await fetch("/api/server-status/check-all", { method: "POST" });
@@ -571,24 +583,106 @@ refreshAllServerStatusBtn?.addEventListener("click", async () => {
     try {
       data = JSON.parse(responseText);
     } catch {
-      notify(`Server error (${response.status}): ${response.statusText}`, "error");
+      if (!silent) {
+        notify(`Server error (${response.status}): ${response.statusText}`, "error");
+      }
       return;
     }
 
     if (!response.ok) {
-      notify(data.detail || "Failed to refresh server status.", "error");
+      if (!silent) {
+        notify(data.detail || "Failed to refresh server status.", "error");
+      }
       return;
     }
 
     renderServerStatusTable(Array.isArray(data.items) ? data.items : []);
     setServerStatusLastUpdated(data.checked_at || null);
-    notify("Server status checks completed.", "success");
+    if (!silent) {
+      notify("Server status checks completed.", "success");
+    }
   } catch (error) {
-    notify(`Failed to refresh server status: ${error.message}`, "error");
+    if (!silent) {
+      notify(`Failed to refresh server status: ${error.message}`, "error");
+    }
   } finally {
-    refreshAllServerStatusBtn.disabled = false;
-    refreshAllServerStatusBtn.innerHTML = originalButtonHtml;
+    if (!silent) {
+      refreshAllServerStatusBtn.disabled = false;
+      refreshAllServerStatusBtn.innerHTML = originalButtonHtml;
+    }
   }
+}
+
+function stopServerStatusAutoCheck() {
+  if (serverStatusAutoCheckTimerId !== null) {
+    clearInterval(serverStatusAutoCheckTimerId);
+    serverStatusAutoCheckTimerId = null;
+  }
+}
+
+function startServerStatusAutoCheck() {
+  stopServerStatusAutoCheck();
+  if (!serverStatusAutoCheckInterval) {
+    return;
+  }
+
+  const intervalSeconds = Number(serverStatusAutoCheckInterval.value || 60);
+  const intervalMs = Number.isFinite(intervalSeconds) && intervalSeconds > 0 ? intervalSeconds * 1000 : 60000;
+
+  serverStatusAutoCheckTimerId = setInterval(async () => {
+    if (serverStatusAutoCheckInFlight) {
+      return;
+    }
+    serverStatusAutoCheckInFlight = true;
+    try {
+      await refreshAllServerStatus({ silent: true });
+    } finally {
+      serverStatusAutoCheckInFlight = false;
+    }
+  }, intervalMs);
+}
+
+function applyServerStatusAutoCheckState() {
+  if (!serverStatusBody || !serverStatusAutoCheckToggle) {
+    return;
+  }
+
+  if (serverStatusAutoCheckToggle.checked) {
+    startServerStatusAutoCheck();
+    return;
+  }
+
+  stopServerStatusAutoCheck();
+}
+
+refreshAllServerStatusBtn?.addEventListener("click", async () => {
+  await refreshAllServerStatus({ silent: false });
+});
+
+if (serverStatusAutoCheckToggle && serverStatusAutoCheckInterval) {
+  const storedEnabled = localStorage.getItem(SERVER_STATUS_AUTO_CHECK_ENABLED_KEY);
+  const storedInterval = localStorage.getItem(SERVER_STATUS_AUTO_CHECK_INTERVAL_KEY);
+
+  if (storedInterval && [...serverStatusAutoCheckInterval.options].some((option) => option.value === storedInterval)) {
+    serverStatusAutoCheckInterval.value = storedInterval;
+  }
+  serverStatusAutoCheckToggle.checked = storedEnabled === "true";
+
+  serverStatusAutoCheckToggle.addEventListener("change", () => {
+    localStorage.setItem(SERVER_STATUS_AUTO_CHECK_ENABLED_KEY, String(serverStatusAutoCheckToggle.checked));
+    applyServerStatusAutoCheckState();
+  });
+
+  serverStatusAutoCheckInterval.addEventListener("change", () => {
+    localStorage.setItem(SERVER_STATUS_AUTO_CHECK_INTERVAL_KEY, serverStatusAutoCheckInterval.value);
+    applyServerStatusAutoCheckState();
+  });
+
+  applyServerStatusAutoCheckState();
+}
+
+window.addEventListener("beforeunload", () => {
+  stopServerStatusAutoCheck();
 });
 
 serverStatusBody?.addEventListener("click", async (event) => {
