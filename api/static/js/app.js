@@ -20,6 +20,7 @@ const userSubmitBtn = document.getElementById("user_submit_btn");
 const userCancelBtn = document.getElementById("user_cancel_btn");
 const userPasswordInput = document.getElementById("user_password");
 const userConfirmPasswordInput = document.getElementById("user_confirm_password");
+const currentUserId = userForm?.dataset.currentUserId || "";
 const appDateFormat = document.body?.dataset.dateFormat || "iso-24";
 let selectedJobId = null;
 
@@ -218,6 +219,27 @@ function setUserFieldValue(name, value) {
   field.value = value || "";
 }
 
+function applySelfDisableGuard(editingUserId) {
+  if (!userForm) {
+    return;
+  }
+
+  const enabledField = userForm.querySelector('input[name="enabled"]');
+  if (!(enabledField instanceof HTMLInputElement)) {
+    return;
+  }
+
+  const isSelfEdit = Boolean(currentUserId) && String(editingUserId || "") === String(currentUserId);
+  enabledField.disabled = isSelfEdit;
+
+  if (isSelfEdit) {
+    enabledField.checked = true;
+    enabledField.title = "You cannot disable your own account.";
+  } else {
+    enabledField.title = "";
+  }
+}
+
 document.querySelectorAll("[data-edit-user]").forEach((button) => {
   button.addEventListener("click", () => {
     if (!userForm) {
@@ -244,6 +266,7 @@ document.querySelectorAll("[data-edit-user]").forEach((button) => {
     setUserFieldValue("enabled", row.dataset.userEnabled || "false");
     setUserFieldValue("password", "");
     setUserFieldValue("confirm_password", "");
+    applySelfDisableGuard(userId);
 
     userForm.scrollIntoView({ behavior: "smooth", block: "center" });
   });
@@ -257,10 +280,12 @@ userCancelBtn?.addEventListener("click", () => {
   userForm.reset();
   userForm.setAttribute("action", "/users/create");
   setUserFormMode(false);
+  applySelfDisableGuard(null);
 });
 
 if (userForm) {
   setUserFormMode(false);
+  applySelfDisableGuard(null);
 }
 
 document.querySelectorAll("[data-delete-server]").forEach((button) => {

@@ -279,6 +279,20 @@ input[type="checkbox"] {
   padding: 0;
 }
 
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
 button {
   background: linear-gradient(135deg, var(--accent), #0e8d8d);
   color: #fff;
@@ -291,6 +305,13 @@ button {
 button:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(0, 107, 107, 0.28);
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .grid-form button[type="submit"] {
