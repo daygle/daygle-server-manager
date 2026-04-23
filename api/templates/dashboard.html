@@ -5,21 +5,21 @@
 
 {% block content %}
 <div class="stats-grid">
-  <article class="card stat-card stat-card-servers">
+  <a href="/servers" class="card stat-card stat-card-servers" style="text-decoration: none;">
     <i class="fas fa-server stat-icon" aria-hidden="true"></i>
     <div class="stat-label">Servers</div>
     <div class="stat-value">{{ total_servers }}</div>
-  </article>
-  <article class="card stat-card stat-card-running">
+  </a>
+  <a href="/updates/jobs?status=running" class="card stat-card stat-card-running" style="text-decoration: none;">
     <i class="fas fa-gear stat-icon" aria-hidden="true"></i>
     <div class="stat-label">Running Jobs</div>
     <div class="stat-value">{{ running_jobs }}</div>
-  </article>
-  <article class="card stat-card stat-card-failed">
+  </a>
+  <a href="/updates/jobs?status=failed" class="card stat-card stat-card-failed" style="text-decoration: none;">
     <i class="fas fa-triangle-exclamation stat-icon" aria-hidden="true"></i>
     <div class="stat-label">Failed Jobs</div>
     <div class="stat-value">{{ failed_jobs }}</div>
-  </article>
+  </a>
 </div>
 
 <section class="card">
