@@ -4140,3 +4140,25 @@ button.btn-icon-only i,
     font-size: 0.78rem;
     word-break: break-all;
 }
+
+.donation-amount-wrap {
+    display: flex;
+    align-items: stretch;
+}
+
+.donation-currency-symbol {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    border: 1px solid var(--border-color);
+    border-right: none;
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    min-width: 44px;
+}
+
+.donation-amount-input {
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+}

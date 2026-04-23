@@ -1913,6 +1913,18 @@ def about_page(request: Request, db: Session = Depends(get_db)):
     return render_app_template(request, "about.html", "about", current_user, db)
 
 
+@app.get("/donate", response_class=HTMLResponse)
+def donate_page(request: Request, db: Session = Depends(get_db)):
+    if not users_exist(db):
+        return RedirectResponse(url="/setup", status_code=303)
+
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    return render_app_template(request, "donate.html", "donate", current_user, db)
+
+
 @app.get("/audit-log", response_class=HTMLResponse)
 def audit_log_page(request: Request, db: Session = Depends(get_db)):
     if not users_exist(db):

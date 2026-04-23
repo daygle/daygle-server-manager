@@ -1,26 +1,110 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Login - Daygle Server Manager</title>
+    <link rel="icon" type="image/png" href="/static/daygle.png" />
     <link rel="stylesheet" href="/static/vendor/fontawesome/all.min.css" />
     <link rel="stylesheet" href="/static/css/styles.css" />
+    <script>
+      (function () {
+        const savedTheme = localStorage.getItem("theme") || "system";
+        const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        const appliedTheme = savedTheme === "system" ? systemTheme : savedTheme;
+        document.documentElement.setAttribute("data-theme", appliedTheme);
+      })();
+    </script>
   </head>
   <body class="auth-page">
-    <div class="auth-card panel">
-      <h1>Sign In</h1>
-      <p>Login to manage updates and servers.</p>
+    <button type="button" class="auth-page-theme-toggle" id="authThemeToggle" title="Toggle Theme">
+      <i class="fas fa-sun" id="authThemeIconLight"></i>
+      <i class="fas fa-moon" id="authThemeIconDark" style="display: none;"></i>
+    </button>
 
-      {% if flash %}
-      <div class="flash flash-{{ flash.type }}">{{ flash.message }}</div>
-      {% endif %}
+    <div class="auth-container visible">
+      <div class="auth-card visible">
+        <div class="auth-header">
+          <img id="logo" src="/static/daygle.png" alt="Daygle" class="auth-logo" />
+          <h1 class="auth-title">Daygle Server Manager</h1>
+          <p class="auth-subtitle">Sign in to manage updates and servers.</p>
+        </div>
 
-      <form method="post" action="/login" class="auth-form">
-        <label>Username <input name="username" required /></label>
-        <label>Password <input type="password" name="password" required /></label>
-        <button type="submit"><i class="fas fa-right-to-bracket"></i>Sign In</button>
-      </form>
+        <form method="post" action="/login" class="auth-form">
+          <div class="form-group">
+            <label for="username" class="form-label">Username</label>
+            <input type="text" id="username" name="username" class="form-control" autocomplete="username" autofocus required />
+          </div>
+
+          <div class="form-group">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" id="password" name="password" class="form-control" autocomplete="current-password" required />
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-right-to-bracket"></i>
+            <span>Sign In</span>
+          </button>
+        </form>
+      </div>
     </div>
+
+    <script>
+      (function () {
+        {% if flash %}
+        window.__initialFlash = {{ flash|tojson }};
+        {% endif %}
+      })();
+    </script>
+    <script src="/static/js/toast.js"></script>
+
+    <script>
+      (function () {
+        const themeToggle = document.getElementById("authThemeToggle");
+        const lightIcon = document.getElementById("authThemeIconLight");
+        const darkIcon = document.getElementById("authThemeIconDark");
+        const logo = document.getElementById("logo");
+
+        function effectiveTheme() {
+          const current = localStorage.getItem("theme") || "system";
+          if (current === "system") {
+            return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          return current;
+        }
+
+        function updateUi(theme) {
+          const isDark = theme === "dark";
+          lightIcon.style.display = isDark ? "none" : "inline";
+          darkIcon.style.display = isDark ? "inline" : "none";
+          logo.src = isDark ? "/static/daygle-light.png" : "/static/daygle.png";
+        }
+
+        function applyThemePreference(pref) {
+          localStorage.setItem("theme", pref);
+          const theme = pref === "system"
+            ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+            : pref;
+          document.documentElement.setAttribute("data-theme", theme);
+          updateUi(theme);
+        }
+
+        const startingTheme = effectiveTheme();
+        document.documentElement.setAttribute("data-theme", startingTheme);
+        updateUi(startingTheme);
+
+        themeToggle.addEventListener("click", function () {
+          const current = localStorage.getItem("theme") || "system";
+          const next = current === "light" ? "dark" : current === "dark" ? "system" : "light";
+          applyThemePreference(next);
+        });
+
+        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () {
+          if ((localStorage.getItem("theme") || "system") === "system") {
+            applyThemePreference("system");
+          }
+        });
+      })();
+    </script>
   </body>
 </html>
