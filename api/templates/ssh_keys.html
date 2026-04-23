@@ -192,12 +192,20 @@ document.getElementById('generate-form').addEventListener('submit', async (e) =>
   const name = document.getElementById('gen-name').value.trim();
   if (!name) return;
 
-  const res = await fetch(`/api/ssh-keys/generate?name=${encodeURIComponent(name)}`, { method: 'POST' });
-  const data = await res.json();
-  if (!res.ok) { alert(data.detail || 'Failed to generate key'); return; }
+  try {
+    const res = await fetch(`/api/ssh-keys/generate?name=${encodeURIComponent(name)}`, { 
+      method: 'POST',
+      credentials: 'include',
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.detail || 'Failed to generate key'); return; }
 
-  addKeyRow(data);
-  document.getElementById('gen-name').value = '';
+    addKeyRow(data);
+    document.getElementById('gen-name').value = '';
+  } catch (err) {
+    console.error('Generate key error:', err);
+    alert('Error generating key: ' + err.message);
+  }
 });
 
 document.getElementById('import-form').addEventListener('submit', async (e) => {
@@ -205,17 +213,23 @@ document.getElementById('import-form').addEventListener('submit', async (e) => {
   const name = document.getElementById('imp-name').value.trim();
   const private_key = document.getElementById('imp-key').value.trim();
 
-  const res = await fetch('/api/ssh-keys', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, private_key }),
-  });
-  const data = await res.json();
-  if (!res.ok) { alert(data.detail || 'Failed to import key'); return; }
+  try {
+    const res = await fetch('/api/ssh-keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ name, private_key }),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.detail || 'Failed to import key'); return; }
 
-  addKeyRow(data);
-  document.getElementById('imp-name').value = '';
-  document.getElementById('imp-key').value = '';
+    addKeyRow(data);
+    document.getElementById('imp-name').value = '';
+    document.getElementById('imp-key').value = '';
+  } catch (err) {
+    console.error('Import key error:', err);
+    alert('Error importing key: ' + err.message);
+  }
 });
 
 function addKeyRow(key) {
@@ -249,10 +263,18 @@ function attachDeleteListener(btn) {
   btn.addEventListener('click', async () => {
     const id = btn.dataset.deleteKey;
     if (!confirm('Delete this SSH key?')) return;
-    const res = await fetch(`/api/ssh-keys/${id}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (!res.ok) { alert(data.detail || 'Failed to delete key'); return; }
-    document.getElementById(`key-row-${id}`)?.remove();
+    try {
+      const res = await fetch(`/api/ssh-keys/${id}`, { 
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.detail || 'Failed to delete key'); return; }
+      document.getElementById(`key-row-${id}`)?.remove();
+    } catch (err) {
+      console.error('Delete key error:', err);
+      alert('Error deleting key: ' + err.message);
+    }
   });
 }
 
