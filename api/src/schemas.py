@@ -64,6 +64,7 @@ class UpdateJobRead(BaseModel):
     id: int
     server_id: int
     server_name: str | None
+    job_type: str
     package_manager: str
     status: str
     command: str

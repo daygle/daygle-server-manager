@@ -30,6 +30,7 @@
         <tr>
           <th>ID</th>
           <th>Server Name</th>
+          <th>Job Type</th>
           <th>Status</th>
           <th>Package Manager</th>
           <th>Created</th>
@@ -41,6 +42,7 @@
         <tr>
           <td>{{ job.id }}</td>
           <td>{{ job.server_name or ('Server #' ~ job.server_id) }}</td>
+          <td>{{ 'Scheduled' if job.job_type == 'scheduled' else 'Manual' }}</td>
           <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
           <td>{{ job.package_manager }}</td>
           <td>{{ format_dt(job.created_at) }}</td>
@@ -48,7 +50,7 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="6">No jobs yet.</td>
+          <td colspan="7">No jobs yet.</td>
         </tr>
         {% endfor %}
       </tbody>

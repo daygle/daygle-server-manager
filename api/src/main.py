@@ -127,6 +127,8 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
         "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS summary VARCHAR(255)",
+        "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS job_type VARCHAR(20) DEFAULT 'manual'",
+        "UPDATE update_jobs SET job_type = 'manual' WHERE job_type IS NULL OR job_type = ''",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format VARCHAR(32)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(16)",
@@ -503,11 +505,13 @@ def purge_old_history(db: Session) -> None:
     db.commit()
 
 
-def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str) -> list[int]:
+def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str, job_type: str = "manual") -> list[int]:
+    safe_job_type = "scheduled" if job_type == "scheduled" else "manual"
     created_jobs: list[int] = []
     for server in servers:
         job = UpdateJob(
             server_id=server.id,
+            job_type=safe_job_type,
             package_manager=package_manager,
             status="pending",
             command="Pending package manager detection...",
@@ -538,7 +542,7 @@ def run_schedule_loop() -> None:
             for schedule in due_schedules:
                 servers = db.query(Server).filter(Server.id.in_(schedule.server_ids)).all()
                 if servers:
-                    enqueue_update_jobs(db, servers, schedule.package_manager)
+                    enqueue_update_jobs(db, servers, schedule.package_manager, job_type="scheduled")
 
                 schedule.last_run_at = now
                 schedule.next_run_at = get_next_schedule_run(schedule, now)
@@ -2457,7 +2461,7 @@ def run_updates(payload: UpdateRequest, request: Request, db: Session = Depends(
     if not servers:
         raise HTTPException(status_code=404, detail="No matching servers found")
 
-    created_jobs = enqueue_update_jobs(db, servers, payload.package_manager)
+    created_jobs = enqueue_update_jobs(db, servers, payload.package_manager, job_type="manual")
     actor = get_session_user(request, db)
     server_names = ", ".join(s.name for s in servers)
     log_audit(db, "update.run", request=request, actor=actor,

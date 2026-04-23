@@ -60,6 +60,7 @@ class UpdateJob(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     server_id: Mapped[int] = mapped_column(ForeignKey("servers.id"), nullable=False)
+    job_type: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")
     package_manager: Mapped[str] = mapped_column(String(20), nullable=False, default="auto")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     command: Mapped[str] = mapped_column(Text, nullable=False)

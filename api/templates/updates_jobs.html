@@ -22,6 +22,7 @@
           <tr>
             <th>ID</th>
             <th>Server Name</th>
+            <th>Job Type</th>
             <th>Status</th>
             <th class="hide-mobile">Package Manager</th>
             <th class="hide-mobile">Created</th>
@@ -35,6 +36,7 @@
           <tr data-job-id="{{ job.id }}" class="job-row" title="Click to view output">
             <td>{{ job.id }}</td>
             <td>{{ job.server_name or ('Server #' ~ job.server_id) }}</td>
+            <td>{{ 'Scheduled' if job.job_type == 'scheduled' else 'Manual' }}</td>
             <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
             <td class="hide-mobile">{{ job.package_manager }}</td>
             <td class="hide-mobile">{{ format_dt(job.created_at) }}</td>
@@ -44,7 +46,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="8" class="text-center empty-state">No jobs yet.</td>
+            <td colspan="9" class="text-center empty-state">No jobs yet.</td>
           </tr>
           {% endfor %}
         </tbody>

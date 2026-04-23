@@ -538,10 +538,12 @@ function escapeHtml(value) {
 }
 
 function renderJobRow(job) {
+  const jobTypeLabel = job.job_type === "scheduled" ? "Scheduled" : "Manual";
   return `
       <tr data-job-id="${job.id}" class="job-row" title="Click to view output">
         <td>${job.id}</td>
         <td>${escapeHtml(job.server_name || `Server #${job.server_id}`)}</td>
+        <td>${escapeHtml(jobTypeLabel)}</td>
         <td>${renderStatus(job.status)}</td>
         <td>${escapeHtml(job.package_manager)}</td>
         <td>${escapeHtml(formatDateTimeForUi(job.created_at))}</td>
@@ -662,7 +664,7 @@ async function loadJobs() {
 
   const jobs = await response.json();
   if (jobs.length === 0) {
-    jobsBody.innerHTML = '<tr><td colspan="8">No jobs yet.</td></tr>';
+    jobsBody.innerHTML = '<tr><td colspan="9">No jobs yet.</td></tr>';
     selectedJobId = null;
     return;
   }
