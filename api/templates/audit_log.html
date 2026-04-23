@@ -4,114 +4,186 @@
 {% block title %}Audit Log{% endblock %}
 
 {% block content %}
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">Audit Log</h3>
+<!-- Filters Card (Initially Hidden) -->
+<div id="filterCard" class="card mb-4" style="display: none;">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-filter"></i>
+      <span>Search &amp; Filter</span>
+    </div>
+    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleFilters()" title="Close">
+      <i class="fas fa-times"></i>
+    </button>
   </div>
   <div class="card-body">
-  <p class="section-description">Search, filter, and page through audit events.</p>
+    <form method="get" id="filterForm">
+      <div class="grid gap-3">
+        <div>
+          <input type="text" id="q" name="q" class="form-control" 
+                 placeholder="Search by action, user, target, detail, or IP..." 
+                 value="{{ search_q }}">
+        </div>
+      </div>
 
-  <form method="get" action="/audit-log" class="grid-form mb-12">
-    <label>
-      Search
-      <input type="text" name="q" value="{{ search_q }}" placeholder="Action, user, target, detail, IP" />
-    </label>
-    <label>
-      Action
-      <select name="action">
-        <option value="">All actions</option>
-        {% for action in action_options %}
-        <option value="{{ action }}" {% if selected_action == action %}selected{% endif %}>{{ action }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      User
-      <select name="actor">
-        <option value="">All users</option>
-        {% for actor in actor_options %}
-        <option value="{{ actor }}" {% if selected_actor == actor %}selected{% endif %}>{{ actor }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      From Date
-      <input type="date" name="date_from" value="{{ selected_date_from }}" />
-    </label>
-    <label>
-      To Date
-      <input type="date" name="date_to" value="{{ selected_date_to }}" />
-    </label>
-    <label>
-      Page Size
-      <select name="page_size">
-        <option value="25" {% if page_size == 25 %}selected{% endif %}>25</option>
-        <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
-        <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
-        <option value="200" {% if page_size == 200 %}selected{% endif %}>200</option>
-      </select>
-    </label>
-    <div class="form-actions">
-      <button type="submit"><i class="fas fa-filter"></i>Apply Filters</button>
-      <a href="/audit-log" class="btn-secondary-link"><i class="fas fa-rotate"></i>Reset</a>
+      <div class="grid grid-cols-4 gap-3 mt-3">
+        <div>
+          <select id="action" name="action" class="form-select">
+            <option value="">All Actions</option>
+            {% for action in action_options %}
+            <option value="{{ action }}" {% if selected_action == action %}selected{% endif %}>{{ action }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <select id="actor" name="actor" class="form-select">
+            <option value="">All Users</option>
+            {% for actor in actor_options %}
+            <option value="{{ actor }}" {% if selected_actor == actor %}selected{% endif %}>{{ actor }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <input type="date" id="date_from" name="date_from" class="form-control" 
+                 value="{{ selected_date_from }}">
+        </div>
+        <div>
+          <input type="date" id="date_to" name="date_to" class="form-control" 
+                 value="{{ selected_date_to }}">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-4 gap-3 mt-3">
+        <div>
+          <select id="page_size" name="page_size" class="form-select">
+            <option value="25" {% if page_size == 25 %}selected{% endif %}>25 per page</option>
+            <option value="50" {% if page_size == 50 %}selected{% endif %}>50 per page</option>
+            <option value="100" {% if page_size == 100 %}selected{% endif %}>100 per page</option>
+            <option value="200" {% if page_size == 200 %}selected{% endif %}>200 per page</option>
+          </select>
+        </div>
+        <div class="col-span-3 flex gap-2">
+          <button type="submit" class="btn btn-primary flex-1">
+            <i class="fas fa-search"></i>
+            <span>Search</span>
+          </button>
+          <a href="/audit-log" class="btn btn-secondary">
+            <i class="fas fa-times"></i>
+            <span>Clear</span>
+          </a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Audit Log Card -->
+<div class="card">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-file-alt"></i>
+      <span>Audit Log</span>
     </div>
-  </form>
-
-  <p class="section-description">Showing {{ entries|length }} of {{ total_count }} entries.</p>
-
-  <div class="table-wrap">
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>User</th>
-          <th>Action</th>
-          <th>Target</th>
-          <th>Detail</th>
-          <th>IP Address</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for entry in entries %}
-        <tr>
-          <td class="audit-time">{{ format_dt(entry.timestamp) }}</td>
-          <td>{{ entry.actor_username or '—' }}</td>
-          <td><span class="audit-action audit-action--{{ entry.action.split('.')[0] }}">{{ entry.action }}</span></td>
-          <td>
-            {% if entry.target_label %}
-              <span class="audit-target-label">{{ entry.target_label }}</span>
-              {% if entry.target_type %}<span class="audit-target-type">{{ entry.target_type }}</span>{% endif %}
-            {% else %}
-              —
-            {% endif %}
-          </td>
-          <td class="audit-detail">{{ entry.detail or '—' }}</td>
-          <td class="audit-ip">{{ entry.ip_address or '—' }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="6">No audit entries yet.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <button id="toggleFilterBtn" class="btn btn-secondary btn-sm" onclick="toggleFilters()" title="Search &amp; Filter">
+      <i class="fas fa-filter"></i>
+      <span class="hide-mobile">Search &amp; Filter</span>
+    </button>
   </div>
+  
+  <div class="card-body p-0">
+    <p class="px-20 pt-20">Showing {{ entries|length }} of {{ total_count }} entries.</p>
 
-  <div class="pagination-row">
-    {% if prev_page_url %}
-    <a class="btn-secondary-link pagination-btn" href="{{ prev_page_url }}"><i class="fas fa-chevron-left"></i>Previous</a>
-    {% else %}
-    <span class="btn-secondary-link pagination-btn pagination-disabled"><i class="fas fa-chevron-left"></i>Previous</span>
-    {% endif %}
-
-    <span class="pagination-meta">Page {{ page }} of {{ total_pages }}</span>
-
-    {% if next_page_url %}
-    <a class="btn-secondary-link pagination-btn" href="{{ next_page_url }}">Next<i class="fas fa-chevron-right"></i></a>
-    {% else %}
-    <span class="btn-secondary-link pagination-btn pagination-disabled">Next<i class="fas fa-chevron-right"></i></span>
-    {% endif %}
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>User</th>
+            <th>Action</th>
+            <th>Target</th>
+            <th>Detail</th>
+            <th class="hide-mobile">IP Address</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in entries %}
+          <tr>
+            <td><small>{{ format_dt(entry.timestamp) }}</small></td>
+            <td>{{ entry.actor_username or '—' }}</td>
+            <td><span class="badge badge-secondary">{{ entry.action }}</span></td>
+            <td>
+              {% if entry.target_label %}
+                <span class="badge badge-info">{{ entry.target_label }}</span>
+                {% if entry.target_type %}<small class="text-secondary">{{ entry.target_type }}</small>{% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td class="text-secondary"><small>{{ entry.detail or '—' }}</small></td>
+            <td class="hide-mobile"><small>{{ entry.ip_address or '—' }}</small></td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="text-center empty-state">
+              <div>
+                <i class="fas fa-search empty-icon"></i>
+                <p>No audit entries yet{% if search_q or selected_action or selected_actor or selected_date_from or selected_date_to %} matching your filters{% endif %}.</p>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
+  
+  <!-- Pagination -->
+  {% if prev_page_url or next_page_url %}
+  <div class="card-footer">
+    <div class="flex-between">
+      <div>
+        {% if prev_page_url %}
+        <a href="{{ prev_page_url }}" class="btn btn-secondary btn-sm">
+          <i class="fas fa-chevron-left"></i>
+          <span>Previous</span>
+        </a>
+        {% endif %}
+      </div>
+      
+      <span class="text-secondary">Page {{ page }} of {{ total_pages }}</span>
+      
+      <div>
+        {% if next_page_url %}
+        <a href="{{ next_page_url }}" class="btn btn-secondary btn-sm">
+          <span>Next</span>
+          <i class="fas fa-chevron-right"></i>
+        </a>
+        {% endif %}
+      </div>
+    </div>
   </div>
-</section>
+  {% endif %}
+</div>
+
+<script>
+  function toggleFilters() {
+    const filterCard = document.getElementById('filterCard');
+    const toggleBtn = document.getElementById('toggleFilterBtn');
+    
+    if (filterCard.style.display === 'none') {
+      filterCard.style.display = 'block';
+      toggleBtn.innerHTML = '<i class="fas fa-times"></i><span class="hide-mobile">Hide Filters</span>';
+    } else {
+      filterCard.style.display = 'none';
+      toggleBtn.innerHTML = '<i class="fas fa-filter"></i><span class="hide-mobile">Search &amp; Filter</span>';
+    }
+  }
+  
+  // Show filter card if any filters are active
+  document.addEventListener('DOMContentLoaded', function() {
+    const hasFilters = {{ 'true' if search_q or selected_action or selected_actor or selected_date_from or selected_date_to else 'false' }};
+    if (hasFilters) {
+      toggleFilters();
+    }
+  });
+</script>
 {% endblock %}
