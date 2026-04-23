@@ -5,53 +5,112 @@
 
 {% block content %}
 <section class="panel prose">
-  <h2>Website Functions</h2>
+  <h2>How to Use Daygle Server Manager</h2>
 
-  <h3>1. Add a server</h3>
-  <p>Go to <strong>Servers</strong> and fill out:</p>
+  <h3>1. Dashboard</h3>
+  <p>The dashboard shows a quick operational snapshot:</p>
   <ul>
-    <li><strong>Name</strong>: Friendly display name (must be unique)</li>
-    <li><strong>Host</strong>: IP or DNS name</li>
-    <li><strong>Port</strong>: Usually 22</li>
-    <li><strong>Username</strong>: Remote Linux user</li>
-    <li><strong>Auth Method</strong>: SSH Key or Password</li>
-    <li><strong>Sudo Password</strong>: Optional; needed only if sudo prompts for it</li>
+    <li>Total configured servers</li>
+    <li>Running and failed update jobs</li>
+    <li>Latest update activity</li>
   </ul>
-  <p>Click <strong>Save Server</strong>. To modify an existing server, use <strong>Edit</strong> in the table and then <strong>Update Server</strong>.</p>
 
-  <h3>2. Run updates now</h3>
-  <p>Go to <strong>System Updates</strong>:</p>
+  <h3>2. Servers</h3>
+  <p>Go to <strong>Servers</strong> to add or manage remote hosts.</p>
+  <ul>
+    <li><strong>Name</strong>: unique display name</li>
+    <li><strong>Host</strong>: IP or DNS name</li>
+    <li><strong>Port</strong>: usually 22</li>
+    <li><strong>Username</strong>: SSH account</li>
+    <li><strong>Auth Method</strong>: SSH key or password</li>
+    <li><strong>Sudo Password</strong>: optional; use only when sudo prompts for a different password</li>
+  </ul>
+  <p>Use <strong>Edit</strong> and <strong>Delete</strong> in the table for existing entries.</p>
+
+  <h3>3. System Updates (Run Now)</h3>
+  <p>In <strong>System Updates</strong> you can run immediate package updates:</p>
   <ul>
     <li>Select one or more target servers</li>
-    <li>Choose package manager (or Auto detect)</li>
+    <li>Choose package manager (<strong>Auto detect</strong>, apt, dnf, yum)</li>
     <li>Click <strong>Start Update</strong></li>
   </ul>
-  <p>Watch progress in the jobs table and open <strong>Latest job output</strong> for full logs.</p>
+  <p>The <strong>Update Jobs</strong> table auto-refreshes. Click any job row to open full output inline.</p>
 
-  <h3>3. Create cron schedules</h3>
-  <p>In <strong>System Updates → Schedules</strong>:</p>
+  <h3>4. Update Schedules</h3>
+  <p>Under <strong>System Updates → Schedules</strong>:</p>
   <ul>
-    <li>Set a schedule name</li>
-    <li>Enter a cron expression (server time in UTC)</li>
+    <li>Create a schedule name</li>
+    <li>Enter a cron expression</li>
     <li>Select target servers and package manager</li>
     <li>Click <strong>Create Schedule</strong></li>
   </ul>
-  <p>Example cron expressions:</p>
-  <pre><code>0 2 * * *      # daily at 02:00 UTC
+  <p>Schedules run in the timezone assigned at creation (based on your active timezone setting at that time).</p>
+  <p>Examples:</p>
+  <pre><code>0 2 * * *      # daily at 02:00
 0 */6 * * *    # every 6 hours
-30 3 * * 0     # every Sunday at 03:30 UTC</code></pre>
-  <p>Use <strong>Enable/Disable</strong> and <strong>Delete</strong> in the schedule table to manage existing schedules.</p>
+30 3 * * 0     # every Sunday at 03:30</code></pre>
+  <p>Use <strong>Enable/Disable</strong> or <strong>Delete</strong> to manage schedules.</p>
 
-  <h3>4. Understand failures</h3>
-  <p>Dashboard and Updates tables include a <strong>Result</strong> column with the job outcome summary. For full context, open <strong>Latest job output</strong>.</p>
+  <h3>5. Alerts</h3>
+  <p>When update jobs fail, the system creates alerts.</p>
   <ul>
-    <li><strong>Auth failed</strong>: verify username/password or SSH key</li>
-    <li><strong>sudo errors</strong>: verify sudo password or sudo rights</li>
-    <li><strong>package manager unknown</strong>: host may not be apt/dnf/yum based</li>
-    <li><strong>timeout/unreachable</strong>: network, DNS, firewall, or host offline</li>
+    <li>View alerts in <strong>Alerts</strong></li>
+    <li>Filter by level and state (open/acknowledged/all)</li>
+    <li>Use <strong>Acknowledge</strong> to mark an alert as handled</li>
+    <li>Use <strong>Dismiss</strong> to remove an alert</li>
+  </ul>
+  <p>Admin users also see an open-alert count badge in the sidebar/top bar.</p>
+
+  <h3>6. Audit Log</h3>
+  <p><strong>Audit Log</strong> records key user/system actions and configuration changes.</p>
+  <ul>
+    <li>Search by text</li>
+    <li>Filter by action and user</li>
+    <li>Filter by date range</li>
+    <li>Use pagination controls to browse older entries</li>
   </ul>
 
-  <h3>5. Update this application</h3>
+  <h3>7. User Management (Admin)</h3>
+  <p>In <strong>User Management</strong> admins can:</p>
+  <ul>
+    <li>Create users</li>
+    <li>Edit profile/admin/enabled status</li>
+    <li>Delete users</li>
+  </ul>
+  <p>Safety rules prevent removing the last enabled admin or disabling/deleting your own active admin account in unsafe ways.</p>
+
+  <h3>8. SSH Keys (Admin)</h3>
+  <p>In <strong>SSH Keys</strong> admins can store private keys or generate new keys for server authentication.</p>
+  <p>Keys in use by servers cannot be deleted until unassigned.</p>
+
+  <h3>9. Global Settings (Admin)</h3>
+  <p><strong>Global Settings</strong> control system-wide behavior:</p>
+  <ul>
+    <li>Date/time display format</li>
+    <li>Default timezone</li>
+    <li>History retention (jobs, audit logs, alerts)</li>
+    <li>Login timeout (minutes of inactivity)</li>
+    <li>Email alert enable/disable</li>
+    <li>SMTP server credentials and sender settings</li>
+    <li>SMTP connection test</li>
+  </ul>
+
+  <h3>10. My Settings</h3>
+  <p>Each user can set personal date/time format and timezone, or choose to inherit global defaults.</p>
+
+  <h3>11. Email Alert Delivery</h3>
+  <p>When email alerts are enabled, alert messages are sent to enabled admin users that have an email address configured in User Management.</p>
+
+  <h3>12. Common Failure Checks</h3>
+  <ul>
+    <li><strong>Authentication failed</strong>: verify username/key/password on the server</li>
+    <li><strong>Sudo failed</strong>: verify sudo password or sudo permissions</li>
+    <li><strong>Package manager unknown</strong>: host may not be apt/dnf/yum based</li>
+    <li><strong>Timeout/unreachable</strong>: verify network, DNS, firewall, and host status</li>
+    <li><strong>SMTP test failed</strong>: verify SMTP host, port, TLS, credentials, and firewall access</li>
+  </ul>
+
+  <h3>13. Update This Application</h3>
   <pre><code>bash update.sh --check
 bash update.sh
 bash update.sh --force
