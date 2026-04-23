@@ -1037,7 +1037,49 @@ document.querySelectorAll("[data-delete-schedule]").forEach((button) => {
 
 if (jobsBody) {
   const isServerRenderedJobsPage = window.location.pathname.startsWith("/updates/jobs");
-  if (!isServerRenderedJobsPage) {
+  if (isServerRenderedJobsPage) {
+    const liveUpdatesToggle = document.getElementById("live_updates_toggle");
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasActiveFilters = ["q", "status", "job_type", "date_from", "date_to", "job_id"].some((key) => {
+      const value = (searchParams.get(key) || "").trim();
+      return value.length > 0;
+    }) || Number(searchParams.get("page") || "1") > 1;
+    let refreshTimerId = null;
+
+    const stopLiveRefresh = () => {
+      if (refreshTimerId !== null) {
+        clearInterval(refreshTimerId);
+        refreshTimerId = null;
+      }
+    };
+
+    const startLiveRefresh = () => {
+      stopLiveRefresh();
+      refreshTimerId = setInterval(() => {
+        window.location.reload();
+      }, 10000);
+    };
+
+    if (liveUpdatesToggle) {
+      if (hasActiveFilters) {
+        liveUpdatesToggle.checked = false;
+        liveUpdatesToggle.disabled = true;
+        liveUpdatesToggle.title = "Clear filters and return to page 1 to enable live updates.";
+      }
+
+      liveUpdatesToggle.addEventListener("change", () => {
+        if (liveUpdatesToggle.checked && !hasActiveFilters) {
+          startLiveRefresh();
+          return;
+        }
+        stopLiveRefresh();
+      });
+
+      if (liveUpdatesToggle.checked && !hasActiveFilters) {
+        startLiveRefresh();
+      }
+    }
+  } else {
     setInterval(loadJobs, 5000);
     loadJobs();
   }
