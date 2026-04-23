@@ -128,13 +128,13 @@
 
       <div class="form-group mt-3">
         <label for="smtp_username" class="form-label">SMTP Username</label>
-        <input id="smtp_username" class="form-control" type="text" name="smtp_username" value="{{ selected_smtp_username }}" placeholder="your-email@example.com" autocomplete="off" />
+        <input id="smtp_username" class="form-control" type="text" name="smtp_username" value="{{ selected_smtp_username }}" placeholder="your-email@example.com" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-bwignore="true" data-1p-ignore="true" data-lpignore="true" />
         <small class="form-text text-secondary">Username for SMTP authentication (usually your email address)</small>
       </div>
 
       <div class="form-group mt-3">
         <label for="smtp_password" class="form-label">SMTP Password</label>
-        <input id="smtp_password" class="form-control" type="password" name="smtp_password" placeholder="Leave blank to keep current password" autocomplete="new-password" />
+        <input id="smtp_password" class="form-control" type="password" name="smtp_password" placeholder="Leave blank to keep current password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-bwignore="true" data-1p-ignore="true" data-lpignore="true" />
         <small class="form-text text-secondary">Password for SMTP authentication (use app passwords for Gmail)</small>
         {% if smtp_password_set %}
         <small class="d-block text-secondary mt-2"><strong>A password is currently saved.</strong></small>
@@ -143,7 +143,7 @@
 
       <div class="form-group mt-3">
         <label for="smtp_from" class="form-label">From Email Address</label>
-        <input id="smtp_from" class="form-control" type="email" name="smtp_from" required value="{{ selected_smtp_from }}" placeholder="noreply@example.com" />
+        <input id="smtp_from" class="form-control" type="email" name="smtp_from" required value="{{ selected_smtp_from }}" placeholder="noreply@example.com" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="email" data-bwignore="true" data-1p-ignore="true" data-lpignore="true" />
         <small class="form-text text-secondary">Email address to send alerts from</small>
       </div>
 
