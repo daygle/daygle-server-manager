@@ -4,11 +4,14 @@
 {% block title %}Alerts{% endblock %}
 
 {% block content %}
-<section class="panel">
-  <h2>Alerts</h2>
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">Alerts</h3>
+  </div>
+  <div class="card-body">
   <p class="section-description">Track active and acknowledged alerts. Failed update jobs create alerts and optionally send admin email notifications.</p>
 
-  <form method="get" action="/alerts" class="grid-form" style="margin-bottom: 12px;">
+  <form method="get" action="/alerts" class="grid-form mb-12">
     <label>
       Search
       <input type="text" name="q" value="{{ search_q }}" placeholder="Title, message, source" />
@@ -47,7 +50,7 @@
 
   <p class="section-description">Showing {{ alerts|length }} of {{ total_count }} alerts.</p>
   <div class="table-wrap">
-    <table>
+    <table class="table table-striped">
       <thead>
         <tr>
           <th>Time</th>
@@ -70,11 +73,11 @@
           <td>{{ 'acknowledged' if alert.acknowledged_at else 'open' }}</td>
           <td>
             {% if not alert.acknowledged_at %}
-            <form method="post" action="/alerts/{{ alert.id }}/ack" style="display:inline;">
+            <form method="post" action="/alerts/{{ alert.id }}/ack" class="d-inline">
               <button class="btn-secondary" type="submit">Acknowledge</button>
             </form>
             {% endif %}
-            <form method="post" action="/alerts/{{ alert.id }}/dismiss" style="display:inline;">
+            <form method="post" action="/alerts/{{ alert.id }}/dismiss" class="d-inline">
               <button class="btn-danger" type="submit">Dismiss</button>
             </form>
           </td>
@@ -102,6 +105,7 @@
     {% else %}
     <span class="btn-secondary-link pagination-btn pagination-disabled">Next</span>
     {% endif %}
+  </div>
   </div>
 </section>
 {% endblock %}

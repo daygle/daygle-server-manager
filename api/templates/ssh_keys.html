@@ -4,35 +4,46 @@
 {% block title %}SSH Keys{% endblock %}
 
 {% block content %}
-<section class="panel">
-  <h2>Generate New Key</h2>
-  <form id="generate-form" class="grid-form" style="align-items: end;">
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">Generate New Key</h3>
+  </div>
+  <div class="card-body">
+  <form id="generate-form" class="grid-form items-end">
     <label>Key Name <input name="name" id="gen-name" required placeholder="e.g. prod-servers" /></label>
     <button type="submit">Generate ed25519 Key</button>
   </form>
+  </div>
 </section>
 
-<section class="panel">
-  <h2>Import Existing Key</h2>
-  <p style="color: var(--text-muted); font-size: 0.9rem;">Paste an OpenSSH PEM private key (the contents of your <code>id_ed25519</code> or <code>id_rsa</code> file).</p>
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">Import Existing Key</h3>
+  </div>
+  <div class="card-body">
+  <p class="field-help">Paste an OpenSSH PEM private key (the contents of your <code>id_ed25519</code> or <code>id_rsa</code> file).</p>
   <form id="import-form" class="grid-form">
     <label>Key Name <input name="name" id="imp-name" required placeholder="e.g. my-existing-key" /></label>
-    <label style="grid-column: 1 / -1;">
+    <label class="col-span-2">
       Private Key (PEM)
       <textarea name="private_key" id="imp-key" rows="8" required
-        style="font-family: monospace; font-size: 0.82rem; width: 100%; resize: vertical;"
+        class="key-textarea"
         placeholder="-----BEGIN OPENSSH PRIVATE KEY-----
 ...
 -----END OPENSSH PRIVATE KEY-----"></textarea>
     </label>
     <button type="submit">Import Key</button>
   </form>
+  </div>
 </section>
 
-<section class="panel">
-  <h2>Stored Keys</h2>
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">Stored Keys</h3>
+  </div>
+  <div class="card-body">
   <div class="table-wrap">
-    <table>
+    <table class="table table-striped">
       <thead>
         <tr>
           <th>Name</th>
@@ -48,7 +59,7 @@
           <td>{{ key.name }}</td>
           <td><span class="badge badge-info">{{ key.key_type }}</span></td>
           <td>
-            <code style="font-size: 0.78rem; word-break: break-all;">{{ key.public_key[:60] }}…</code>
+            <code class="key-preview">{{ key.public_key[:60] }}…</code>
             <button class="btn-small" onclick="copyPubKey({{ key.id }}, `{{ key.public_key }}`)">Copy</button>
           </td>
           <td>{{ format_dt(key.created_at) }}</td>
@@ -63,6 +74,7 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
   </div>
 </section>
 
@@ -161,7 +173,7 @@ function addKeyRow(key) {
     <td>${key.name}</td>
     <td><span class="badge badge-info">${key.key_type}</span></td>
     <td>
-      <code style="font-size:0.78rem;word-break:break-all;">${preview}</code>
+      <code class="key-preview">${preview}</code>
       <button class="btn-small" onclick="copyPubKey(${key.id}, \`${key.public_key}\`)">Copy</button>
     </td>
     <td>${formatDateForUi(key.created_at)}</td>

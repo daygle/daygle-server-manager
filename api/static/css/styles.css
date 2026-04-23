@@ -3742,3 +3742,103 @@ label textarea,
     display: grid;
     gap: 12px;
 }
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+}
+
+.pagination-row {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.pagination-meta {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+.btn-small {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 4px 10px;
+    font-size: 0.8125rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.btn-small:hover {
+    background: var(--bg-hover);
+}
+
+.page-header {
+    margin-bottom: 16px;
+}
+
+.page-header h1 {
+    margin: 0 0 6px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.page-header p {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.card.prose .card-body h3 {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.card.prose .card-body p,
+.card.prose .card-body ul,
+.card.prose .card-body ol {
+    margin-bottom: 0.75rem;
+}
+
+#sidebarBrand {
+    cursor: pointer;
+    gap: 2px;
+}
+
+.user-menu-caret {
+    font-size: 12px;
+    color: var(--text-secondary);
+    transition: transform 0.2s;
+}
+
+.max-w-640 {
+    max-width: 640px;
+}
+
+.line-height-loose {
+    line-height: 2;
+}
+
+.items-end {
+    align-items: end;
+}
+
+
+.key-textarea {
+    font-family: monospace;
+    font-size: 0.82rem;
+    width: 100%;
+    resize: vertical;
+}
+
+.key-preview {
+    font-size: 0.78rem;
+    word-break: break-all;
+}

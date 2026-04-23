@@ -4,11 +4,14 @@
 {% block title %}Audit Log{% endblock %}
 
 {% block content %}
-<section class="panel">
-  <h2>Audit Log</h2>
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">Audit Log</h3>
+  </div>
+  <div class="card-body">
   <p class="section-description">Search, filter, and page through audit events.</p>
 
-  <form method="get" action="/audit-log" class="grid-form" style="margin-bottom: 12px;">
+  <form method="get" action="/audit-log" class="grid-form mb-12">
     <label>
       Search
       <input type="text" name="q" value="{{ search_q }}" placeholder="Action, user, target, detail, IP" />
@@ -57,7 +60,7 @@
   <p class="section-description">Showing {{ entries|length }} of {{ total_count }} entries.</p>
 
   <div class="table-wrap">
-    <table>
+    <table class="table table-striped">
       <thead>
         <tr>
           <th>Time</th>
@@ -108,6 +111,7 @@
     {% else %}
     <span class="btn-secondary-link pagination-btn pagination-disabled">Next</span>
     {% endif %}
+  </div>
   </div>
 </section>
 {% endblock %}

@@ -4,8 +4,11 @@
 {% block title %}Help{% endblock %}
 
 {% block content %}
-<section class="panel prose">
-  <h2>How to Use Daygle Server Manager</h2>
+<section class="card prose">
+  <div class="card-header">
+    <h3 class="card-title">How to Use Daygle Server Manager</h3>
+  </div>
+  <div class="card-body">
 
   <h3>1. Dashboard</h3>
   <p>The dashboard shows a quick operational snapshot:</p>
@@ -116,5 +119,6 @@ bash update.sh
 bash update.sh --force
 bash update.sh --skip-start
 bash update.sh --help</code></pre>
+    </div>
 </section>
 {% endblock %}

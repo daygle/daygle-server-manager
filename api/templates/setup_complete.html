@@ -9,16 +9,20 @@
   <p>Your admin account has been created.</p>
 </div>
 
-<div class="panel" style="max-width: 640px;">
-  <h2>Next Steps</h2>
-  <ol style="line-height: 2;">
+<div class="card max-w-640">
+  <div class="card-header">
+    <h3 class="card-title">Next Steps</h3>
+  </div>
+  <div class="card-body">
+  <ol class="line-height-loose">
     <li>Go to <a href="/ssh-keys"><strong>SSH Keys</strong></a> and generate or import an SSH key.</li>
     <li>Copy the displayed public key to each server you want to manage.</li>
     <li>Go to <a href="/servers"><strong>Servers</strong></a> and add your servers, selecting the SSH key.</li>
     <li>Go to <a href="/updates"><strong>System Updates</strong></a> to run your first update job.</li>
   </ol>
-  <div style="margin-top: 1.5rem;">
+  <div class="mt-24">
     <a href="/ssh-keys">Go to SSH Keys &rarr;</a>
+  </div>
   </div>
 </div>
 {% endblock %}

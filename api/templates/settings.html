@@ -5,8 +5,11 @@
 
 {% block content %}
 <form method="post" action="/settings/save-all">
-<section class="panel">
-  <h2>Display Preferences</h2>
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">Display Preferences</h3>
+  </div>
+  <div class="card-body">
   <div class="grid-form">
     <label>
       Date and Time Format
@@ -28,10 +31,14 @@
     </label>
   </div>
   <p class="field-help">These settings apply globally to all users and pages.</p>
+  </div>
 </section>
 
-<section class="panel">
-  <h2>History Retention</h2>
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">History Retention</h3>
+  </div>
+  <div class="card-body">
   <div class="grid-form">
     <label>
       Keep job &amp; audit records for (days)
@@ -39,10 +46,14 @@
     </label>
   </div>
   <p class="field-help">Enter the number of days to retain records. Use 0 to keep history forever. Update job records and audit log entries older than this will be automatically deleted. Purging runs once per hour.</p>
+  </div>
 </section>
 
-<section class="panel">
-  <h2>Session Security</h2>
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">Session Security</h3>
+  </div>
+  <div class="card-body">
   <div class="grid-form">
     <label>
       Login timeout (minutes)
@@ -50,10 +61,14 @@
     </label>
   </div>
   <p class="field-help">Users are logged out after this many minutes of inactivity.</p>
+  </div>
 </section>
 
-<section class="panel">
-  <h2>Alert Notifications</h2>
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">Alert Notifications</h3>
+  </div>
+  <div class="card-body">
   <div class="grid-form">
     <label class="checkbox-field">
       <input type="checkbox" name="email_alerts_enabled" {% if selected_email_alerts_enabled %}checked{% endif %} />
@@ -61,10 +76,14 @@
     </label>
   </div>
   <p class="field-help">When enabled, failed update alerts are emailed to enabled admin users with an email address.</p>
+  </div>
 </section>
 
-<section class="panel">
-  <h2>SMTP Settings</h2>
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">SMTP Settings</h3>
+  </div>
+  <div class="card-body">
   <div class="grid-form">
     <label>
       SMTP Host
@@ -99,13 +118,18 @@
     </label>
   </div>
   <p class="field-help">These credentials are used for admin alert emails.</p>
+  </div>
 </section>
 
-<section class="panel">
-  <h2>Apply Changes</h2>
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">Apply Changes</h3>
+  </div>
+  <div class="card-body">
   <div class="form-actions">
     <button type="submit">Save All Settings</button>
     <button type="submit" class="btn-secondary" formaction="/settings/smtp/test">Test SMTP Connection</button>
+  </div>
   </div>
 </section>
 </form>

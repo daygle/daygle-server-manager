@@ -5,24 +5,27 @@
 
 {% block content %}
 <div class="stats-grid">
-  <article class="panel stat-card">
+  <article class="card stat-card">
     <div class="stat-label">Servers</div>
     <div class="stat-value">{{ total_servers }}</div>
   </article>
-  <article class="panel stat-card">
+  <article class="card stat-card">
     <div class="stat-label">Running Jobs</div>
     <div class="stat-value">{{ running_jobs }}</div>
   </article>
-  <article class="panel stat-card">
+  <article class="card stat-card">
     <div class="stat-label">Failed Jobs</div>
     <div class="stat-value">{{ failed_jobs }}</div>
   </article>
 </div>
 
-<section class="panel">
-  <h2>Recent Update Jobs</h2>
+<section class="card">
+  <div class="card-header">
+    <h3 class="card-title">Recent Update Jobs</h3>
+  </div>
+  <div class="card-body">
   <div class="table-wrap">
-    <table>
+    <table class="table table-striped">
       <thead>
         <tr>
           <th>ID</th>
@@ -50,6 +53,7 @@
         {% endfor %}
       </tbody>
     </table>
+  </div>
   </div>
 </section>
 {% endblock %}

@@ -18,8 +18,8 @@
     <div class="app-container">
       <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
-          <div class="sidebar-brand" id="sidebarBrand" style="cursor: pointer; gap: 2px;">
-            <img src="/static/daygle-light.png" alt="Daygle Server Manager" style="height: 32px; width: auto;" />
+          <div class="sidebar-brand" id="sidebarBrand">
+            <img src="/static/daygle-light.png" alt="Daygle Server Manager" />
             <span class="brand-text">aygle Server Manager</span>
           </div>
         </div>
@@ -114,7 +114,7 @@
                   {{ current_user.username[0]|upper }}
                 </div>
                 <span class="user-name">{{ current_user.username }}</span>
-                <i class="fas fa-chevron-down" style="font-size: 12px; color: var(--text-secondary); transition: transform 0.2s;"></i>
+                <i class="fas fa-chevron-down user-menu-caret"></i>
               </button>
               <div class="dropdown-menu" id="userMenuDropdown">
                 <a href="/user-settings" class="dropdown-item {% if active_page == 'user-settings' %}active{% endif %}">
