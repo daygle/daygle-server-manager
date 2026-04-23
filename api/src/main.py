@@ -1900,6 +1900,13 @@ def audit_log_page(request: Request, db: Session = Depends(get_db)):
         .all()
     )
 
+    if total_count == 0:
+        showing_from = 0
+        showing_to = 0
+    else:
+        showing_from = ((page - 1) * page_size) + 1
+        showing_to = min(((page - 1) * page_size) + len(entries), total_count)
+
     action_options = [
         row[0]
         for row in db.query(AuditLog.action)
@@ -1949,6 +1956,8 @@ def audit_log_page(request: Request, db: Session = Depends(get_db)):
         page=page,
         page_size=page_size,
         total_count=total_count,
+        showing_from=showing_from,
+        showing_to=showing_to,
         total_pages=total_pages,
         prev_page_url=prev_page_url,
         next_page_url=next_page_url,

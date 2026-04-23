@@ -11,7 +11,7 @@
       <i class="fas fa-filter"></i>
       <span>Search &amp; Filter</span>
     </div>
-    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleFilters()" title="Close">
+    <button type="button" class="btn btn-secondary btn-sm btn-icon-only" onclick="toggleFilters()" title="Close" aria-label="Close filters">
       <i class="fas fa-times"></i>
     </button>
   </div>
@@ -83,7 +83,7 @@
   
   <div class="card-body p-0">
     <div class="flex-between" style="padding: 16px 20px 12px 20px; gap: 12px; flex-wrap: wrap;">
-      <p style="margin: 0;" class="text-secondary">Showing {{ entries|length }} of {{ total_count }} entries</p>
+      <p style="margin: 0;" class="text-secondary">Showing {{ showing_from }}-{{ showing_to }} of {{ total_count }} entries</p>
       <form method="get" action="/audit-log" class="flex gap-2" style="align-items: center;">
         <input type="hidden" name="q" value="{{ search_q }}">
         <input type="hidden" name="action" value="{{ selected_action }}">
