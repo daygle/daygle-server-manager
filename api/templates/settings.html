@@ -5,132 +5,168 @@
 
 {% block content %}
 <form method="post" action="/settings/save-all">
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">Display Preferences</h3>
-  </div>
-  <div class="card-body">
-  <div class="grid-form">
-    <label>
-      Date and Time Format
-      <select name="date_format" required>
-        {% for option_key, option_label, _ in date_format_options %}
-        <option value="{{ option_key }}" {% if selected_date_format == option_key %}selected{% endif %}>
-          {{ option_label }}
-        </option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      Timezone
-      <select name="timezone_name" required>
-        {% for tz_value, tz_label in timezone_options %}
-        <option value="{{ tz_value }}" {% if selected_timezone == tz_value %}selected{% endif %}>{{ tz_label }}</option>
-        {% endfor %}
-      </select>
-    </label>
-  </div>
-  <p class="field-help">These settings apply globally to all users and pages.</p>
-  </div>
-</section>
 
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">History Retention</h3>
-  </div>
-  <div class="card-body">
-  <div class="grid-form">
-    <label>
-      Keep job &amp; audit records for (days)
-      <input name="retention_days" type="number" min="0" max="3650" step="1" required value="{{ selected_retention_days }}" />
-    </label>
-  </div>
-  <p class="field-help">Enter the number of days to retain records. Use 0 to keep history forever. Update job records and audit log entries older than this will be automatically deleted. Purging runs once per hour.</p>
-  </div>
-</section>
+  <!-- Display Preferences Card -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fas fa-display"></i>
+        <span>Display Preferences</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label for="date_format" class="form-label">Date and Time Format</label>
+        <select id="date_format" class="form-select" name="date_format" required>
+          {% for option_key, option_label, _ in date_format_options %}
+          <option value="{{ option_key }}" {% if selected_date_format == option_key %}selected{% endif %}>
+            {{ option_label }}
+          </option>
+          {% endfor %}
+        </select>
+        <small class="form-text text-secondary">Format for displaying dates and times throughout the application</small>
+      </div>
 
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">Session Security</h3>
+      <div class="form-group mt-3">
+        <label for="timezone_name" class="form-label">Timezone</label>
+        <select id="timezone_name" class="form-select" name="timezone_name" required>
+          {% for tz_value, tz_label in timezone_options %}
+          <option value="{{ tz_value }}" {% if selected_timezone == tz_value %}selected{% endif %}>{{ tz_label }}</option>
+          {% endfor %}
+        </select>
+        <small class="form-text text-secondary">Timezone for displaying dates and times throughout the application</small>
+      </div>
+    </div>
   </div>
-  <div class="card-body">
-  <div class="grid-form">
-    <label>
-      Login timeout (minutes)
-      <input name="login_timeout_minutes" type="number" min="1" max="43200" step="1" required value="{{ selected_login_timeout_minutes }}" />
-    </label>
-  </div>
-  <p class="field-help">Users are logged out after this many minutes of inactivity.</p>
-  </div>
-</section>
 
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">Alert Notifications</h3>
+  <!-- History Retention Card -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fas fa-history"></i>
+        <span>History Retention</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label for="retention_days" class="form-label">Keep job &amp; audit records for (days)</label>
+        <input id="retention_days" class="form-control" type="number" name="retention_days" min="0" max="3650" step="1" required value="{{ selected_retention_days }}" />
+        <small class="form-text text-secondary">Enter the number of days to retain records. Use 0 to keep history forever. Update job records and audit log entries older than this will be automatically deleted. Purging runs once per hour.</small>
+      </div>
+    </div>
   </div>
-  <div class="card-body">
-  <div class="grid-form">
-    <label class="checkbox-field">
-      <input type="checkbox" name="email_alerts_enabled" {% if selected_email_alerts_enabled %}checked{% endif %} />
-      <span>Email admins when alerts are generated</span>
-    </label>
-  </div>
-  <p class="field-help">When enabled, failed update alerts are emailed to enabled admin users with an email address.</p>
-  </div>
-</section>
 
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">SMTP Settings</h3>
+  <!-- Session Security Card -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fas fa-lock"></i>
+        <span>Session Security</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label for="login_timeout_minutes" class="form-label">Login timeout (minutes)</label>
+        <input id="login_timeout_minutes" class="form-control" type="number" name="login_timeout_minutes" min="1" max="43200" step="1" required value="{{ selected_login_timeout_minutes }}" />
+        <small class="form-text text-secondary">Users are logged out after this many minutes of inactivity.</small>
+      </div>
+    </div>
   </div>
-  <div class="card-body">
-  <div class="grid-form">
-    <label>
-      SMTP Host
-      <input name="smtp_host" required value="{{ selected_smtp_host }}" />
-    </label>
-    <label>
-      SMTP Port
-      <input name="smtp_port" type="number" min="1" max="65535" required value="{{ selected_smtp_port }}" />
-    </label>
-    <label>
-      SMTP Username
-      <input name="smtp_username" value="{{ selected_smtp_username }}" autocomplete="off" />
-    </label>
-    <label>
-      SMTP Password
-      <input name="smtp_password" type="password" placeholder="Leave blank to keep current password" autocomplete="new-password" />
-      {% if smtp_password_set %}
-      <small class="field-help">A password is currently saved.</small>
-      {% endif %}
-    </label>
-    <label>
-      From Address
-      <input name="smtp_from" type="email" required value="{{ selected_smtp_from }}" />
-    </label>
-    <label class="checkbox-field">
-      <input type="checkbox" name="smtp_use_tls" {% if selected_smtp_use_tls %}checked{% endif %} />
-      <span>Use TLS</span>
-    </label>
-    <label class="checkbox-field">
-      <input type="checkbox" name="clear_smtp_password" />
-      <span>Clear saved SMTP password</span>
-    </label>
-  </div>
-  <p class="field-help">These credentials are used for admin alert emails.</p>
-  </div>
-</section>
 
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">Apply Changes</h3>
+  <!-- Alert Notifications Card -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fas fa-bell"></i>
+        <span>Alert Notifications</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-check mb-0">
+        <input id="email_alerts_enabled" type="checkbox" class="form-check-input" name="email_alerts_enabled" {% if selected_email_alerts_enabled %}checked{% endif %} />
+        <label for="email_alerts_enabled" class="form-check-label">
+          <strong>Email admins when alerts are generated</strong>
+          <small class="d-block text-secondary">When enabled, failed update alerts are emailed to enabled admin users with an email address.</small>
+        </label>
+      </div>
+    </div>
   </div>
-  <div class="card-body">
-  <div class="form-actions">
-    <button type="submit"><i class="fas fa-floppy-disk"></i>Save All Settings</button>
-    <button type="submit" class="btn-secondary" formaction="/settings/smtp/test"><i class="fas fa-vial"></i>Test SMTP Connection</button>
+
+  <!-- SMTP Settings Card -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fas fa-envelope"></i>
+        <span>SMTP Settings</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label for="smtp_host" class="form-label">SMTP Host</label>
+        <input id="smtp_host" class="form-control" type="text" name="smtp_host" required value="{{ selected_smtp_host }}" placeholder="smtp.gmail.com" />
+        <small class="form-text text-secondary">SMTP server hostname or IP address</small>
+      </div>
+
+      <div class="form-group mt-3">
+        <label for="smtp_port" class="form-label">SMTP Port</label>
+        <input id="smtp_port" class="form-control" type="number" name="smtp_port" min="1" max="65535" required value="{{ selected_smtp_port }}" />
+        <small class="form-text text-secondary">SMTP server port (587 for TLS, 465 for SSL, 25 for plain)</small>
+      </div>
+
+      <div class="form-group mt-3">
+        <label for="smtp_username" class="form-label">SMTP Username</label>
+        <input id="smtp_username" class="form-control" type="text" name="smtp_username" value="{{ selected_smtp_username }}" placeholder="your-email@example.com" autocomplete="off" />
+        <small class="form-text text-secondary">Username for SMTP authentication (usually your email address)</small>
+      </div>
+
+      <div class="form-group mt-3">
+        <label for="smtp_password" class="form-label">SMTP Password</label>
+        <input id="smtp_password" class="form-control" type="password" name="smtp_password" placeholder="Leave blank to keep current password" autocomplete="new-password" />
+        <small class="form-text text-secondary">Password for SMTP authentication (use app passwords for Gmail)</small>
+        {% if smtp_password_set %}
+        <small class="d-block text-secondary mt-2"><strong>A password is currently saved.</strong></small>
+        {% endif %}
+      </div>
+
+      <div class="form-group mt-3">
+        <label for="smtp_from" class="form-label">From Email Address</label>
+        <input id="smtp_from" class="form-control" type="email" name="smtp_from" required value="{{ selected_smtp_from }}" placeholder="noreply@example.com" />
+        <small class="form-text text-secondary">Email address to send alerts from</small>
+      </div>
+
+      <div class="form-check mt-3">
+        <input id="smtp_use_tls" type="checkbox" class="form-check-input" name="smtp_use_tls" {% if selected_smtp_use_tls %}checked{% endif %} />
+        <label for="smtp_use_tls" class="form-check-label">
+          <strong>Use TLS Encryption</strong>
+          <small class="d-block text-secondary">Use STARTTLS for secure connection (recommended for most servers)</small>
+        </label>
+      </div>
+
+      <div class="form-check mt-3">
+        <input id="clear_smtp_password" type="checkbox" class="form-check-input" name="clear_smtp_password" />
+        <label for="clear_smtp_password" class="form-check-label">
+          <strong>Clear saved SMTP password</strong>
+          <small class="d-block text-secondary">Remove the currently saved SMTP password</small>
+        </label>
+      </div>
+    </div>
   </div>
+
+  <!-- Apply Changes Card -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fas fa-save"></i>
+        <span>Apply Changes</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-floppy-disk"></i><span>Save All Settings</span></button>
+        <button type="submit" class="btn btn-secondary" formaction="/settings/smtp/test"><i class="fas fa-vial"></i><span>Test SMTP Connection</span></button>
+      </div>
+    </div>
   </div>
-</section>
+
 </form>
 {% endblock %}
