@@ -507,10 +507,17 @@ button:disabled {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: stretch;
 }
 
 .form-actions button[type="submit"] {
   grid-column: auto;
+}
+
+.form-actions button[type="submit"],
+.form-actions .btn-secondary-link {
+  min-height: 42px;
+  padding-inline: 16px;
 }
 
 .field-help {

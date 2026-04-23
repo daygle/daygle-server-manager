@@ -48,8 +48,10 @@
         <option value="200" {% if page_size == 200 %}selected{% endif %}>200</option>
       </select>
     </label>
-    <button type="submit">Apply Filters</button>
-    <a href="/audit-log" class="btn-secondary-link">Reset</a>
+    <div class="form-actions">
+      <button type="submit">Apply Filters</button>
+      <a href="/audit-log" class="btn-secondary-link">Reset</a>
+    </div>
   </form>
 
   <p class="section-description">Showing {{ entries|length }} of {{ total_count }} entries.</p>
