@@ -2037,6 +2037,65 @@ pre.code-block, pre.code-block code {
     word-wrap: break-word;
 }
 
+/* Job Output Styling - Terminal/Console-like display */
+.job-output-row {
+    background: var(--bg-secondary);
+}
+
+.job-output-pre {
+    background: #1a1a1a;
+    color: #e0e0e0;
+    padding: 16px;
+    border-radius: var(--radius-md);
+    margin: 0;
+    overflow: auto;
+    max-height: 500px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .job-output-pre {
+    background: #0a0a0a;
+    color: #d0d0d0;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.output-section-label {
+    display: block;
+    font-weight: 600;
+    color: #4db8ff;
+    margin-top: 12px;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+}
+
+.output-section-label:first-child {
+    margin-top: 0;
+}
+
+[data-theme="dark"] .output-section-label {
+    color: #66d9ff;
+}
+
+.output-section-body {
+    display: block;
+    color: inherit;
+    margin-bottom: 8px;
+}
+
+/* Styling for selected/expanded job rows */
+.selected-job-row {
+    background: rgba(59, 130, 246, 0.08);
+}
+
+[data-theme="dark"] .selected-job-row {
+    background: rgba(59, 130, 246, 0.15);
+}
+
 /* ========================================
    Print Styles
    ======================================== */
