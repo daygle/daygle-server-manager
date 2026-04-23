@@ -117,18 +117,18 @@
           {% for entry in entries %}
           <tr>
             <td><small>{{ format_dt(entry.timestamp) }}</small></td>
-            <td>{{ entry.actor_username or '—' }}</td>
+            <td>{{ entry.actor_username or 'N/A' }}</td>
             <td><span class="badge badge-secondary">{{ entry.action }}</span></td>
             <td>
               {% if entry.target_label %}
                 <span class="badge badge-info">{{ entry.target_label }}</span>
                 {% if entry.target_type %}<small class="text-secondary">{{ entry.target_type }}</small>{% endif %}
               {% else %}
-                —
+                N/A
               {% endif %}
             </td>
-            <td class="text-secondary"><small>{{ entry.detail or '—' }}</small></td>
-            <td class="hide-mobile"><small>{{ entry.ip_address or '—' }}</small></td>
+            <td class="text-secondary"><small>{{ entry.detail or 'N/A' }}</small></td>
+            <td class="hide-mobile"><small>{{ entry.ip_address or 'N/A' }}</small></td>
           </tr>
           {% else %}
           <tr>
