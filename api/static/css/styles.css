@@ -514,6 +514,10 @@ button:disabled {
   align-items: stretch;
 }
 
+.form-actions button {
+  width: auto;
+}
+
 .form-actions button[type="submit"] {
   grid-column: auto;
 }
