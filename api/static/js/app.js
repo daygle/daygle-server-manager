@@ -193,7 +193,7 @@ function setUserFormMode(editing) {
     if (userFormIcon) {
       userFormIcon.className = "fas fa-user-edit";
     }
-    userSubmitBtn.innerHTML = '<i class="fas fa-save"></i>Save Changes';
+    userSubmitBtn.innerHTML = '<i class="fas fa-save"></i><span>Save Changes</span>';
     userCancelBtn.classList.remove("hidden");
     userPasswordInput.required = false;
     userConfirmPasswordInput.required = false;
@@ -204,7 +204,7 @@ function setUserFormMode(editing) {
     if (userFormIcon) {
       userFormIcon.className = "fas fa-user-plus";
     }
-    userSubmitBtn.innerHTML = '<i class="fas fa-user-plus"></i>Create User';
+    userSubmitBtn.innerHTML = '<i class="fas fa-user-plus"></i><span>Create User</span>';
     userCancelBtn.classList.add("hidden");
     userPasswordInput.required = true;
     userConfirmPasswordInput.required = true;
@@ -260,18 +260,24 @@ function applySelfDisableGuard(editingUserId) {
   }
 
   const enabledField = userForm.querySelector('input[name="enabled"]');
-  if (!(enabledField instanceof HTMLInputElement)) {
+  const enabledSelectField = userForm.querySelector('select[name="enabled"]');
+  const targetField = enabledField || enabledSelectField;
+  if (!(targetField instanceof HTMLInputElement) && !(targetField instanceof HTMLSelectElement)) {
     return;
   }
 
   const isSelfEdit = Boolean(currentUserId) && String(editingUserId || "") === String(currentUserId);
-  enabledField.disabled = isSelfEdit;
+  targetField.disabled = isSelfEdit;
 
   if (isSelfEdit) {
-    enabledField.checked = true;
-    enabledField.title = "You cannot disable your own account.";
+    if (targetField instanceof HTMLInputElement) {
+      targetField.checked = true;
+    } else {
+      targetField.value = "true";
+    }
+    targetField.title = "You cannot disable your own account.";
   } else {
-    enabledField.title = "";
+    targetField.title = "";
   }
 }
 

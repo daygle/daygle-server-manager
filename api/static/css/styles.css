@@ -3798,6 +3798,44 @@ button i,
     vertical-align: middle;
 }
 
+.btn.btn-icon-only {
+    width: 38px;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.btn.btn-icon-only i,
+button.btn-icon-only i,
+.btn.btn-icon-only .fas,
+.btn.btn-icon-only .far,
+.btn.btn-icon-only .fab {
+    margin-right: 0;
+}
+
+#usersListCard .user-actions-col {
+    width: 1%;
+    white-space: nowrap;
+}
+
+#usersListCard .flex-gap-8 form {
+    margin: 0;
+    display: inline-flex;
+}
+
+#usersListCard .flex-gap-8 .btn.btn-icon-only {
+    width: 36px;
+    min-height: 36px;
+    height: 36px;
+}
+
+#userFormCard .two-col-grid {
+    margin-bottom: 4px;
+}
+
+#userFormCard .form-actions {
+    margin-top: 1rem;
+}
+
 .btn-secondary-link .fa-chevron-right,
 .btn-secondary-link .fa-arrow-right {
     margin-left: 6px;
