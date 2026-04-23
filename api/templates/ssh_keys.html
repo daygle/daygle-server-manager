@@ -106,6 +106,15 @@
                 >
                   <i class="fas fa-copy"></i>
                 </button>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm btn-icon-only"
+                  data-copy-auth-key="{{ key.id }}"
+                  onclick='copyAuthorizedKeyEntry({{ key.id }}, {{ key.name|tojson }}, {{ key.public_key|tojson }})'
+                  title="Copy for authorized_keys"
+                >
+                  <i class="fas fa-user-check"></i>
+                </button>
                 <button class="btn btn-danger btn-sm btn-icon-only" type="button" data-delete-key="{{ key.id }}" title="Delete key">
                   <i class="fas fa-trash"></i>
                 </button>
@@ -178,30 +187,56 @@ function formatDateForUi(value) {
 
 async function copyPubKey(id, pubKey) {
   try {
-    // Try modern clipboard API first
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(pubKey);
-    } else {
-      // Fallback for older browsers or non-secure contexts
-      const textarea = document.createElement('textarea');
-      textarea.value = pubKey;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-    }
-    
+    await writeToClipboard(pubKey);
     const btn = document.querySelector(`#key-row-${id} [data-copy-key]`);
-    if (!btn) return;
-    const original = btn.innerHTML;
-    btn.innerHTML = '<i class="fas fa-check"></i>';
-    setTimeout(() => { btn.innerHTML = original; }, 2000);
+    flashCopied(btn);
   } catch (err) {
     console.error('Copy failed:', err);
     alert('Failed to copy: ' + err.message);
   }
+}
+
+function buildAuthorizedKeysComment(name) {
+  return `daygle-server-manager:${String(name || 'key').trim().replace(/\s+/g, '-')}`;
+}
+
+async function copyAuthorizedKeyEntry(id, name, pubKey) {
+  try {
+    const line = `${pubKey} ${buildAuthorizedKeysComment(name)}`;
+    await writeToClipboard(line);
+    const btn = document.querySelector(`#key-row-${id} [data-copy-auth-key]`);
+    flashCopied(btn);
+  } catch (err) {
+    console.error('Copy authorized_keys entry failed:', err);
+    alert('Failed to copy: ' + err.message);
+  }
+}
+
+async function writeToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  document.body.removeChild(textarea);
+
+  if (!copied) {
+    throw new Error('Clipboard copy command failed');
+  }
+}
+
+function flashCopied(btn) {
+  if (!btn) return;
+  const original = btn.innerHTML;
+  btn.innerHTML = '<i class="fas fa-check"></i>';
+  setTimeout(() => { btn.innerHTML = original; }, 2000);
 }
 
 document.getElementById('generate-form').addEventListener('submit', async (e) => {
@@ -285,6 +320,9 @@ function addKeyRow(key) {
         <button type="button" class="btn btn-secondary btn-sm btn-icon-only" data-copy-key="${key.id}" title="Copy public key">
           <i class="fas fa-copy"></i>
         </button>
+        <button type="button" class="btn btn-secondary btn-sm btn-icon-only" data-copy-auth-key="${key.id}" title="Copy for authorized_keys">
+          <i class="fas fa-user-check"></i>
+        </button>
         <button class="btn btn-danger btn-sm btn-icon-only" type="button" data-delete-key="${key.id}" title="Delete key">
           <i class="fas fa-trash"></i>
         </button>
@@ -296,6 +334,11 @@ function addKeyRow(key) {
   // Attach copy listener
   tr.querySelector('[data-copy-key]').addEventListener('click', async () => {
     await copyPubKey(key.id, key.public_key);
+  });
+
+  // Attach authorized_keys copy listener
+  tr.querySelector('[data-copy-auth-key]').addEventListener('click', async () => {
+    await copyAuthorizedKeyEntry(key.id, key.name, key.public_key);
   });
   
   // Attach delete listener

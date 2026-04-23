@@ -305,8 +305,17 @@ def run_update_job(db: Session, job_id: int) -> None:
         job.status = "failed"
         failure_text = f"{type(exc).__name__}: {exc}"
         failure_text = redact_secrets(failure_text, [server_password, server_sudo_password])
+        hint_text = ""
+        if isinstance(exc, paramiko.AuthenticationException):
+            hint_text = (
+                "\n\n[hint]\n"
+                "SSH authentication failed. Verify the selected username, ensure the matching public key is in "
+                "~/.ssh/authorized_keys for that user, and confirm SSH directory/file permissions (700 for ~/.ssh, "
+                "600 for authorized_keys). If using root, also check sshd_config allows key-based root login "
+                "(PermitRootLogin prohibit-password or yes)."
+            )
         step_text = "\n".join(step_logs)
-        job.output = f"[summary]\nUpdate failed\n\n[steps]\n{step_text}\n\n[error]\n{failure_text}".strip()
+        job.output = f"[summary]\nUpdate failed\n\n[steps]\n{step_text}\n\n[error]\n{failure_text}{hint_text}".strip()
         job.summary = "Update failed"
         job.finished_at = datetime.utcnow()
         db.commit()

@@ -481,6 +481,64 @@ if (userForm) {
   usersListCard?.classList.add("visible");
 }
 
+document.querySelectorAll("[data-test-server]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const row = button.closest("tr");
+    const serverId = button.getAttribute("data-test-server");
+    if (!row || !serverId) {
+      return;
+    }
+
+    const payload = {
+      host: (row.dataset.serverHost || "").trim(),
+      port: Number(row.dataset.serverPort || 22),
+      username: (row.dataset.serverUsername || "").trim(),
+      auth_method: row.dataset.serverAuth || "key",
+      ssh_key_id: row.dataset.serverSshKeyId ? Number(row.dataset.serverSshKeyId) : null,
+      server_id: Number(serverId),
+      password: null,
+    };
+
+    if (!payload.host || !payload.username) {
+      notify("Server details are incomplete for connection testing.", "error");
+      return;
+    }
+
+    const originalButtonHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    try {
+      const response = await fetch("/api/servers/test-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const responseText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        notify(`Server error (${response.status}): ${response.statusText}`, "error");
+        return;
+      }
+
+      if (!response.ok) {
+        notify(`${row.dataset.serverName || "Server"}: ${data.detail || "Connection test failed."}`, "error");
+        return;
+      }
+
+      notify(data.message || `${row.dataset.serverName || "Server"}: connection successful.`, "success");
+    } catch (error) {
+      notify(`Connection test failed: ${error.message}`, "error");
+    } finally {
+      button.disabled = false;
+      button.innerHTML = originalButtonHtml;
+    }
+  });
+});
+
 document.querySelectorAll("[data-delete-server]").forEach((button) => {
   button.addEventListener("click", async () => {
     const serverId = button.getAttribute("data-delete-server");
