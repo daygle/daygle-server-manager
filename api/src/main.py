@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
@@ -14,6 +15,7 @@ from croniter import croniter
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import paramiko
 from sqlalchemy import String, func, or_, text
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
@@ -23,6 +25,7 @@ from .database import Base, SessionLocal, engine, get_db
 from .models import Alert, AppSetting, AuditLog, SSHKey, Server, UpdateJob, UpdateSchedule, User
 from .schemas import (
     SSHKeyCreate,
+    ServerConnectionTestRequest,
     SSHKeyRead,
     ServerCreate,
     ServerRead,
@@ -2645,6 +2648,86 @@ def delete_ssh_key(key_id: int, request: Request, db: Session = Depends(get_db))
     log_audit(db, "ssh_key.delete", request=request, actor=actor,
               target_type="ssh_key", target_id=key_id, target_label=ssh_key.name)
     return {"message": "SSH key deleted"}
+
+
+def load_private_key_for_ssh(private_key_pem: str) -> paramiko.PKey:
+    key_loaders = [
+        paramiko.Ed25519Key,
+        paramiko.RSAKey,
+        paramiko.ECDSAKey,
+        paramiko.DSSKey,
+    ]
+    last_error: Exception | None = None
+    for loader in key_loaders:
+        try:
+            return loader.from_private_key(io.StringIO(private_key_pem))
+        except Exception as exc:  # pragma: no cover - fallback probing
+            last_error = exc
+    raise HTTPException(status_code=400, detail="Stored SSH private key format is not supported") from last_error
+
+
+@app.post("/api/servers/test-connection")
+def test_server_connection(payload: ServerConnectionTestRequest, request: Request, db: Session = Depends(get_db)):
+    require_api_user(request, db, admin=True)
+
+    host = payload.host.strip()
+    username = payload.username.strip()
+    if not host:
+        raise HTTPException(status_code=400, detail="Host is required")
+    if not username:
+        raise HTTPException(status_code=400, detail="Username is required")
+
+    auth_method = payload.auth_method
+    password = payload.password or None
+    ssh_key_id = payload.ssh_key_id
+
+    existing_server: Server | None = None
+    if payload.server_id:
+        existing_server = db.query(Server).filter(Server.id == payload.server_id).first()
+
+    if auth_method == "password":
+        if not password and existing_server and existing_server.auth_method == "password":
+            password = existing_server.password
+        if not password:
+            raise HTTPException(status_code=400, detail="SSH password is required for password auth")
+    else:
+        if not ssh_key_id and existing_server and existing_server.auth_method == "key":
+            ssh_key_id = existing_server.ssh_key_id
+        if not ssh_key_id:
+            raise HTTPException(status_code=400, detail="SSH key is required for key auth")
+
+    connect_kwargs = {
+        "hostname": host,
+        "port": payload.port,
+        "username": username,
+        "timeout": 15,
+        "banner_timeout": 15,
+        "auth_timeout": 15,
+        "allow_agent": False,
+        "look_for_keys": False,
+    }
+
+    if auth_method == "password":
+        connect_kwargs["password"] = password
+    else:
+        ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
+        if not ssh_key:
+            raise HTTPException(status_code=400, detail="Selected SSH key does not exist")
+        connect_kwargs["pkey"] = load_private_key_for_ssh(ssh_key.private_key)
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    try:
+        client.connect(**connect_kwargs)
+    except paramiko.AuthenticationException:
+        raise HTTPException(status_code=400, detail="Authentication failed. Check username and credentials.")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Connection failed: {str(exc)}")
+    finally:
+        client.close()
+
+    return {"ok": True, "message": f"Connection successful to {host}:{payload.port}"}
 
 
 @app.post("/api/servers", response_model=ServerRead)

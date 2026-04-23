@@ -24,6 +24,7 @@ const passwordLabel = document.getElementById("password_label");
 const keyLabel = document.getElementById("key_label");
 const cancelEditBtn = document.getElementById("cancel_edit_btn");
 const saveServerBtn = document.getElementById("save_server_btn");
+const testConnectionBtn = document.getElementById("test_connection_btn");
 const serverFormTitle = document.getElementById("server-form-title");
 const serverFormCard = document.getElementById("serverFormCard");
 const serversListCard = document.getElementById("serversListCard");
@@ -115,6 +116,71 @@ authMethod?.addEventListener("change", toggleAuthFields);
 if (authMethod && passwordLabel && keyLabel) {
   toggleAuthFields();
 }
+
+testConnectionBtn?.addEventListener("click", async () => {
+  if (!serverForm) {
+    return;
+  }
+
+  const formData = new FormData(serverForm);
+  const payload = {
+    host: (formData.get("host") || "").toString().trim(),
+    port: Number(formData.get("port") || 22),
+    username: (formData.get("username") || "").toString().trim(),
+    auth_method: (formData.get("auth_method") || "key").toString(),
+    password: (formData.get("password") || "").toString() || null,
+    ssh_key_id: formData.get("ssh_key_id") ? Number(formData.get("ssh_key_id")) : null,
+    server_id: formData.get("server_id") ? Number(formData.get("server_id")) : null,
+  };
+
+  if (!payload.host || !payload.username) {
+    notify("Host and username are required before testing connection.", "error");
+    return;
+  }
+
+  if (payload.auth_method === "password" && !payload.password && !payload.server_id) {
+    notify("Enter an SSH password before testing password authentication.", "error");
+    return;
+  }
+
+  if (payload.auth_method === "key" && !payload.ssh_key_id) {
+    notify("Select an SSH key before testing key authentication.", "error");
+    return;
+  }
+
+  const originalButtonHtml = testConnectionBtn.innerHTML;
+  testConnectionBtn.disabled = true;
+  testConnectionBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Testing...</span>';
+
+  try {
+    const response = await fetch("/api/servers/test-connection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const responseText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      notify(`Server error (${response.status}): ${response.statusText}`, "error");
+      return;
+    }
+
+    if (!response.ok) {
+      notify(data.detail || "Connection test failed.", "error");
+      return;
+    }
+
+    notify(data.message || "Connection successful.", "success");
+  } catch (error) {
+    notify(`Connection test failed: ${error.message}`, "error");
+  } finally {
+    testConnectionBtn.disabled = false;
+    testConnectionBtn.innerHTML = originalButtonHtml;
+  }
+});
 
 serverForm?.addEventListener("submit", async (event) => {
   event.preventDefault();

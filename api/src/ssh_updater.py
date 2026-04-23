@@ -91,6 +91,21 @@ def detect_package_manager(client: paramiko.SSHClient) -> str:
     return package_manager
 
 
+def load_private_key_for_ssh(private_key_pem: str) -> paramiko.PKey:
+    key_loaders = [
+        paramiko.Ed25519Key,
+        paramiko.RSAKey,
+        paramiko.ECDSAKey,
+        paramiko.DSSKey,
+    ]
+    for loader in key_loaders:
+        try:
+            return loader.from_private_key(io.StringIO(private_key_pem))
+        except Exception:
+            continue
+    raise ValueError("Unsupported private key format")
+
+
 def build_update_command(package_manager: str) -> str:
     if package_manager == "apt":
         # Extra noninteractive and lock-timeout options reduce chances of hanging.
@@ -235,7 +250,7 @@ def run_update_job(db: Session, job_id: int) -> None:
         if server.auth_method == "password":
             connect_kwargs["password"] = server.password
         elif server.ssh_key_id and server.ssh_key:
-            pkey = paramiko.pkey.load_private_key(io.StringIO(server.ssh_key.private_key))
+            pkey = load_private_key_for_ssh(server.ssh_key.private_key)
             connect_kwargs["pkey"] = pkey
 
         step_logs.append(f"[{datetime.utcnow().isoformat()}] Connecting to {server.host}:{server.port} as {server.username}")

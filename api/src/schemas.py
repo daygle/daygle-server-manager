@@ -30,6 +30,16 @@ class ServerCreate(BaseModel):
     sudo_password: str | None = None
 
 
+class ServerConnectionTestRequest(BaseModel):
+    host: str = Field(min_length=1, max_length=255)
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str = Field(min_length=1, max_length=120)
+    auth_method: str = Field(default="key", pattern="^(key|password)$")
+    password: str | None = None
+    ssh_key_id: int | None = None
+    server_id: int | None = None
+
+
 class ServerUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     host: str | None = Field(default=None, min_length=1, max_length=255)
