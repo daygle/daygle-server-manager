@@ -130,7 +130,7 @@
           <td><strong>{{ server.name }}</strong></td>
           <td>{{ server.host }}:{{ server.port }}</td>
           <td>{{ server.username }}</td>
-          <td class="hide-mobile">{{ 'Password' if server.auth_method == 'password' else server.auth_method }}</td>
+          <td class="hide-mobile">{{ 'Password' if server.auth_method == 'password' else 'Key' }}</td>
           <td class="hide-mobile">{{ 'set' if server.sudo_password else 'N/A' }}</td>
           <td>
             <div class="flex-gap-8">

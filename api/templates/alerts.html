@@ -34,7 +34,6 @@
           <label for="state" class="form-label">State</label>
           <select id="state" name="state" class="form-select">
             <option value="open" {% if selected_state == 'open' %}selected{% endif %}>Open</option>
-            <option value="ack" {% if selected_state == 'ack' %}selected{% endif %}>Acknowledged</option>
             <option value="all" {% if selected_state == 'all' %}selected{% endif %}>All</option>
           </select>
         </div>
@@ -49,7 +48,6 @@
         </div>
       </div>
       <div class="flex-between mt-3" style="gap: 12px; flex-wrap: wrap;">
-        <div class="text-secondary"><strong>{{ unacknowledged_count }}</strong> unacknowledged</div>
         <div class="flex gap-2">
           <button type="submit" class="btn btn-primary">
             <i class="fas fa-filter"></i>
@@ -85,15 +83,12 @@
   <div class="card-body">
     <p class="text-secondary" style="margin-bottom: 16px;">Showing {{ alerts|length }} of {{ total_count }} alerts.</p>
     {% for alert in alerts %}
-    <div class="card alert-item {{ alert.level }} {% if alert.acknowledged_at %}acknowledged{% endif %}">
+    <div class="card alert-item {{ alert.level }}">
       <div class="card-body">
         <div class="alert-header">
           <div class="flex-gap-8" style="flex-wrap: wrap;">
             <span class="alert-badge {{ alert.level }}">{{ alert.level }}</span>
             <h5 class="alert-title" style="margin: 0;">{{ alert.title }}</h5>
-            {% if alert.acknowledged_at %}
-            <i class="fas fa-check-circle" style="color: var(--success);" title="Acknowledged"></i>
-            {% endif %}
           </div>
           <div class="alert-actions">
             {% if alert.source_type == 'update_job' and alert.source_id and (alert.source_id|int) > 0 %}
@@ -101,14 +96,6 @@
               <i class="fas fa-terminal"></i>
               <span class="hide-mobile">View Output</span>
             </a>
-            {% endif %}
-            {% if not alert.acknowledged_at %}
-            <form method="post" action="/alerts/{{ alert.id }}/ack" style="margin: 0;">
-              <button class="btn btn-secondary btn-sm" type="submit">
-                <i class="fas fa-check"></i>
-                <span class="hide-mobile">Acknowledge</span>
-              </button>
-            </form>
             {% endif %}
             <form method="post" action="/alerts/{{ alert.id }}/dismiss" style="margin: 0;">
               <button class="btn btn-danger btn-sm" type="submit">
@@ -128,9 +115,7 @@
             {% if alert.source_type %}
             • {{ alert.source_type }}{% if alert.source_id %} #{{ alert.source_id }}{% endif %}
             {% endif %}
-            {% if alert.acknowledged_at %}
-            • Acknowledged {{ format_dt(alert.acknowledged_at) }}
-            {% endif %}
+
           </small>
         </div>
       </div>
