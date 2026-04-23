@@ -42,12 +42,10 @@
     <div class="field">
       <span class="label-with-info">
         <span class="field-label">Cron Expression</span>
-        <details class="info-tip">
-          <summary aria-label="Cron expression help">
-            <i class="fas fa-circle-info" aria-hidden="true"></i>
-          </summary>
+        <span class="info-tip">
+          <button type="button" class="info-tip-btn" aria-label="Cron expression help">&#9432;</button>
           <span class="info-tip-text">Example: <code>0 2 * * *</code> runs daily at 02:00 in the timezone tied to this schedule. New schedules use your current timezone setting.</span>
-        </details>
+        </span>
       </span>
       <input id="cron_expression" name="cron_expression" required placeholder="0 2 * * *" />
     </div>
@@ -84,7 +82,6 @@
           <th>Name</th>
           <th>Servers</th>
           <th>Schedule</th>
-          <th>Timezone</th>
           <th>Next Run</th>
           <th>Last Run</th>
           <th>Status</th>
@@ -97,7 +94,6 @@
           <td>{{ schedule.name }}</td>
           <td>{% for sid in schedule.server_ids %}{{ server_name_map.get(sid, 'Server #' ~ sid) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
           <td>{{ schedule.cron_expression or ('every ' ~ schedule.interval_minutes ~ ' min (legacy)') }}</td>
-          <td>{{ schedule.timezone or global_timezone }}</td>
           <td>{{ format_dt(schedule.next_run_at) }}</td>
           <td>{{ format_dt(schedule.last_run_at) }}</td>
           <td>

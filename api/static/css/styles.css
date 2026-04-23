@@ -336,19 +336,26 @@ div.field .field-label {
 
 .info-tip {
   position: relative;
-  display: inline-block;
-}
-
-.info-tip summary {
-  list-style: none;
   display: inline-flex;
   align-items: center;
-  color: var(--accent-2);
-  cursor: pointer;
 }
 
-.info-tip summary::-webkit-details-marker {
-  display: none;
+.info-tip-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  font-size: 1em;
+  color: var(--accent-2);
+  cursor: pointer;
+  border-radius: 50%;
+}
+
+.info-tip-btn:hover,
+.info-tip-btn:focus {
+  color: var(--accent);
+  outline: none;
 }
 
 .info-tip-text {
@@ -366,36 +373,14 @@ div.field .field-label {
   line-height: 1.35;
   box-shadow: 0 10px 24px rgba(30, 24, 15, 0.18);
   display: none;
-  opacity: 0;
+  z-index: 100;
   pointer-events: none;
-  transition: opacity 140ms ease;
-  z-index: 10;
+  white-space: normal;
 }
 
-.info-tip[open] .info-tip-text {
+.info-tip:hover .info-tip-text,
+.info-tip:focus-within .info-tip-text {
   display: block;
-  opacity: 1;
-}
-
-@media (hover: hover) {
-  .info-tip:hover .info-tip-text {
-    display: block;
-    opacity: 1;
-  }
-}
-
-.info-tip summary:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.info-tip[open] summary {
-  color: var(--accent);
-}
-
-.info-tip[open] .info-tip-text,
-.info-tip:hover .info-tip-text {
-  opacity: 1;
 }
 
 input,
