@@ -86,6 +86,14 @@ class UpdateScheduleCreate(BaseModel):
     enabled: bool = True
 
 
+class UpdateScheduleUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    server_ids: list[int] = Field(min_length=1)
+    package_manager: str = Field(default="auto", pattern="^(auto|apt|dnf|yum)$")
+    cron_expression: str = Field(min_length=5, max_length=120)
+    enabled: bool | None = None
+
+
 class UpdateScheduleRead(BaseModel):
     id: int
     name: str

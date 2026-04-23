@@ -15,6 +15,10 @@ const createScheduleBtn = document.getElementById("create_schedule_btn");
 const createScheduleBtnEmpty = document.getElementById("create_schedule_btn_empty");
 const cancelScheduleBtn = document.getElementById("cancel_schedule_btn");
 const scheduleFormCloseBtn = document.getElementById("schedule_form_close_btn");
+const scheduleFormTitle = document.getElementById("schedule-form-title");
+const scheduleFormIcon = document.getElementById("schedule-form-icon");
+const saveScheduleBtn = document.getElementById("save_schedule_btn");
+const scheduleIdInput = document.getElementById("schedule_id");
 const authMethod = document.getElementById("auth_method");
 const passwordLabel = document.getElementById("password_label");
 const keyLabel = document.getElementById("key_label");
@@ -672,18 +676,21 @@ scheduleForm?.addEventListener("submit", async (event) => {
     cron_expression: document.getElementById("cron_expression")?.value,
     package_manager: document.getElementById("schedule_package_manager")?.value || "auto",
     server_ids: scheduleServers,
-    enabled: true,
   };
 
-  const response = await fetch("/api/schedules", {
-    method: "POST",
+  const editingScheduleId = scheduleIdInput?.value ? Number(scheduleIdInput.value) : null;
+
+  const endpoint = editingScheduleId ? `/api/schedules/${editingScheduleId}` : "/api/schedules";
+  const method = editingScheduleId ? "PUT" : "POST";
+  const response = await fetch(endpoint, {
+    method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const error = await response.json();
-    alert(error.detail || "Failed to create schedule");
+    alert(error.detail || (editingScheduleId ? "Failed to update schedule" : "Failed to create schedule"));
     return;
   }
 
@@ -700,12 +707,36 @@ function setScheduleFormVisibility(showForm) {
 
 function showCreateScheduleForm() {
   scheduleForm?.reset();
+  if (scheduleIdInput) {
+    scheduleIdInput.value = "";
+  }
+  if (scheduleFormTitle) {
+    scheduleFormTitle.textContent = "Create Scheduled Update";
+  }
+  if (scheduleFormIcon) {
+    scheduleFormIcon.className = "fas fa-calendar-plus";
+  }
+  if (saveScheduleBtn) {
+    saveScheduleBtn.innerHTML = '<i class="fas fa-calendar-plus"></i><span>Create Schedule</span>';
+  }
   setScheduleFormVisibility(true);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function hideScheduleFormAndReset() {
   scheduleForm?.reset();
+  if (scheduleIdInput) {
+    scheduleIdInput.value = "";
+  }
+  if (scheduleFormTitle) {
+    scheduleFormTitle.textContent = "Create Scheduled Update";
+  }
+  if (scheduleFormIcon) {
+    scheduleFormIcon.className = "fas fa-calendar-plus";
+  }
+  if (saveScheduleBtn) {
+    saveScheduleBtn.innerHTML = '<i class="fas fa-calendar-plus"></i><span>Create Schedule</span>';
+  }
   setScheduleFormVisibility(false);
 }
 
@@ -719,6 +750,66 @@ if (scheduleFormCard && scheduledUpdatesCard) {
   scheduleFormCard.classList.add("visible");
   scheduledUpdatesCard.classList.add("visible");
 }
+
+document.querySelectorAll("[data-edit-schedule]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!scheduleForm) {
+      return;
+    }
+
+    const editId = button.getAttribute("data-edit-schedule");
+    if (!editId) {
+      return;
+    }
+
+    scheduleForm.reset();
+    if (scheduleIdInput) {
+      scheduleIdInput.value = editId;
+    }
+
+    const scheduleName = button.getAttribute("data-schedule-name") || "";
+    const scheduleCron = button.getAttribute("data-schedule-cron") || "";
+    const schedulePackageManager = button.getAttribute("data-schedule-package-manager") || "auto";
+    const scheduleServerIdsRaw = button.getAttribute("data-schedule-server-ids") || "";
+    const scheduleServerIds = scheduleServerIdsRaw
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0);
+
+    const nameField = document.getElementById("schedule_name");
+    const cronField = document.getElementById("cron_expression");
+    const packageManagerField = document.getElementById("schedule_package_manager");
+
+    if (nameField) {
+      nameField.value = scheduleName;
+    }
+    if (cronField) {
+      cronField.value = scheduleCron;
+    }
+    if (packageManagerField) {
+      packageManagerField.value = schedulePackageManager;
+    }
+
+    document.querySelectorAll("#schedule-server-checks input[type='checkbox']").forEach((checkbox) => {
+      if (checkbox instanceof HTMLInputElement) {
+        checkbox.checked = scheduleServerIds.includes(checkbox.value);
+      }
+    });
+
+    if (scheduleFormTitle) {
+      scheduleFormTitle.textContent = "Edit Scheduled Update";
+    }
+    if (scheduleFormIcon) {
+      scheduleFormIcon.className = "fas fa-calendar-check";
+    }
+    if (saveScheduleBtn) {
+      saveScheduleBtn.innerHTML = '<i class="fas fa-save"></i><span>Save Changes</span>';
+    }
+
+    setScheduleFormVisibility(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+});
 
 document.querySelectorAll("[data-toggle-schedule]").forEach((button) => {
   button.addEventListener("click", async () => {

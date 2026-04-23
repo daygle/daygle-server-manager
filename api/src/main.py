@@ -30,6 +30,7 @@ from .schemas import (
     UpdateJobRead,
     UpdateRequest,
     UpdateScheduleCreate,
+    UpdateScheduleUpdate,
     UpdateScheduleRead,
 )
 from .security import hash_password, verify_password
@@ -2372,6 +2373,48 @@ def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session
     db.commit()
     db.refresh(schedule)
     log_audit(db, "schedule.create", request=request, actor=current_user,
+              target_type="schedule", target_id=schedule.id, target_label=schedule.name)
+    return schedule
+
+
+@app.put("/api/schedules/{schedule_id}", response_model=UpdateScheduleRead)
+def update_schedule(schedule_id: int, payload: UpdateScheduleUpdate, request: Request, db: Session = Depends(get_db)):
+    current_user = require_api_user(request, db, admin=True)
+
+    schedule = db.query(UpdateSchedule).filter(UpdateSchedule.id == schedule_id).first()
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+
+    clean_name = payload.name.strip()
+    duplicate = (
+        db.query(UpdateSchedule)
+        .filter(UpdateSchedule.name == clean_name, UpdateSchedule.id != schedule_id)
+        .first()
+    )
+    if duplicate:
+        raise HTTPException(status_code=400, detail="Schedule name already exists")
+
+    servers = db.query(Server).filter(Server.id.in_(payload.server_ids)).all()
+    if len(servers) != len(set(payload.server_ids)):
+        raise HTTPException(status_code=400, detail="One or more servers in the schedule do not exist")
+
+    cron_expr = payload.cron_expression.strip()
+    if not croniter.is_valid(cron_expr):
+        raise HTTPException(status_code=400, detail="Invalid cron expression")
+
+    schedule.name = clean_name
+    schedule.package_manager = payload.package_manager
+    schedule.cron_expression = cron_expr
+    schedule.server_ids = sorted(set(payload.server_ids))
+    if payload.enabled is not None:
+        schedule.enabled = payload.enabled
+
+    if schedule.enabled:
+        schedule.next_run_at = get_next_schedule_run(schedule, datetime.utcnow())
+
+    db.commit()
+    db.refresh(schedule)
+    log_audit(db, "schedule.update", request=request, actor=current_user,
               target_type="schedule", target_id=schedule.id, target_label=schedule.name)
     return schedule
 

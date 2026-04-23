@@ -7,8 +7,8 @@
 <div class="card mb-4 hidden" id="scheduleFormCard">
   <div class="card-header flex-between">
     <div class="card-title">
-      <i class="fas fa-calendar-plus"></i>
-      <span>Create Scheduled Update</span>
+      <i class="fas fa-calendar-plus" id="schedule-form-icon"></i>
+      <span id="schedule-form-title">Create Scheduled Update</span>
     </div>
     <button type="button" id="schedule_form_close_btn" class="btn btn-secondary btn-sm btn-icon-only" title="Cancel">
       <i class="fas fa-times"></i>
@@ -16,6 +16,7 @@
   </div>
   <div class="card-body">
     <form id="schedule-form">
+      <input type="hidden" id="schedule_id" name="schedule_id" />
       <div class="two-col-grid">
         <div class="form-group">
           <label for="schedule_name" class="form-label">Schedule Name</label>
@@ -57,7 +58,7 @@
           <i class="fas fa-times"></i>
           <span>Cancel</span>
         </button>
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-primary" id="save_schedule_btn">
           <i class="fas fa-calendar-plus"></i>
           <span>Create Schedule</span>
         </button>
@@ -112,6 +113,19 @@
             </td>
             <td>
               <div class="flex-gap-8">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm btn-icon-only"
+                  title="Edit"
+                  data-edit-schedule="{{ schedule.id }}"
+                  data-schedule-name="{{ schedule.name }}"
+                  data-schedule-cron="{{ schedule.cron_expression or '' }}"
+                  data-schedule-package-manager="{{ schedule.package_manager }}"
+                  data-schedule-server-ids="{{ schedule.server_ids|join(',') }}"
+                  data-schedule-enabled="{{ 'true' if schedule.enabled else 'false' }}"
+                >
+                  <i class="fas fa-pen"></i>
+                </button>
                 <button type="button" class="btn {% if schedule.enabled %}btn-warning{% else %}btn-success{% endif %} btn-sm btn-icon-only" title="{{ 'Disable' if schedule.enabled else 'Enable' }}" data-toggle-schedule="{{ schedule.id }}">
                   <i class="fas {% if schedule.enabled %}fa-toggle-off{% else %}fa-toggle-on{% endif %}"></i>
                 </button>

@@ -10,42 +10,59 @@
       <i class="fas fa-play-circle"></i>
       <span>Manual Updates</span>
     </div>
-    <a href="/updates/scheduled" class="btn btn-secondary">
-      <i class="fas fa-calendar-alt"></i>
-      <span>Scheduled Updates</span>
-    </a>
+    <div class="flex-gap-8">
+      <a href="/updates/scheduled" class="btn btn-secondary">
+        <i class="fas fa-calendar-alt"></i>
+        <span>Scheduled Updates</span>
+      </a>
+      <a href="/updates/jobs" class="btn btn-secondary">
+        <i class="fas fa-tasks"></i>
+        <span>View Jobs</span>
+      </a>
+    </div>
   </div>
   <div class="card-body">
+    <p class="section-description">Run updates instantly on selected servers. For recurring automation, use Scheduled Updates.</p>
+
     <form id="run-form" class="run-form">
-      <div class="form-group">
-        <label class="form-label">Target Servers</label>
-        <div class="server-checks" id="server-checks">
-          {% for server in servers %}
-          <label class="check-item">
-            <input type="checkbox" value="{{ server.id }}" />
-            <span>{{ server.name }} ({{ server.host }})</span>
-          </label>
-          {% else %}
-          <p>Add servers first from the Servers page.</p>
-          {% endfor %}
+      <div class="two-col-grid">
+        <div class="form-group">
+          <label class="form-label">Target Servers</label>
+          <div class="server-checks" id="server-checks">
+            {% for server in servers %}
+            <label class="check-item">
+              <input type="checkbox" value="{{ server.id }}" />
+              <span>{{ server.name }} ({{ server.host }})</span>
+            </label>
+            {% else %}
+            <p>Add servers first from the Servers page.</p>
+            {% endfor %}
+          </div>
         </div>
-      </div>
 
-      <div class="form-group">
-        <label for="package_manager" class="form-label">Package Manager</label>
-        <select id="package_manager" class="form-select">
-          <option value="auto" selected>Auto detect</option>
-          <option value="apt">apt</option>
-          <option value="dnf">dnf</option>
-          <option value="yum">yum</option>
-        </select>
-      </div>
+        <div>
+          <div class="form-group">
+            <label for="package_manager" class="form-label">Package Manager</label>
+            <select id="package_manager" class="form-select">
+              <option value="auto" selected>Auto detect</option>
+              <option value="apt">apt</option>
+              <option value="dnf">dnf</option>
+              <option value="yum">yum</option>
+            </select>
+            <small class="form-text">Use Auto detect unless you need to force a specific package manager.</small>
+          </div>
 
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary">
-          <i class="fas fa-play"></i>
-          <span>Start Update</span>
-        </button>
+          <div class="alert alert-info mt-3">
+            <strong>Tip:</strong> Start with a single server to verify results, then run updates on larger groups.
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-play"></i>
+              <span>Start Update</span>
+            </button>
+          </div>
+        </div>
       </div>
     </form>
   </div>
