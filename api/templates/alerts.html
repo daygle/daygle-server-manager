@@ -40,7 +40,7 @@
       </select>
     </label>
     <button type="submit">Apply Filters</button>
-    <a href="/alerts" class="btn-secondary" style="display:inline-flex;align-items:center;justify-content:center;padding:0 16px;min-height:42px;text-decoration:none;">Reset</a>
+    <a href="/alerts" class="btn-secondary-link">Reset</a>
   </form>
 
   <p class="section-description">Showing {{ alerts|length }} of {{ total_count }} alerts.</p>
@@ -88,17 +88,17 @@
 
   <div class="pagination-row">
     {% if prev_page_url %}
-    <a class="btn-secondary" href="{{ prev_page_url }}">Previous</a>
+    <a class="btn-secondary-link pagination-btn" href="{{ prev_page_url }}">Previous</a>
     {% else %}
-    <span class="btn-secondary pagination-disabled">Previous</span>
+    <span class="btn-secondary-link pagination-btn pagination-disabled">Previous</span>
     {% endif %}
 
     <span class="pagination-meta">Page {{ page }} of {{ total_pages }}</span>
 
     {% if next_page_url %}
-    <a class="btn-secondary" href="{{ next_page_url }}">Next</a>
+    <a class="btn-secondary-link pagination-btn" href="{{ next_page_url }}">Next</a>
     {% else %}
-    <span class="btn-secondary pagination-disabled">Next</span>
+    <span class="btn-secondary-link pagination-btn pagination-disabled">Next</span>
     {% endif %}
   </div>
 </section>

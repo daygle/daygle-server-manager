@@ -103,7 +103,10 @@
       <input type="checkbox" name="clear_smtp_password" />
       <span>Clear saved SMTP password</span>
     </label>
-    <button type="submit">Save SMTP Settings</button>
+    <div class="form-actions">
+      <button type="submit">Save SMTP Settings</button>
+      <button type="submit" class="btn-secondary" formaction="/settings/smtp/test">Test SMTP Connection</button>
+    </div>
   </form>
   <p class="field-help">These credentials are used for admin alert emails.</p>
 </section>

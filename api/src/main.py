@@ -411,6 +411,16 @@ def send_admin_alert_email(db: Session, alert: Alert) -> None:
         smtp.send_message(msg)
 
 
+def test_smtp_connection(host: str, port: int, username: str, password: str, use_tls: bool) -> None:
+    with smtplib.SMTP(host=host, port=port, timeout=15) as smtp:
+        smtp.ehlo()
+        if use_tls:
+            smtp.starttls()
+            smtp.ehlo()
+        if username:
+            smtp.login(username, password)
+
+
 def create_alert(
     db: Session,
     *,
@@ -1187,6 +1197,67 @@ def update_smtp_settings(
         ),
     )
     set_flash(request, "SMTP settings updated.", "success")
+    return RedirectResponse(url="/settings", status_code=303)
+
+
+@app.post("/settings/smtp/test")
+def test_smtp_settings(
+    request: Request,
+    smtp_host: str = Form(...),
+    smtp_port: int = Form(...),
+    smtp_username: str = Form(""),
+    smtp_password: str = Form(""),
+    smtp_use_tls: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    host = smtp_host.strip()
+    if not host:
+        set_flash(request, "SMTP host is required.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+    if smtp_port < 1 or smtp_port > 65535:
+        set_flash(request, "SMTP port must be between 1 and 65535.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    username = smtp_username.strip()
+    use_tls = parse_bool_setting(smtp_use_tls, False)
+    password_to_use = smtp_password or get_smtp_setting(db, SMTP_PASSWORD_SETTING_KEY, "SMTP_PASSWORD", "")
+
+    try:
+        test_smtp_connection(host, smtp_port, username, password_to_use, use_tls)
+    except Exception as exc:
+        log_audit(
+            db,
+            "settings.smtp_test",
+            request=request,
+            actor=current_user,
+            detail=(
+                f"Connection test failed host={host}, port={smtp_port}, "
+                f"user={'set' if username else 'empty'}, tls={'enabled' if use_tls else 'disabled'}, "
+                f"error={type(exc).__name__}: {exc}"
+            ),
+        )
+        set_flash(request, f"SMTP test failed: {type(exc).__name__}: {exc}", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    log_audit(
+        db,
+        "settings.smtp_test",
+        request=request,
+        actor=current_user,
+        detail=(
+            f"Connection test succeeded host={host}, port={smtp_port}, "
+            f"user={'set' if username else 'empty'}, tls={'enabled' if use_tls else 'disabled'}"
+        ),
+    )
+    set_flash(request, "SMTP connection test succeeded.", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
 

@@ -502,6 +502,17 @@ button:disabled {
   padding-inline: 16px;
 }
 
+.form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.form-actions button[type="submit"] {
+  grid-column: auto;
+}
+
 .field-help {
   color: var(--muted);
   font-size: 0.78rem;
