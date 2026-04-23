@@ -9,7 +9,7 @@ from time import sleep
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo, available_timezones
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from croniter import croniter
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -2541,7 +2541,7 @@ def create_ssh_key(payload: SSHKeyCreate, request: Request, db: Session = Depend
 @app.post("/api/ssh-keys/generate", response_model=SSHKeyRead)
 def generate_ssh_key(
     request: Request,
-    name: str,
+    name: str = Query(...),
     db: Session = Depends(get_db),
 ):
     require_api_user(request, db, admin=True)

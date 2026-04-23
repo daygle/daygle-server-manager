@@ -197,7 +197,16 @@ document.getElementById('generate-form').addEventListener('submit', async (e) =>
       method: 'POST',
       credentials: 'include',
     });
-    const data = await res.json();
+    
+    let data;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      console.error('Failed to parse JSON response:', res.status, res.statusText, await res.text());
+      alert(`Server error (${res.status}): ${res.statusText}`);
+      return;
+    }
+    
     if (!res.ok) { alert(data.detail || 'Failed to generate key'); return; }
 
     addKeyRow(data);
@@ -220,7 +229,16 @@ document.getElementById('import-form').addEventListener('submit', async (e) => {
       credentials: 'include',
       body: JSON.stringify({ name, private_key }),
     });
-    const data = await res.json();
+    
+    let data;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      console.error('Failed to parse JSON response:', res.status, res.statusText, await res.text());
+      alert(`Server error (${res.status}): ${res.statusText}`);
+      return;
+    }
+    
     if (!res.ok) { alert(data.detail || 'Failed to import key'); return; }
 
     addKeyRow(data);
