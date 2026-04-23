@@ -2532,34 +2532,24 @@ def create_ssh_key(payload: SSHKeyCreate, request: Request, db: Session = Depend
     # Determine key type and format public key
     public_key_obj = private_key.public_key()
     
+    # Serialize public key using OpenSSH wire format for all supported types
+    try:
+        public_key = public_key_obj.public_bytes(
+            encoding=serialization.Encoding.OpenSSH,
+            format=serialization.PublicFormat.OpenSSH,
+        ).decode().strip()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not serialize public key: {exc}")
+
+    # Derive key_type from the first token of the OpenSSH public key line
     if isinstance(private_key, ed25519.Ed25519PrivateKey):
         key_type = "ssh-ed25519"
-        public_bytes = public_key_obj.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
-        )
-        public_key = f"ssh-ed25519 {base64.b64encode(public_bytes).decode()}"
     elif isinstance(private_key, ed448.Ed448PrivateKey):
         key_type = "ssh-ed448"
-        public_bytes = public_key_obj.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
-        )
-        public_key = f"ssh-ed448 {base64.b64encode(public_bytes).decode()}"
     elif isinstance(private_key, rsa.RSAPrivateKey):
         key_type = "ssh-rsa"
-        public_bytes = public_key_obj.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-        public_key = f"ssh-rsa {base64.b64encode(public_bytes).decode()}"
     elif isinstance(private_key, ec.EllipticCurvePrivateKey):
         key_type = f"ecdsa-sha2-nistp{private_key.curve.key_size}"
-        public_bytes = public_key_obj.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-        public_key = f"{key_type} {base64.b64encode(public_bytes).decode()}"
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported key type: {type(private_key)}")
 
@@ -2602,10 +2592,9 @@ def generate_ssh_key(
     pem_bytes = raw_private.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption())
     private_key_pem = pem_bytes.decode()
 
-    # Get public key in OpenSSH format
+    # Get public key in OpenSSH wire format (includes key-type blob prefix)
     raw_public = raw_private.public_key()
-    public_bytes = raw_public.public_bytes(Encoding.Raw, PublicFormat.Raw)
-    public_key = f"ssh-ed25519 {base64.b64encode(public_bytes).decode()}"
+    public_key = raw_public.public_bytes(Encoding.OpenSSH, PublicFormat.OpenSSH).decode().strip()
 
     ssh_key = SSHKey(
         name=name,
