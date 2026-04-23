@@ -537,6 +537,18 @@ pre.code-block code {
     position: relative;
 }
 
+.stat-card-servers {
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+.stat-card-running {
+    background: linear-gradient(135deg, #0f766e, #0d9488);
+}
+
+.stat-card-failed {
+    background: linear-gradient(135deg, #b91c1c, #dc2626);
+}
+
 .stat-card:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
@@ -551,6 +563,11 @@ pre.code-block code {
 .stat-label {
     font-size: 0.875rem;
     opacity: 0.9;
+}
+
+.stat-card .stat-value,
+.stat-card .stat-label {
+    color: rgba(255, 255, 255, 0.95);
 }
 
 .stat-icon {
