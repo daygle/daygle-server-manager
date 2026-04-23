@@ -178,7 +178,21 @@ function formatDateForUi(value) {
 
 async function copyPubKey(id, pubKey) {
   try {
-    await navigator.clipboard.writeText(pubKey);
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(pubKey);
+    } else {
+      // Fallback for older browsers or non-secure contexts
+      const textarea = document.createElement('textarea');
+      textarea.value = pubKey;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    
     const btn = document.querySelector(`#key-row-${id} [data-copy-key]`);
     if (!btn) return;
     const original = btn.innerHTML;
