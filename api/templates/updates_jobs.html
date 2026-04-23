@@ -87,7 +87,10 @@
   </div>
   <div class="card-body p-0">
     <div class="flex-between" style="padding: 16px 20px 12px 20px; gap: 12px; flex-wrap: wrap;">
-      <p style="margin: 0;" class="text-secondary">Showing {{ showing_from }}-{{ showing_to }} of {{ total_count }} jobs</p>
+      <div>
+        <p style="margin: 0;" class="text-secondary">Showing {{ showing_from }}-{{ showing_to }} of {{ total_count }} jobs</p>
+        <small class="text-secondary">Live refresh is paused on this page to keep filters and pagination stable.</small>
+      </div>
       <form method="get" action="/updates/jobs" class="flex gap-2" style="align-items: center;">
         <input type="hidden" name="q" value="{{ search_q }}">
         <input type="hidden" name="status" value="{{ selected_status }}">

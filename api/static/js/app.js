@@ -1036,6 +1036,9 @@ document.querySelectorAll("[data-delete-schedule]").forEach((button) => {
 });
 
 if (jobsBody) {
-  setInterval(loadJobs, 5000);
-  loadJobs();
+  const isServerRenderedJobsPage = window.location.pathname.startsWith("/updates/jobs");
+  if (!isServerRenderedJobsPage) {
+    setInterval(loadJobs, 5000);
+    loadJobs();
+  }
 }
