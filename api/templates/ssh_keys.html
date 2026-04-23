@@ -99,7 +99,7 @@
               <div class="flex-gap-8">
                 <button
                   type="button"
-                  class="btn btn-secondary btn-sm btn-icon-only"
+                  class="btn btn-primary btn-sm btn-icon-only"
                   data-copy-key="{{ key.id }}"
                   onclick='copyPubKey({{ key.id }}, {{ key.public_key|tojson }})'
                   title="Copy public key"
@@ -108,7 +108,7 @@
                 </button>
                 <button
                   type="button"
-                  class="btn btn-secondary btn-sm btn-icon-only"
+                  class="btn btn-success btn-sm btn-icon-only"
                   data-copy-auth-key="{{ key.id }}"
                   onclick='copyAuthorizedKeyEntry({{ key.id }}, {{ key.name|tojson }}, {{ key.public_key|tojson }})'
                   title="Copy for authorized_keys"
@@ -317,10 +317,10 @@ function addKeyRow(key) {
     <td class="hide-mobile"><small>${formatDateForUi(key.created_at)}</small></td>
     <td>
       <div class="flex-gap-8">
-        <button type="button" class="btn btn-secondary btn-sm btn-icon-only" data-copy-key="${key.id}" title="Copy public key">
+        <button type="button" class="btn btn-primary btn-sm btn-icon-only" data-copy-key="${key.id}" title="Copy public key">
           <i class="fas fa-copy"></i>
         </button>
-        <button type="button" class="btn btn-secondary btn-sm btn-icon-only" data-copy-auth-key="${key.id}" title="Copy for authorized_keys">
+        <button type="button" class="btn btn-success btn-sm btn-icon-only" data-copy-auth-key="${key.id}" title="Copy for authorized_keys">
           <i class="fas fa-user-check"></i>
         </button>
         <button class="btn btn-danger btn-sm btn-icon-only" type="button" data-delete-key="${key.id}" title="Delete key">
