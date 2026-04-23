@@ -46,6 +46,17 @@
         </select>
         <small class="form-text text-secondary">Global default theme for users who have not set a personal preference.</small>
       </div>
+
+      <div class="form-group mt-3">
+        <label for="page_size" class="form-label">Default Table Rows Per Page</label>
+        <select id="page_size" class="form-select" name="page_size" required>
+          <option value="25" {% if selected_page_size == 25 %}selected{% endif %}>25 rows</option>
+          <option value="50" {% if selected_page_size == 50 %}selected{% endif %}>50 rows</option>
+          <option value="100" {% if selected_page_size == 100 %}selected{% endif %}>100 rows</option>
+          <option value="200" {% if selected_page_size == 200 %}selected{% endif %}>200 rows</option>
+        </select>
+        <small class="form-text text-secondary">Global default for tables throughout the application. Users can override this setting.</small>
+      </div>
     </div>
   </div>
 

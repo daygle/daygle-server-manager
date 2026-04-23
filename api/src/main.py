@@ -63,9 +63,12 @@ SMTP_PASSWORD_SETTING_KEY = "smtp_password"
 SMTP_USE_TLS_SETTING_KEY = "smtp_use_tls"
 SMTP_FROM_SETTING_KEY = "smtp_from"
 DEFAULT_THEME_SETTING_KEY = "default_theme"
+PAGE_SIZE_SETTING_KEY = "page_size"
 DEFAULT_DATE_FORMAT = "iso-24"
 DEFAULT_TIMEZONE = "UTC"
 DEFAULT_THEME = "system"
+DEFAULT_PAGE_SIZE = 50
+VALID_PAGE_SIZES = {25, 50, 100, 200}
 DEFAULT_HISTORY_RETENTION_DAYS = 90
 MAX_HISTORY_RETENTION_DAYS = 3650
 DEFAULT_LOGIN_TIMEOUT_MINUTES = 480
@@ -128,6 +131,7 @@ def on_startup() -> None:
         app.state.default_theme = get_default_theme_setting(db)
         app.state.login_timeout_minutes = get_login_timeout_minutes(db)
         app.state.email_alerts_enabled = get_email_alerts_enabled(db)
+        app.state.page_size = get_page_size_setting(db)
     finally:
         db.close()
     if not getattr(app.state, "schedule_worker_started", False):
@@ -149,6 +153,7 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(16)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color VARCHAR(16)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS page_size INTEGER",
         (
             "CREATE TABLE IF NOT EXISTS audit_logs ("
             "id SERIAL PRIMARY KEY, "
@@ -432,6 +437,40 @@ def get_email_alerts_enabled(db: Session) -> bool:
 
 def get_active_email_alerts_enabled() -> bool:
     return getattr(app.state, "email_alerts_enabled", DEFAULT_EMAIL_ALERTS_ENABLED)
+
+
+def normalize_page_size(value: str | int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        size = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return size if size in VALID_PAGE_SIZES else None
+
+
+def get_page_size_setting(db: Session) -> int:
+    raw = get_app_setting(db, PAGE_SIZE_SETTING_KEY, str(DEFAULT_PAGE_SIZE))
+    normalized = normalize_page_size(raw)
+    return normalized if normalized is not None else DEFAULT_PAGE_SIZE
+
+
+def get_active_page_size() -> int:
+    return getattr(app.state, "page_size", DEFAULT_PAGE_SIZE)
+
+
+def get_user_page_size(user: User) -> int:
+    if user and user.page_size and user.page_size in VALID_PAGE_SIZES:
+        return user.page_size
+    return DEFAULT_PAGE_SIZE
+
+
+def get_effective_page_size(user: User | None, db: Session | None = None) -> int:
+    if user and user.page_size and user.page_size in VALID_PAGE_SIZES:
+        return user.page_size
+    if db:
+        return get_page_size_setting(db)
+    return get_active_page_size()
 
 
 def send_admin_alert_email(db: Session, alert: Alert) -> None:
@@ -981,10 +1020,11 @@ def updates_jobs_page(request: Request, db: Session = Depends(get_db)):
     if page < 1:
         page = 1
 
+    default_page_size = get_effective_page_size(current_user, db)
     try:
-        page_size = int(request.query_params.get("page_size", "50"))
+        page_size = int(request.query_params.get("page_size", str(default_page_size)))
     except ValueError:
-        page_size = 50
+        page_size = default_page_size
     page_size = max(10, min(page_size, 200))
 
     query = db.query(UpdateJob)
@@ -1125,6 +1165,7 @@ def user_settings_page(request: Request, db: Session = Depends(get_db)):
         selected_user_timezone=current_user.timezone or USER_TIMEZONE_GLOBAL,
         selected_user_theme=current_user.theme_preference or USER_THEME_GLOBAL,
         selected_user_avatar_color=normalize_avatar_color(current_user.avatar_color) or DEFAULT_AVATAR_COLOR,
+        selected_user_page_size=current_user.page_size or None,
     )
 
 
@@ -1135,6 +1176,7 @@ def save_user_settings(
     timezone_name: str = Form(...),
     theme: str = Form(USER_THEME_GLOBAL),
     avatar_color: str = Form(DEFAULT_AVATAR_COLOR),
+    page_size: str = Form(""),
     db: Session = Depends(get_db),
 ):
     current_user = get_session_user(request, db)
@@ -1191,6 +1233,19 @@ def save_user_settings(
     current_user.avatar_color = normalized_avatar_color
     if normalized_avatar_color != prev_avatar_color:
         changed.append("avatar color")
+
+    # Page size
+    prev_page_size = current_user.page_size
+    if page_size and page_size.strip():
+        normalized_page_size = normalize_page_size(page_size)
+        if not normalized_page_size:
+            set_flash(request, "Invalid page size selection.", "error")
+            return RedirectResponse(url="/user-settings", status_code=303)
+        current_user.page_size = normalized_page_size
+    else:
+        current_user.page_size = None
+    if current_user.page_size != prev_page_size:
+        changed.append("page size")
 
     db.commit()
 
@@ -1339,6 +1394,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         selected_date_format=get_active_date_format(),
         selected_timezone=get_active_timezone(),
         selected_default_theme=get_active_default_theme(),
+        selected_page_size=get_page_size_setting(db),
         selected_job_retention_days=get_update_job_retention_days(db),
         selected_audit_retention_days=get_audit_retention_days(db),
         selected_login_timeout_minutes=get_active_login_timeout_minutes(),
@@ -1358,6 +1414,7 @@ def save_all_settings(
     date_format: str = Form(...),
     timezone_name: str = Form(...),
     default_theme: str = Form(DEFAULT_THEME),
+    page_size: str = Form(...),
     job_retention_days: int = Form(...),
     audit_retention_days: int = Form(...),
     login_timeout_minutes: int = Form(...),
@@ -1392,6 +1449,11 @@ def save_all_settings(
     normalized_default_theme = normalize_theme(default_theme)
     if not normalized_default_theme:
         set_flash(request, "Invalid default theme selection.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    normalized_page_size = normalize_page_size(page_size)
+    if not normalized_page_size:
+        set_flash(request, "Invalid page size selection.", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
     normalized_job_retention = normalize_history_retention_days(job_retention_days)
@@ -1466,6 +1528,19 @@ def save_all_settings(
             detail=f"Changed from {prev_default_theme} to {normalized_default_theme}",
         )
         changed.append("default theme")
+
+    prev_page_size = get_page_size_setting(db)
+    if normalized_page_size != prev_page_size:
+        set_app_setting(db, PAGE_SIZE_SETTING_KEY, str(normalized_page_size))
+        app.state.page_size = normalized_page_size
+        log_audit(
+            db,
+            "settings.page_size",
+            request=request,
+            actor=current_user,
+            detail=f"Changed from {prev_page_size} to {normalized_page_size}",
+        )
+        changed.append("page size")
 
     prev_job_retention = get_update_job_retention_days(db)
     if normalized_job_retention != prev_job_retention:
@@ -2148,10 +2223,11 @@ def audit_log_page(request: Request, db: Session = Depends(get_db)):
     if page < 1:
         page = 1
 
+    default_page_size = get_effective_page_size(current_user, db)
     try:
-        page_size = int(request.query_params.get("page_size", "50"))
+        page_size = int(request.query_params.get("page_size", str(default_page_size)))
     except ValueError:
-        page_size = 50
+        page_size = default_page_size
     page_size = max(10, min(page_size, 200))
 
     query = db.query(AuditLog)
@@ -2299,10 +2375,11 @@ def alerts_page(request: Request, db: Session = Depends(get_db)):
         page = 1
     page = max(1, page)
 
+    default_page_size = get_effective_page_size(current_user, db)
     try:
-        page_size = int(request.query_params.get("page_size", "50"))
+        page_size = int(request.query_params.get("page_size", str(default_page_size)))
     except ValueError:
-        page_size = 50
+        page_size = default_page_size
     page_size = max(10, min(page_size, 200))
 
     query = db.query(Alert)

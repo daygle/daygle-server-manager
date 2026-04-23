@@ -59,6 +59,18 @@
         </select>
         <small class="form-text">Choose the color used for your avatar in the top navigation.</small>
       </div>
+
+      <div class="form-group mt-3">
+        <label for="page_size" class="form-label">Table Rows Per Page</label>
+        <select id="page_size" class="form-select" name="page_size">
+          <option value="">Use global default</option>
+          <option value="25" {% if selected_user_page_size == 25 %}selected{% endif %}>25 rows</option>
+          <option value="50" {% if selected_user_page_size == 50 %}selected{% endif %}>50 rows</option>
+          <option value="100" {% if selected_user_page_size == 100 %}selected{% endif %}>100 rows</option>
+          <option value="200" {% if selected_user_page_size == 200 %}selected{% endif %}>200 rows</option>
+        </select>
+        <small class="form-text">Number of rows to display per page in tables. Leave empty to use the global default.</small>
+      </div>
     </div>
     <div class="card-footer form-actions">
       <button type="submit" class="btn btn-primary">
