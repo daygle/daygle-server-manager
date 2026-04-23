@@ -11,7 +11,7 @@
   <div class="card-body">
   <form id="generate-form" class="grid-form items-end">
     <label>Key Name <input name="name" id="gen-name" required placeholder="e.g. prod-servers" /></label>
-    <button type="submit">Generate ed25519 Key</button>
+    <button type="submit"><i class="fas fa-key"></i>Generate ed25519 Key</button>
   </form>
   </div>
 </section>
@@ -32,7 +32,7 @@
 ...
 -----END OPENSSH PRIVATE KEY-----"></textarea>
     </label>
-    <button type="submit">Import Key</button>
+    <button type="submit"><i class="fas fa-file-import"></i>Import Key</button>
   </form>
   </div>
 </section>
@@ -60,11 +60,11 @@
           <td><span class="badge badge-info">{{ key.key_type }}</span></td>
           <td>
             <code class="key-preview">{{ key.public_key[:60] }}…</code>
-            <button class="btn-small" onclick="copyPubKey({{ key.id }}, `{{ key.public_key }}`)">Copy</button>
+            <button class="btn-small" onclick="copyPubKey({{ key.id }}, `{{ key.public_key }}`)"><i class="fas fa-copy"></i>Copy</button>
           </td>
           <td>{{ format_dt(key.created_at) }}</td>
           <td>
-            <button class="btn-danger" type="button" data-delete-key="{{ key.id }}">Delete</button>
+            <button class="btn-danger" type="button" data-delete-key="{{ key.id }}"><i class="fas fa-trash"></i>Delete</button>
           </td>
         </tr>
         {% else %}
@@ -174,10 +174,10 @@ function addKeyRow(key) {
     <td><span class="badge badge-info">${key.key_type}</span></td>
     <td>
       <code class="key-preview">${preview}</code>
-      <button class="btn-small" onclick="copyPubKey(${key.id}, \`${key.public_key}\`)">Copy</button>
+      <button class="btn-small" onclick="copyPubKey(${key.id}, \`${key.public_key}\`)" ><i class="fas fa-copy"></i>Copy</button>
     </td>
     <td>${formatDateForUi(key.created_at)}</td>
-    <td><button class="btn-danger" type="button" data-delete-key="${key.id}">Delete</button></td>
+    <td><button class="btn-danger" type="button" data-delete-key="${key.id}"><i class="fas fa-trash"></i>Delete</button></td>
   `;
   tbody.appendChild(tr);
   attachDeleteListener(tr.querySelector('[data-delete-key]'));

@@ -31,7 +31,7 @@
       </select>
     </label>
 
-    <button type="submit">Start Update</button>
+    <button type="submit"><i class="fas fa-play"></i>Start Update</button>
   </form>
   </div>
 </section>
@@ -79,7 +79,7 @@
         {% endfor %}
       </div>
     </div>
-    <button type="submit">Create Schedule</button>
+    <button type="submit"><i class="fas fa-calendar-plus"></i>Create Schedule</button>
   </form>
 
   <div class="table-wrap schedules-table-wrap">
@@ -110,9 +110,9 @@
           </td>
           <td>
             <button type="button" class="btn-secondary" data-toggle-schedule="{{ schedule.id }}">
-              {{ 'Disable' if schedule.enabled else 'Enable' }}
+              <i class="fas {{ 'fa-toggle-off' if schedule.enabled else 'fa-toggle-on' }}"></i>{{ 'Disable' if schedule.enabled else 'Enable' }}
             </button>
-            <button type="button" class="btn-danger" data-delete-schedule="{{ schedule.id }}">Delete</button>
+            <button type="button" class="btn-danger" data-delete-schedule="{{ schedule.id }}"><i class="fas fa-trash"></i>Delete</button>
           </td>
         </tr>
         {% else %}

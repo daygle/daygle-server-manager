@@ -121,7 +121,7 @@ serverForm?.addEventListener("submit", async (event) => {
     cancelEditBtn.classList.add("hidden");
   }
   if (saveServerBtn) {
-    saveServerBtn.textContent = "Save Server";
+    saveServerBtn.innerHTML = '<i class="fas fa-floppy-disk"></i>Save Server';
   }
   window.location.reload();
 });
@@ -153,7 +153,7 @@ document.querySelectorAll("[data-edit-server]").forEach((button) => {
     toggleAuthFields();
 
     if (saveServerBtn) {
-      saveServerBtn.textContent = "Update Server";
+      saveServerBtn.innerHTML = '<i class="fas fa-pen"></i>Update Server';
     }
     if (cancelEditBtn) {
       cancelEditBtn.classList.remove("hidden");
@@ -172,7 +172,7 @@ cancelEditBtn?.addEventListener("click", () => {
     serverIdInput.value = "";
   }
   if (saveServerBtn) {
-    saveServerBtn.textContent = "Save Server";
+    saveServerBtn.innerHTML = '<i class="fas fa-floppy-disk"></i>Save Server';
   }
   cancelEditBtn.classList.add("hidden");
   toggleAuthFields();
@@ -185,7 +185,7 @@ function setUserFormMode(editing) {
 
   if (editing) {
     userFormTitle.textContent = "Edit User";
-    userSubmitBtn.textContent = "Update User";
+    userSubmitBtn.innerHTML = '<i class="fas fa-pen"></i>Update User';
     userCancelBtn.classList.remove("hidden");
     userPasswordInput.required = false;
     userConfirmPasswordInput.required = false;
@@ -193,7 +193,7 @@ function setUserFormMode(editing) {
     userConfirmPasswordInput.placeholder = "Repeat new password";
   } else {
     userFormTitle.textContent = "Create User";
-    userSubmitBtn.textContent = "Create User";
+    userSubmitBtn.innerHTML = '<i class="fas fa-user-plus"></i>Create User';
     userCancelBtn.classList.add("hidden");
     userPasswordInput.required = true;
     userConfirmPasswordInput.required = true;

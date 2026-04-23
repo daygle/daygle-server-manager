@@ -43,8 +43,8 @@
       </select>
     </label>
     <div class="form-actions">
-      <button type="submit">Apply Filters</button>
-      <a href="/alerts" class="btn-secondary-link">Reset</a>
+      <button type="submit"><i class="fas fa-filter"></i>Apply Filters</button>
+      <a href="/alerts" class="btn-secondary-link"><i class="fas fa-rotate"></i>Reset</a>
     </div>
   </form>
 
@@ -74,11 +74,11 @@
           <td>
             {% if not alert.acknowledged_at %}
             <form method="post" action="/alerts/{{ alert.id }}/ack" class="d-inline">
-              <button class="btn-secondary" type="submit">Acknowledge</button>
+              <button class="btn-secondary" type="submit"><i class="fas fa-check"></i>Acknowledge</button>
             </form>
             {% endif %}
             <form method="post" action="/alerts/{{ alert.id }}/dismiss" class="d-inline">
-              <button class="btn-danger" type="submit">Dismiss</button>
+              <button class="btn-danger" type="submit"><i class="fas fa-trash"></i>Dismiss</button>
             </form>
           </td>
         </tr>
@@ -93,17 +93,17 @@
 
   <div class="pagination-row">
     {% if prev_page_url %}
-    <a class="btn-secondary-link pagination-btn" href="{{ prev_page_url }}">Previous</a>
+    <a class="btn-secondary-link pagination-btn" href="{{ prev_page_url }}"><i class="fas fa-chevron-left"></i>Previous</a>
     {% else %}
-    <span class="btn-secondary-link pagination-btn pagination-disabled">Previous</span>
+    <span class="btn-secondary-link pagination-btn pagination-disabled"><i class="fas fa-chevron-left"></i>Previous</span>
     {% endif %}
 
     <span class="pagination-meta">Page {{ page }} of {{ total_pages }}</span>
 
     {% if next_page_url %}
-    <a class="btn-secondary-link pagination-btn" href="{{ next_page_url }}">Next</a>
+    <a class="btn-secondary-link pagination-btn" href="{{ next_page_url }}">Next<i class="fas fa-chevron-right"></i></a>
     {% else %}
-    <span class="btn-secondary-link pagination-btn pagination-disabled">Next</span>
+    <span class="btn-secondary-link pagination-btn pagination-disabled">Next<i class="fas fa-chevron-right"></i></span>
     {% endif %}
   </div>
   </div>

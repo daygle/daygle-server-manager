@@ -48,8 +48,8 @@
       </span>
       <input type="password" name="sudo_password" autocomplete="new-password" />
     </label>
-    <button type="submit" id="save_server_btn">Save Server</button>
-    <button type="button" id="cancel_edit_btn" class="hidden">Cancel Edit</button>
+    <button type="submit" id="save_server_btn"><i class="fas fa-floppy-disk"></i>Save Server</button>
+    <button type="button" id="cancel_edit_btn" class="hidden"><i class="fas fa-xmark"></i>Cancel Edit</button>
   </form>
   </div>
 </section>
@@ -90,8 +90,8 @@
           <td>{{ server.auth_method }}</td>
           <td>{{ 'set' if server.sudo_password else 'not set' }}</td>
           <td>
-            <button class="btn-secondary" type="button" data-edit-server="{{ server.id }}">Edit</button>
-            <button class="btn-danger" type="button" data-delete-server="{{ server.id }}">Delete</button>
+            <button class="btn-secondary" type="button" data-edit-server="{{ server.id }}"><i class="fas fa-pen"></i>Edit</button>
+            <button class="btn-danger" type="button" data-delete-server="{{ server.id }}"><i class="fas fa-trash"></i>Delete</button>
           </td>
         </tr>
         {% else %}

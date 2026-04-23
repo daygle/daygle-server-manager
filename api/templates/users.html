@@ -18,8 +18,8 @@
     <label>Email <input name="email" type="email" /></label>
     <label class="checkbox-field"><input type="checkbox" name="is_admin" value="true" /> Admin User</label>
     <label class="checkbox-field"><input type="checkbox" name="enabled" value="true" checked /> Enabled</label>
-    <button id="user_submit_btn" type="submit">Create User</button>
-    <button id="user_cancel_btn" type="button" class="btn-secondary hidden">Cancel Edit</button>
+    <button id="user_submit_btn" type="submit"><i class="fas fa-user-plus"></i>Create User</button>
+    <button id="user_cancel_btn" type="button" class="btn-secondary hidden"><i class="fas fa-xmark"></i>Cancel Edit</button>
   </form>
   </div>
 </section>
@@ -64,18 +64,18 @@
           <td>{{ format_dt(user.created_at) }}</td>
           <td>{{ format_dt(user.last_login) }}</td>
           <td>
-            <button type="button" class="btn-secondary" data-edit-user="{{ user.id }}">Edit</button>
+            <button type="button" class="btn-secondary" data-edit-user="{{ user.id }}"><i class="fas fa-pen"></i>Edit</button>
             <form method="post" action="/users/{{ user.id }}/toggle-enabled" class="d-inline">
               <button
                 class="btn-secondary"
                 type="submit"
                 {% if user.id == current_user.id %}disabled title="You cannot disable your own account."{% endif %}
               >
-                {{ 'Disable' if user.enabled else 'Enable' }}
+                <i class="fas {{ 'fa-user-slash' if user.enabled else 'fa-user-check' }}"></i>{{ 'Disable' if user.enabled else 'Enable' }}
               </button>
             </form>
             <form method="post" action="/users/{{ user.id }}/delete" class="d-inline">
-              <button class="btn-danger" type="submit">Delete</button>
+              <button class="btn-danger" type="submit"><i class="fas fa-trash"></i>Delete</button>
             </form>
           </td>
         </tr>

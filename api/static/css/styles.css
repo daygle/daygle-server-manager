@@ -3780,6 +3780,21 @@ label textarea,
     background: var(--bg-hover);
 }
 
+button i,
+.btn i,
+.btn-secondary i,
+.btn-danger i,
+.btn-secondary-link i {
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.btn-secondary-link .fa-chevron-right,
+.btn-secondary-link .fa-arrow-right {
+    margin-left: 6px;
+    margin-right: 0;
+}
+
 .page-header {
     margin-bottom: 16px;
 }
