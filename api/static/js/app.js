@@ -44,6 +44,16 @@ const userConfirmPasswordInput = document.getElementById("user_confirm_password"
 const currentUserId = userForm?.dataset.currentUserId || "";
 const appDateFormat = document.body?.dataset.dateFormat || "iso-24";
 const appTimezone = document.body?.dataset.timezone || "UTC";
+const deepLinkedJobId = (() => {
+  try {
+    const raw = new URLSearchParams(window.location.search).get("job_id");
+    const parsed = Number(raw);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+  } catch (error) {
+    return null;
+  }
+})();
+let pendingAutoOpenJobId = deepLinkedJobId;
 let selectedJobId = null;
 
 function notify(message, type = "info") {
@@ -621,8 +631,23 @@ async function viewJobOutput(jobId) {
   }
 
   const job = await response.json();
+  const jobRowSelector = `#jobs-body tr[data-job-id="${job.id}"]`;
+  if (!document.querySelector(jobRowSelector) && jobsBody) {
+    jobsBody.querySelectorAll("tr").forEach((row) => {
+      if (!row.getAttribute("data-job-id")) {
+        row.remove();
+      }
+    });
+    jobsBody.insertAdjacentHTML("afterbegin", renderJobRow(job));
+  }
+
   selectedJobId = Number(job.id);
   setDisplayedJobOutput(job);
+
+  const selectedRow = document.querySelector(jobRowSelector);
+  if (selectedRow) {
+    selectedRow.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 }
 
 async function loadJobs() {
@@ -647,6 +672,12 @@ async function loadJobs() {
   const selectedJob = selectedJobId ? jobs.find((job) => job.id === selectedJobId) : null;
   if (selectedJob) {
     setDisplayedJobOutput(selectedJob);
+  }
+
+  if (pendingAutoOpenJobId) {
+    const autoOpenId = pendingAutoOpenJobId;
+    pendingAutoOpenJobId = null;
+    await viewJobOutput(autoOpenId);
   }
   // Don't auto-open any row — user clicks to expand
 }
