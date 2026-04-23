@@ -610,6 +610,45 @@ pre {
   display: none;
 }
 
+.section-description {
+  color: #666;
+  font-size: 0.9rem;
+  margin: -4px 0 12px;
+}
+
+.audit-action {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-family: "IBM Plex Mono", monospace;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #e9e6e0;
+  color: #444;
+}
+
+.audit-action--user    { background: #dbeafe; color: #1e40af; }
+.audit-action--server  { background: #dcfce7; color: #166534; }
+.audit-action--ssh_key { background: #fef9c3; color: #854d0e; }
+.audit-action--schedule { background: #ede9fe; color: #5b21b6; }
+.audit-action--update  { background: #ffedd5; color: #9a3412; }
+.audit-action--settings { background: #f1f5f9; color: #334155; }
+
+.audit-target-label { font-weight: 500; }
+
+.audit-target-type {
+  display: block;
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.audit-detail,
+.audit-ip,
+.audit-time {
+  font-size: 0.83rem;
+  color: #555;
+  white-space: nowrap;
+}
+
 .prose p {
   margin-top: 0;
   margin-bottom: 10px;

@@ -105,3 +105,18 @@ class AppSetting(Base):
     key: Mapped[str] = mapped_column(String(120), primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    actor_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    actor_username: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    action: Mapped[str] = mapped_column(String(120), nullable=False)
+    target_type: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    target_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    target_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(60), nullable=True)

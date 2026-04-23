@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block page_title %}Audit Log - Daygle Server Manager{% endblock %}
+{% block title %}Audit Log{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <h2>Audit Log</h2>
+  <p class="section-description">Last 500 recorded actions, newest first.</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>User</th>
+          <th>Action</th>
+          <th>Target</th>
+          <th>Detail</th>
+          <th>IP Address</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in entries %}
+        <tr>
+          <td class="audit-time">{{ format_dt(entry.timestamp) }}</td>
+          <td>{{ entry.actor_username or '—' }}</td>
+          <td><span class="audit-action audit-action--{{ entry.action.split('.')[0] }}">{{ entry.action }}</span></td>
+          <td>
+            {% if entry.target_label %}
+              <span class="audit-target-label">{{ entry.target_label }}</span>
+              {% if entry.target_type %}<span class="audit-target-type">{{ entry.target_type }}</span>{% endif %}
+            {% else %}
+              —
+            {% endif %}
+          </td>
+          <td class="audit-detail">{{ entry.detail or '—' }}</td>
+          <td class="audit-ip">{{ entry.ip_address or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6">No audit entries yet.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

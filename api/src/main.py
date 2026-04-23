@@ -17,7 +17,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import get_setting
 from .database import Base, SessionLocal, engine, get_db
-from .models import AppSetting, SSHKey, Server, UpdateJob, UpdateSchedule, User
+from .models import AppSetting, AuditLog, SSHKey, Server, UpdateJob, UpdateSchedule, User
 from .schemas import (
     SSHKeyCreate,
     SSHKeyRead,
@@ -91,10 +91,51 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS summary VARCHAR(255)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format VARCHAR(32)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
+        (
+            "CREATE TABLE IF NOT EXISTS audit_logs ("
+            "id SERIAL PRIMARY KEY, "
+            "timestamp TIMESTAMP NOT NULL DEFAULT NOW(), "
+            "actor_id INTEGER, "
+            "actor_username VARCHAR(120), "
+            "action VARCHAR(120) NOT NULL, "
+            "target_type VARCHAR(60), "
+            "target_id VARCHAR(120), "
+            "target_label VARCHAR(255), "
+            "detail TEXT, "
+            "ip_address VARCHAR(60))"
+        ),
     ]
     with engine.begin() as conn:
         for statement in statements:
             conn.execute(text(statement))
+
+
+def log_audit(
+    db: Session,
+    action: str,
+    request: Request | None = None,
+    actor: User | None = None,
+    target_type: str | None = None,
+    target_id: str | int | None = None,
+    target_label: str | None = None,
+    detail: str | None = None,
+) -> None:
+    ip = None
+    if request:
+        forwarded = request.headers.get("x-forwarded-for")
+        ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else None)
+    entry = AuditLog(
+        action=action,
+        actor_id=actor.id if actor else None,
+        actor_username=actor.username if actor else None,
+        target_type=target_type,
+        target_id=str(target_id) if target_id is not None else None,
+        target_label=target_label,
+        detail=detail,
+        ip_address=ip,
+    )
+    db.add(entry)
+    db.commit()
 
 
 def get_next_schedule_run(schedule: UpdateSchedule, from_time: datetime | None = None) -> datetime:
@@ -442,12 +483,16 @@ def login_submit(
     db.commit()
 
     request.session["user_id"] = user.id
+    log_audit(db, "user.login", request=request, actor=user)
     set_flash(request, f"Welcome back, {user.username}.", "success")
     return RedirectResponse(url="/dashboard", status_code=303)
 
 
 @app.get("/logout")
-def logout(request: Request) -> RedirectResponse:
+def logout(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
+    current_user = get_session_user(request, db)
+    if current_user:
+        log_audit(db, "user.logout", request=request, actor=current_user)
     request.session.clear()
     return RedirectResponse(url="/login", status_code=303)
 
@@ -662,6 +707,7 @@ def update_date_format(
 
     set_app_setting(db, DATE_FORMAT_SETTING_KEY, normalized)
     app.state.date_format = normalized
+    log_audit(db, "settings.date_format", request=request, actor=current_user, detail=f"Set to {normalized}")
     set_flash(request, "Global date format updated.", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
@@ -687,6 +733,7 @@ def update_timezone(
 
     set_app_setting(db, TIMEZONE_SETTING_KEY, normalized)
     app.state.timezone = normalized
+    log_audit(db, "settings.timezone", request=request, actor=current_user, detail=f"Set to {normalized}")
     set_flash(request, "Global timezone updated.", "success")
     return RedirectResponse(url="/settings", status_code=303)
 
@@ -740,6 +787,8 @@ def create_user(
     db.add(user)
     db.commit()
 
+    log_audit(db, "user.create", request=request, actor=current_user,
+              target_type="user", target_id=user.id, target_label=clean_username)
     set_flash(request, f"User '{clean_username}' created.", "success")
     return RedirectResponse(url="/users", status_code=303)
 
@@ -771,6 +820,8 @@ def toggle_user_enabled(user_id: int, request: Request, db: Session = Depends(ge
 
     user.enabled = new_enabled
     db.commit()
+    log_audit(db, "user.enable" if new_enabled else "user.disable", request=request, actor=current_user,
+              target_type="user", target_id=user.id, target_label=user.username)
     set_flash(request, f"User '{user.username}' updated.", "success")
     return RedirectResponse(url="/users", status_code=303)
 
@@ -847,6 +898,8 @@ def update_user(
         user.password_hash = hash_password(password)
 
     db.commit()
+    log_audit(db, "user.update", request=request, actor=current_user,
+              target_type="user", target_id=user.id, target_label=user.username)
     set_flash(request, f"User '{user.username}' updated.", "success")
     return RedirectResponse(url="/users", status_code=303)
 
@@ -877,6 +930,8 @@ def delete_user(user_id: int, request: Request, db: Session = Depends(get_db)):
 
     db.delete(user)
     db.commit()
+    log_audit(db, "user.delete", request=request, actor=current_user,
+              target_type="user", target_id=user_id, target_label=user.username)
     set_flash(request, "User deleted.", "success")
     return RedirectResponse(url="/users", status_code=303)
 
@@ -922,6 +977,23 @@ def about_page(request: Request, db: Session = Depends(get_db)):
     return render_app_template(request, "about.html", "about", current_user, db)
 
 
+@app.get("/audit-log", response_class=HTMLResponse)
+def audit_log_page(request: Request, db: Session = Depends(get_db)):
+    if not users_exist(db):
+        return RedirectResponse(url="/setup", status_code=303)
+
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    entries = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(500).all()
+    return render_app_template(request, "audit_log.html", "audit-log", current_user, db, entries=entries)
+
+
 @app.post("/api/ssh-keys", response_model=SSHKeyRead)
 def create_ssh_key(payload: SSHKeyCreate, request: Request, db: Session = Depends(get_db)):
     require_api_user(request, db, admin=True)
@@ -951,6 +1023,9 @@ def create_ssh_key(payload: SSHKeyCreate, request: Request, db: Session = Depend
     db.add(ssh_key)
     db.commit()
     db.refresh(ssh_key)
+    actor = get_session_user(request, db)
+    log_audit(db, "ssh_key.create", request=request, actor=actor,
+              target_type="ssh_key", target_id=ssh_key.id, target_label=ssh_key.name)
     return ssh_key
 
 
@@ -994,6 +1069,9 @@ def generate_ssh_key(
     db.add(ssh_key)
     db.commit()
     db.refresh(ssh_key)
+    actor = get_session_user(request, db)
+    log_audit(db, "ssh_key.generate", request=request, actor=actor,
+              target_type="ssh_key", target_id=ssh_key.id, target_label=ssh_key.name)
     return ssh_key
 
 
@@ -1019,6 +1097,9 @@ def delete_ssh_key(key_id: int, request: Request, db: Session = Depends(get_db))
 
     db.delete(ssh_key)
     db.commit()
+    actor = get_session_user(request, db)
+    log_audit(db, "ssh_key.delete", request=request, actor=actor,
+              target_type="ssh_key", target_id=key_id, target_label=ssh_key.name)
     return {"message": "SSH key deleted"}
 
 
@@ -1034,6 +1115,9 @@ def create_server(server_data: ServerCreate, request: Request, db: Session = Dep
     db.add(server)
     db.commit()
     db.refresh(server)
+    actor = get_session_user(request, db)
+    log_audit(db, "server.create", request=request, actor=actor,
+              target_type="server", target_id=server.id, target_label=server.name)
     return server
 
 
@@ -1087,6 +1171,9 @@ def update_server(server_id: int, payload: ServerUpdate, request: Request, db: S
 
     db.commit()
     db.refresh(server)
+    actor = get_session_user(request, db)
+    log_audit(db, "server.update", request=request, actor=actor,
+              target_type="server", target_id=server.id, target_label=server.name)
     return server
 
 
@@ -1121,6 +1208,9 @@ def delete_server(server_id: int, request: Request, db: Session = Depends(get_db
 
     db.delete(server)
     db.commit()
+    actor = get_session_user(request, db)
+    log_audit(db, "server.delete", request=request, actor=actor,
+              target_type="server", target_id=server_id, target_label=server.name)
     return {"message": "Server deleted"}
 
 
@@ -1133,7 +1223,10 @@ def run_updates(payload: UpdateRequest, request: Request, db: Session = Depends(
         raise HTTPException(status_code=404, detail="No matching servers found")
 
     created_jobs = enqueue_update_jobs(db, servers, payload.package_manager)
-
+    actor = get_session_user(request, db)
+    server_names = ", ".join(s.name for s in servers)
+    log_audit(db, "update.run", request=request, actor=actor,
+              detail=f"Servers: {server_names}; package_manager: {payload.package_manager}")
     return {"job_ids": created_jobs}
 
 
@@ -1167,6 +1260,8 @@ def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session
     db.add(schedule)
     db.commit()
     db.refresh(schedule)
+    log_audit(db, "schedule.create", request=request, actor=current_user,
+              target_type="schedule", target_id=schedule.id, target_label=schedule.name)
     return schedule
 
 
@@ -1189,6 +1284,9 @@ def toggle_schedule(schedule_id: int, request: Request, db: Session = Depends(ge
         schedule.next_run_at = get_next_schedule_run(schedule, datetime.utcnow())
     db.commit()
     db.refresh(schedule)
+    actor = get_session_user(request, db)
+    log_audit(db, "schedule.enable" if schedule.enabled else "schedule.disable", request=request, actor=actor,
+              target_type="schedule", target_id=schedule.id, target_label=schedule.name)
     return schedule
 
 
@@ -1202,6 +1300,9 @@ def delete_schedule(schedule_id: int, request: Request, db: Session = Depends(ge
 
     db.delete(schedule)
     db.commit()
+    actor = get_session_user(request, db)
+    log_audit(db, "schedule.delete", request=request, actor=actor,
+              target_type="schedule", target_id=schedule_id, target_label=schedule.name)
     return {"message": "Schedule deleted"}
 
 
