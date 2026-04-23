@@ -323,15 +323,16 @@ label {
   gap: 6px;
 }
 
-div.field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: 0.94rem;
 }
 
-div.field .field-label {
+.field .field-label {
   font-weight: 500;
-  font-size: 0.92rem;
+  font-size: inherit;
+  line-height: 1.2;
 }
 
 .info-tip {
