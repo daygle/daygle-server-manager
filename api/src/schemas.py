@@ -63,6 +63,7 @@ class UpdateRequest(BaseModel):
 class UpdateJobRead(BaseModel):
     id: int
     server_id: int
+    server_name: str | None
     package_manager: str
     status: str
     command: str

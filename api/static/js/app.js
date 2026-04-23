@@ -342,7 +342,7 @@ function renderJobRow(job) {
   return `
       <tr data-job-id="${job.id}">
         <td>${job.id}</td>
-        <td>${job.server_id}</td>
+        <td>${escapeHtml(job.server_name || `Server #${job.server_id}`)}</td>
         <td>${renderStatus(job.status)}</td>
         <td>${escapeHtml(job.package_manager)}</td>
         <td>${escapeHtml(job.created_at)}</td>

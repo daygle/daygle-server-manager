@@ -13,6 +13,13 @@ from .models import Server, UpdateJob
 SSH_CONNECT_TIMEOUT_SECONDS = 30
 REMOTE_COMMAND_TIMEOUT_SECONDS = 1800
 
+APT_PROGRESS_PREFIXES = (
+    "Reading package lists...",
+    "Building dependency tree...",
+    "Reading state information...",
+    "Calculating upgrade...",
+)
+
 
 def redact_secrets(text: str, secrets: list[str | None]) -> str:
     redacted = text
@@ -20,6 +27,49 @@ def redact_secrets(text: str, secrets: list[str | None]) -> str:
         if secret:
             redacted = redacted.replace(secret, "[REDACTED]")
     return redacted
+
+
+def clean_command_output(package_manager: str, output: str) -> str:
+    normalized_output = output.replace("\r", "\n")
+    if package_manager != "apt":
+        return normalized_output.strip()
+
+    cleaned_lines: list[str] = []
+    previous_blank = False
+
+    for raw_line in normalized_output.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+
+        if not stripped:
+            if cleaned_lines and not previous_blank:
+                cleaned_lines.append("")
+            previous_blank = True
+            continue
+
+        if is_noisy_apt_line(stripped):
+            continue
+
+        cleaned_lines.append(line)
+        previous_blank = False
+
+    return "\n".join(cleaned_lines).strip()
+
+
+def is_noisy_apt_line(line: str) -> bool:
+    if line == "[stderr]":
+        return False
+
+    if re.match(r"^\d+%\s+\[.*\]$", line):
+        return True
+
+    if re.match(r"^(Hit|Get|Ign):\d+\s", line):
+        return True
+
+    if re.match(r"^Fetched\s+.+\sin\s.+\(.+\/s\)$", line):
+        return True
+
+    return any(line.startswith(prefix) for prefix in APT_PROGRESS_PREFIXES)
 
 
 def detect_package_manager(client: paramiko.SSHClient) -> str:
@@ -202,6 +252,7 @@ def run_update_job(db: Session, job_id: int) -> None:
         exit_code, output, timed_out = run_remote_command(client, command, sudo_password)
         output = redact_secrets(output, [server_password, server_sudo_password])
         summary = summarize_update_result(package_manager, output, exit_code, timed_out)
+        cleaned_output = clean_command_output(package_manager, output)
 
         # Common lock wording for apt/dpkg. Keep message concise and actionable.
         lock_hint = ""
@@ -217,7 +268,7 @@ def run_update_job(db: Session, job_id: int) -> None:
             + "\n\n[steps]\n"
             + "\n".join(step_logs)
             + "\n\n[command-output]\n"
-            + output
+            + (cleaned_output or "No relevant command output.")
             + lock_hint
         ).strip()
 

@@ -120,13 +120,13 @@
       <thead>
         <tr>
           <th>ID</th>
-          <th>Server ID</th>
+          <th>Server Name</th>
           <th>Status</th>
           <th>Package Manager</th>
           <th>Created</th>
           <th>Started</th>
           <th>Finished</th>
-          <th>Preview</th>
+          <th>Result</th>
           <th>Action</th>
         </tr>
       </thead>
@@ -134,7 +134,7 @@
         {% for job in jobs %}
         <tr data-job-id="{{ job.id }}">
           <td>{{ job.id }}</td>
-          <td>{{ job.server_id }}</td>
+          <td>{{ job.server_name or ('Server #' ~ job.server_id) }}</td>
           <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
           <td>{{ job.package_manager }}</td>
           <td>{{ job.created_at }}</td>

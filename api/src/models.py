@@ -68,6 +68,10 @@ class UpdateJob(Base):
 
     server: Mapped[Server] = relationship("Server", back_populates="update_jobs")
 
+    @property
+    def server_name(self) -> str | None:
+        return self.server.name if self.server else None
+
 
 class UpdateSchedule(Base):
     __tablename__ = "update_schedules"
