@@ -4,35 +4,47 @@
 {% block title %}User Settings{% endblock %}
 
 {% block content %}
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">Display Preferences</h3>
+<form method="post" action="/user-settings/save-all">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fas fa-cog"></i>
+        <span>Display &amp; Formatting Settings</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <p class="section-description">Configure how dates and times are displayed for your account.</p>
+
+      <div class="form-group">
+        <label for="user_date_format" class="form-label">Date and Time Format</label>
+        <select id="user_date_format" class="form-select" name="date_format" required>
+          <option value="global" {% if selected_user_date_format == 'global' %}selected{% endif %}>Use global default</option>
+          {% for option_key, option_label, _ in date_format_options %}
+          <option value="{{ option_key }}" {% if selected_user_date_format == option_key %}selected{% endif %}>
+            {{ option_label }}
+          </option>
+          {% endfor %}
+        </select>
+        <small class="form-text">Select how date and time values are rendered in tables and logs.</small>
+      </div>
+
+      <div class="form-group mt-3">
+        <label for="user_timezone" class="form-label">Timezone</label>
+        <select id="user_timezone" class="form-select" name="timezone_name" required>
+          <option value="global" {% if selected_user_timezone == 'global' %}selected{% endif %}>Use global default</option>
+          {% for tz_value, tz_label in timezone_options %}
+          <option value="{{ tz_value }}" {% if selected_user_timezone == tz_value %}selected{% endif %}>{{ tz_label }}</option>
+          {% endfor %}
+        </select>
+        <small class="form-text">Your preferred timezone for displaying dates and times.</small>
+      </div>
+    </div>
+    <div class="card-footer form-actions">
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-save"></i>
+        <span>Save Settings</span>
+      </button>
+    </div>
   </div>
-  <div class="card-body">
-  <form method="post" action="/user-settings/save-all" class="grid-form">
-    <label>
-      Date and Time Format
-      <select name="date_format" required>
-        <option value="global" {% if selected_user_date_format == 'global' %}selected{% endif %}>Use global default</option>
-        {% for option_key, option_label, _ in date_format_options %}
-        <option value="{{ option_key }}" {% if selected_user_date_format == option_key %}selected{% endif %}>
-          {{ option_label }}
-        </option>
-        {% endfor %}
-      </select>
-    </label>
-    <label>
-      Timezone
-      <select name="timezone_name" required>
-        <option value="global" {% if selected_user_timezone == 'global' %}selected{% endif %}>Use global default</option>
-        {% for tz_value, tz_label in timezone_options %}
-        <option value="{{ tz_value }}" {% if selected_user_timezone == tz_value %}selected{% endif %}>{{ tz_label }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <button type="submit"><i class="fas fa-floppy-disk"></i>Save User Settings</button>
-  </form>
-  <p class="field-help">Your personal settings override the global date format and timezone only for your account.</p>
-  </div>
-</section>
+</form>
 {% endblock %}
