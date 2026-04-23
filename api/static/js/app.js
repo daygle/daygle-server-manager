@@ -427,30 +427,75 @@ function renderJobRow(job) {
     `;
 }
 
+const SECTION_LABELS = {
+  summary: "Summary",
+  steps: "Steps",
+  "command-output": "Command Output",
+  hint: "Hint",
+  error: "Error",
+};
+
+function renderJobOutput(raw) {
+  if (!raw) return "No output loaded.";
+  const sectionPattern = /^\[([a-z-]+)\]\n?/gm;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  const matches = [];
+
+  while ((match = sectionPattern.exec(raw)) !== null) {
+    matches.push({ index: match.index, tag: match[1], end: match.index + match[0].length });
+  }
+
+  for (let i = 0; i < matches.length; i++) {
+    const { index, tag, end } = matches[i];
+    const contentEnd = i + 1 < matches.length ? matches[i + 1].index : raw.length;
+    const label = SECTION_LABELS[tag] || tag;
+    const content = raw.slice(end, contentEnd).trimEnd();
+    parts.push(
+      `<span class="output-section-label">${escapeHtml(label)}</span>` +
+      `<span class="output-section-body">${escapeHtml(content)}</span>`
+    );
+    lastIndex = contentEnd;
+  }
+
+  if (matches.length === 0) {
+    return escapeHtml(raw);
+  }
+
+  return parts.join("");
+}
+
 function setDisplayedJobOutput(job) {
-  if (!latestLog) {
-    return;
-  }
+  // Remove any existing output rows
+  document.querySelectorAll("#jobs-body tr.job-output-row").forEach((r) => r.remove());
 
-  latestLog.textContent = job.output || "No output yet for this job.";
-  if (selectedJobLabel) {
-    selectedJobLabel.textContent = `job #${job.id}`;
-  }
-
-  const logDetails = latestLog.closest("details");
-  if (logDetails) {
-    logDetails.open = true;
-  }
-
-  document.querySelectorAll("#jobs-body tr").forEach((row) => {
-    row.classList.remove("selected-job-row");
-  });
+  // Mark the selected row
+  document.querySelectorAll("#jobs-body tr.job-row").forEach((r) => r.classList.remove("selected-job-row"));
   const selectedRow = document.querySelector(`#jobs-body tr[data-job-id="${job.id}"]`);
-  selectedRow?.classList.add("selected-job-row");
+  if (!selectedRow) return;
+  selectedRow.classList.add("selected-job-row");
+
+  // Insert expansion row after the selected row
+  const colCount = selectedRow.cells.length;
+  const outputTr = document.createElement("tr");
+  outputTr.className = "job-output-row";
+  const outputTd = document.createElement("td");
+  outputTd.colSpan = colCount;
+  const pre = document.createElement("pre");
+  pre.className = "job-output-pre";
+  pre.innerHTML = renderJobOutput(job.output);
+  outputTd.appendChild(pre);
+  outputTr.appendChild(outputTd);
+  selectedRow.insertAdjacentElement("afterend", outputTr);
 }
 
 async function viewJobOutput(jobId) {
-  if (!latestLog) {
+  // Toggle off if clicking the already-open row
+  if (selectedJobId === jobId) {
+    document.querySelectorAll("#jobs-body tr.job-output-row").forEach((r) => r.remove());
+    document.querySelectorAll("#jobs-body tr.job-row").forEach((r) => r.classList.remove("selected-job-row"));
+    selectedJobId = null;
     return;
   }
 
@@ -466,7 +511,7 @@ async function viewJobOutput(jobId) {
 }
 
 async function loadJobs() {
-  if (!jobsBody || !latestLog) {
+  if (!jobsBody) {
     return;
   }
 
@@ -478,10 +523,6 @@ async function loadJobs() {
   const jobs = await response.json();
   if (jobs.length === 0) {
     jobsBody.innerHTML = '<tr><td colspan="8">No jobs yet.</td></tr>';
-    latestLog.textContent = "No output loaded.";
-    if (selectedJobLabel) {
-      selectedJobLabel.textContent = "latest";
-    }
     selectedJobId = null;
     return;
   }
@@ -491,10 +532,8 @@ async function loadJobs() {
   const selectedJob = selectedJobId ? jobs.find((job) => job.id === selectedJobId) : null;
   if (selectedJob) {
     setDisplayedJobOutput(selectedJob);
-  } else {
-    selectedJobId = jobs[0].id;
-    setDisplayedJobOutput(jobs[0]);
   }
+  // Don't auto-open any row — user clicks to expand
 }
 
 jobsBody?.addEventListener("click", async (event) => {

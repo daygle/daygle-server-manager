@@ -39,9 +39,9 @@
       Schedule Name
       <input id="schedule_name" name="name" required placeholder="Nightly patch window" />
     </label>
-    <label>
+    <div class="field">
       <span class="label-with-info">
-        Cron Expression
+        <label for="cron_expression">Cron Expression</label>
         <details class="info-tip">
           <summary aria-label="Cron expression help">
             <i class="fas fa-circle-info" aria-hidden="true"></i>
@@ -50,7 +50,7 @@
         </details>
       </span>
       <input id="cron_expression" name="cron_expression" required placeholder="0 2 * * *" />
-    </label>
+    </div>
     <label>
       Package Manager
       <select id="schedule_package_manager" name="package_manager">
@@ -158,9 +158,5 @@
       </tbody>
     </table>
   </div>
-  <details class="job-log" open>
-    <summary>Job output (<span id="selected-job-label">latest</span>)</summary>
-    <pre id="latest-log">No output loaded.</pre>
-  </details>
 </section>
 {% endblock %}
