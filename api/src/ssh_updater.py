@@ -20,19 +20,19 @@ APT_PROGRESS_PREFIXES = (
     "Calculating upgrade...",
 )
 
+REDACTION_PLACEHOLDER = "[REDACTED]"
+
 
 def redact_secrets(text: str, secrets: list[str | None]) -> str:
     redacted = text
     for secret in secrets:
         if secret:
-            redacted = redacted.replace(secret, "[REDACTED]")
+            redacted = redacted.replace(secret, REDACTION_PLACEHOLDER)
     return redacted
 
 
 def clean_command_output(package_manager: str, output: str) -> str:
     normalized_output = output.replace("\r", "\n")
-    if package_manager != "apt":
-        return normalized_output.strip()
 
     cleaned_lines: list[str] = []
     previous_blank = False
@@ -47,13 +47,20 @@ def clean_command_output(package_manager: str, output: str) -> str:
             previous_blank = True
             continue
 
-        if is_noisy_apt_line(stripped):
+        if should_skip_output_line(package_manager, stripped):
             continue
 
         cleaned_lines.append(line)
         previous_blank = False
 
     return "\n".join(cleaned_lines).strip()
+
+
+def should_skip_output_line(package_manager: str, line: str) -> bool:
+    if line == REDACTION_PLACEHOLDER:
+        return True
+
+    return package_manager == "apt" and is_noisy_apt_line(line)
 
 
 def is_noisy_apt_line(line: str) -> bool:
