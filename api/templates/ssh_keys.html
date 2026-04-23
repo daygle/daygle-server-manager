@@ -198,11 +198,12 @@ document.getElementById('generate-form').addEventListener('submit', async (e) =>
       credentials: 'include',
     });
     
+    const text = await res.text();
     let data;
     try {
-      data = await res.json();
+      data = JSON.parse(text);
     } catch (parseErr) {
-      console.error('Failed to parse JSON response:', res.status, res.statusText, await res.text());
+      console.error('Failed to parse JSON response:', res.status, res.statusText, text);
       alert(`Server error (${res.status}): ${res.statusText}`);
       return;
     }
@@ -230,11 +231,12 @@ document.getElementById('import-form').addEventListener('submit', async (e) => {
       body: JSON.stringify({ name, private_key }),
     });
     
+    const text = await res.text();
     let data;
     try {
-      data = await res.json();
+      data = JSON.parse(text);
     } catch (parseErr) {
-      console.error('Failed to parse JSON response:', res.status, res.statusText, await res.text());
+      console.error('Failed to parse JSON response:', res.status, res.statusText, text);
       alert(`Server error (${res.status}): ${res.statusText}`);
       return;
     }
@@ -286,7 +288,15 @@ function attachDeleteListener(btn) {
         method: 'DELETE',
         credentials: 'include',
       });
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        console.error('Failed to parse JSON response:', res.status, res.statusText, text);
+        alert(`Server error (${res.status}): ${res.statusText}`);
+        return;
+      }
       if (!res.ok) { alert(data.detail || 'Failed to delete key'); return; }
       document.getElementById(`key-row-${id}`)?.remove();
     } catch (err) {
