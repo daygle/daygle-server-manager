@@ -100,11 +100,13 @@
           </div>
 
           <div class="topbar-right">
-            {% if current_user and current_user.is_admin and unacknowledged_alert_count > 0 %}
+            {% if current_user and current_user.is_admin %}
             <div class="alerts-menu">
-              <a href="/alerts" class="alerts-button" title="Open alerts">
+              <a href="/alerts" class="alerts-button" title="View Alerts">
                 <i class="fas fa-bell"></i>
+                {% if unacknowledged_alert_count > 0 %}
                 <span class="alerts-badge">{{ unacknowledged_alert_count }}</span>
+                {% endif %}
               </a>
             </div>
             {% endif %}

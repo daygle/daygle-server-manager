@@ -4,108 +4,191 @@
 {% block title %}Alerts{% endblock %}
 
 {% block content %}
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">Alerts</h3>
+<div id="filterCard" class="card mb-4" style="display: none;">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-filter"></i>
+      <span>Filter Alerts</span>
+    </div>
+    <button type="button" class="btn btn-secondary btn-sm btn-icon-only" onclick="toggleFilters()" title="Close" aria-label="Close filters">
+      <i class="fas fa-times"></i>
+    </button>
   </div>
   <div class="card-body">
-  <p class="section-description">Track active and acknowledged alerts. Failed update jobs create alerts and optionally send admin email notifications.</p>
+    <form method="get" action="/alerts">
+      <div class="grid grid-cols-4 gap-3">
+        <div>
+          <label for="q" class="form-label">Search</label>
+          <input id="q" type="text" name="q" class="form-control" value="{{ search_q }}" placeholder="Title, message, source" />
+        </div>
+        <div>
+          <label for="level" class="form-label">Level</label>
+          <select id="level" name="level" class="form-select">
+            <option value="" {% if not selected_level %}selected{% endif %}>All levels</option>
+            <option value="error" {% if selected_level == 'error' %}selected{% endif %}>Error</option>
+            <option value="warning" {% if selected_level == 'warning' %}selected{% endif %}>Warning</option>
+            <option value="info" {% if selected_level == 'info' %}selected{% endif %}>Info</option>
+          </select>
+        </div>
+        <div>
+          <label for="state" class="form-label">State</label>
+          <select id="state" name="state" class="form-select">
+            <option value="open" {% if selected_state == 'open' %}selected{% endif %}>Open</option>
+            <option value="ack" {% if selected_state == 'ack' %}selected{% endif %}>Acknowledged</option>
+            <option value="all" {% if selected_state == 'all' %}selected{% endif %}>All</option>
+          </select>
+        </div>
+        <div>
+          <label for="page_size" class="form-label">Rows</label>
+          <select id="page_size" name="page_size" class="form-select">
+            <option value="25" {% if page_size == 25 %}selected{% endif %}>25</option>
+            <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
+            <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
+            <option value="200" {% if page_size == 200 %}selected{% endif %}>200</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex-between mt-3" style="gap: 12px; flex-wrap: wrap;">
+        <div class="text-secondary"><strong>{{ unacknowledged_count }}</strong> unacknowledged</div>
+        <div class="flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            <i class="fas fa-filter"></i>
+            <span>Apply Filters</span>
+          </button>
+          <a href="/alerts" class="btn btn-secondary">
+            <i class="fas fa-times"></i>
+            <span>Clear</span>
+          </a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
 
-  <form method="get" action="/alerts" class="grid-form mb-12">
-    <label>
-      Search
-      <input type="text" name="q" value="{{ search_q }}" placeholder="Title, message, source" />
-    </label>
-    <label>
-      Level
-      <select name="level">
-        <option value="" {% if not selected_level %}selected{% endif %}>All levels</option>
-        <option value="error" {% if selected_level == 'error' %}selected{% endif %}>error</option>
-        <option value="warning" {% if selected_level == 'warning' %}selected{% endif %}>warning</option>
-        <option value="info" {% if selected_level == 'info' %}selected{% endif %}>info</option>
-      </select>
-    </label>
-    <label>
-      State
-      <select name="state">
-        <option value="open" {% if selected_state == 'open' %}selected{% endif %}>Open</option>
-        <option value="ack" {% if selected_state == 'ack' %}selected{% endif %}>Acknowledged</option>
-        <option value="all" {% if selected_state == 'all' %}selected{% endif %}>All</option>
-      </select>
-    </label>
-    <label>
-      Page Size
-      <select name="page_size">
-        <option value="25" {% if page_size == 25 %}selected{% endif %}>25</option>
-        <option value="50" {% if page_size == 50 %}selected{% endif %}>50</option>
-        <option value="100" {% if page_size == 100 %}selected{% endif %}>100</option>
-        <option value="200" {% if page_size == 200 %}selected{% endif %}>200</option>
-      </select>
-    </label>
-    <div class="form-actions">
-      <button type="submit"><i class="fas fa-filter"></i>Apply Filters</button>
-      <a href="/alerts" class="btn-secondary-link"><i class="fas fa-rotate"></i>Reset</a>
+<div class="card">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-bell"></i>
+      <span>System Alerts</span>
     </div>
-  </form>
-
-  <p class="section-description">Showing {{ alerts|length }} of {{ total_count }} alerts.</p>
-  <div class="table-wrap">
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Level</th>
-          <th>Title</th>
-          <th>Message</th>
-          <th>Source</th>
-          <th>State</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for alert in alerts %}
-        <tr class="{% if alert.acknowledged_at %}alert-row-ack{% endif %}">
-          <td>{{ format_dt(alert.created_at) }}</td>
-          <td><span class="status status-{{ 'failed' if alert.level == 'error' else ('running' if alert.level == 'warning' else 'pending') }}">{{ alert.level }}</span></td>
-          <td>{{ alert.title }}</td>
-          <td>{{ alert.message }}</td>
-          <td>{{ alert.source_type or '-' }}{% if alert.source_id %} #{{ alert.source_id }}{% endif %}</td>
-          <td>{{ 'acknowledged' if alert.acknowledged_at else 'open' }}</td>
-          <td>
+    <div class="flex-gap-8">
+      <button id="toggleFilterBtn" class="btn btn-secondary btn-sm" onclick="toggleFilters()" type="button">
+        <i class="fas fa-filter"></i>
+        <span class="hide-mobile">Filter Alerts</span>
+      </button>
+      <button class="btn btn-secondary btn-sm" onclick="refreshAlerts()" type="button">
+        <i class="fas fa-sync-alt"></i>
+        <span class="hide-mobile">Refresh</span>
+      </button>
+    </div>
+  </div>
+  <div class="card-body">
+    <p class="text-secondary" style="margin-bottom: 16px;">Showing {{ alerts|length }} of {{ total_count }} alerts.</p>
+    {% for alert in alerts %}
+    <div class="card alert-item {{ alert.level }} {% if alert.acknowledged_at %}acknowledged{% endif %}">
+      <div class="card-body">
+        <div class="alert-header">
+          <div class="flex-gap-8" style="flex-wrap: wrap;">
+            <span class="alert-badge {{ alert.level }}">{{ alert.level }}</span>
+            <h5 class="alert-title" style="margin: 0;">{{ alert.title }}</h5>
+            {% if alert.acknowledged_at %}
+            <i class="fas fa-check-circle" style="color: var(--success);" title="Acknowledged"></i>
+            {% endif %}
+          </div>
+          <div class="alert-actions">
             {% if not alert.acknowledged_at %}
-            <form method="post" action="/alerts/{{ alert.id }}/ack" class="d-inline">
-              <button class="btn-secondary" type="submit"><i class="fas fa-check"></i>Acknowledge</button>
+            <form method="post" action="/alerts/{{ alert.id }}/ack" style="margin: 0;">
+              <button class="btn btn-secondary btn-sm" type="submit">
+                <i class="fas fa-check"></i>
+                <span class="hide-mobile">Acknowledge</span>
+              </button>
             </form>
             {% endif %}
-            <form method="post" action="/alerts/{{ alert.id }}/dismiss" class="d-inline">
-              <button class="btn-danger" type="submit"><i class="fas fa-trash"></i>Dismiss</button>
+            <form method="post" action="/alerts/{{ alert.id }}/dismiss" style="margin: 0;">
+              <button class="btn btn-danger btn-sm" type="submit">
+                <i class="fas fa-trash"></i>
+                <span class="hide-mobile">Dismiss</span>
+              </button>
             </form>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="7">No alerts found.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+          </div>
+        </div>
 
-  <div class="pagination-row">
-    {% if prev_page_url %}
-    <a class="btn-secondary-link pagination-btn" href="{{ prev_page_url }}"><i class="fas fa-chevron-left"></i>Previous</a>
+        <p style="margin-bottom: 10px;">{{ alert.message }}</p>
+
+        <div class="alert-meta">
+          <small>
+            <i class="fas fa-clock"></i>
+            {{ format_dt(alert.created_at) }}
+            {% if alert.source_type %}
+            • {{ alert.source_type }}{% if alert.source_id %} #{{ alert.source_id }}{% endif %}
+            {% endif %}
+            {% if alert.acknowledged_at %}
+            • Acknowledged {{ format_dt(alert.acknowledged_at) }}
+            {% endif %}
+          </small>
+        </div>
+      </div>
+    </div>
     {% else %}
-    <span class="btn-secondary-link pagination-btn pagination-disabled"><i class="fas fa-chevron-left"></i>Previous</span>
-    {% endif %}
-
-    <span class="pagination-meta">Page {{ page }} of {{ total_pages }}</span>
-
-    {% if next_page_url %}
-    <a class="btn-secondary-link pagination-btn" href="{{ next_page_url }}">Next<i class="fas fa-chevron-right"></i></a>
-    {% else %}
-    <span class="btn-secondary-link pagination-btn pagination-disabled">Next<i class="fas fa-chevron-right"></i></span>
-    {% endif %}
+    <div class="card">
+      <div class="card-body text-center empty-state">
+        <div>
+          <i class="fas fa-bell-slash empty-icon"></i>
+          <p>No alerts found{% if search_q or selected_level or selected_state != 'open' %} matching your filters{% endif %}.</p>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
   </div>
+
+  {% if prev_page_url or next_page_url %}
+  <div class="card-footer">
+    <div class="flex-between">
+      <div>
+        {% if prev_page_url %}
+        <a href="{{ prev_page_url }}" class="btn btn-secondary btn-sm">
+          <i class="fas fa-chevron-left"></i>
+          <span>Previous</span>
+        </a>
+        {% endif %}
+      </div>
+      <span class="text-secondary">Page {{ page }} of {{ total_pages }}</span>
+      <div>
+        {% if next_page_url %}
+        <a href="{{ next_page_url }}" class="btn btn-secondary btn-sm">
+          <span>Next</span>
+          <i class="fas fa-chevron-right"></i>
+        </a>
+        {% endif %}
+      </div>
+    </div>
   </div>
-</section>
+  {% endif %}
+</div>
+
+<script>
+window.toggleFilters = function () {
+  const filterCard = document.getElementById('filterCard');
+  const toggleBtn = document.getElementById('toggleFilterBtn');
+
+  if (filterCard.style.display === 'none') {
+    filterCard.style.display = 'block';
+    toggleBtn.innerHTML = '<i class="fas fa-times"></i><span class="hide-mobile">Hide Filters</span>';
+  } else {
+    filterCard.style.display = 'none';
+    toggleBtn.innerHTML = '<i class="fas fa-filter"></i><span class="hide-mobile">Filter Alerts</span>';
+  }
+};
+
+function refreshAlerts() {
+  window.location.reload();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const hasFilters = {{ 'true' if search_q or selected_level or selected_state != 'open' or page_size != 50 else 'false' }};
+  if (hasFilters) {
+    toggleFilters();
+  }
+});
+</script>
 {% endblock %}
