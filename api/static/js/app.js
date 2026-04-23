@@ -16,8 +16,13 @@ const cancelEditBtn = document.getElementById("cancel_edit_btn");
 const saveServerBtn = document.getElementById("save_server_btn");
 const userForm = document.getElementById("user-form");
 const userFormTitle = document.getElementById("user-form-title");
+const userFormIcon = document.getElementById("user-form-icon");
 const userSubmitBtn = document.getElementById("user_submit_btn");
 const userCancelBtn = document.getElementById("user_cancel_btn");
+const userFormCloseBtn = document.getElementById("user_form_close_btn");
+const userFormCard = document.getElementById("userFormCard");
+const usersListCard = document.getElementById("usersListCard");
+const createUserBtn = document.getElementById("create_user_btn");
 const userPasswordInput = document.getElementById("user_password");
 const userConfirmPasswordInput = document.getElementById("user_confirm_password");
 const currentUserId = userForm?.dataset.currentUserId || "";
@@ -185,14 +190,20 @@ function setUserFormMode(editing) {
 
   if (editing) {
     userFormTitle.textContent = "Edit User";
-    userSubmitBtn.innerHTML = '<i class="fas fa-pen"></i>Update User';
+    if (userFormIcon) {
+      userFormIcon.className = "fas fa-user-edit";
+    }
+    userSubmitBtn.innerHTML = '<i class="fas fa-save"></i>Save Changes';
     userCancelBtn.classList.remove("hidden");
     userPasswordInput.required = false;
     userConfirmPasswordInput.required = false;
     userPasswordInput.placeholder = "Leave blank to keep current password";
     userConfirmPasswordInput.placeholder = "Repeat new password";
   } else {
-    userFormTitle.textContent = "Create User";
+    userFormTitle.textContent = "Create New User";
+    if (userFormIcon) {
+      userFormIcon.className = "fas fa-user-plus";
+    }
     userSubmitBtn.innerHTML = '<i class="fas fa-user-plus"></i>Create User';
     userCancelBtn.classList.add("hidden");
     userPasswordInput.required = true;
@@ -201,6 +212,30 @@ function setUserFormMode(editing) {
     userConfirmPasswordInput.placeholder = "";
   }
 }
+
+function setUserFormVisibility(showForm) {
+  if (!userFormCard || !usersListCard) {
+    return;
+  }
+
+  userFormCard.classList.toggle("hidden", !showForm);
+  usersListCard.classList.toggle("hidden", showForm);
+}
+
+function showCreateUserForm() {
+  if (!userForm) {
+    return;
+  }
+
+  userForm.reset();
+  userForm.setAttribute("action", "/users/create");
+  setUserFormMode(false);
+  applySelfDisableGuard(null);
+  setUserFormVisibility(true);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+window.showCreateUserForm = showCreateUserForm;
 
 function setUserFieldValue(name, value) {
   if (!userForm) {
@@ -267,12 +302,13 @@ document.querySelectorAll("[data-edit-user]").forEach((button) => {
     setUserFieldValue("password", "");
     setUserFieldValue("confirm_password", "");
     applySelfDisableGuard(userId);
+    setUserFormVisibility(true);
 
     userForm.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 });
 
-userCancelBtn?.addEventListener("click", () => {
+function hideUserFormAndReset() {
   if (!userForm) {
     return;
   }
@@ -281,11 +317,19 @@ userCancelBtn?.addEventListener("click", () => {
   userForm.setAttribute("action", "/users/create");
   setUserFormMode(false);
   applySelfDisableGuard(null);
-});
+  setUserFormVisibility(false);
+}
+
+userCancelBtn?.addEventListener("click", hideUserFormAndReset);
+userFormCloseBtn?.addEventListener("click", hideUserFormAndReset);
+createUserBtn?.addEventListener("click", showCreateUserForm);
 
 if (userForm) {
   setUserFormMode(false);
   applySelfDisableGuard(null);
+  setUserFormVisibility(false);
+  userFormCard?.classList.add("visible");
+  usersListCard?.classList.add("visible");
 }
 
 document.querySelectorAll("[data-delete-server]").forEach((button) => {

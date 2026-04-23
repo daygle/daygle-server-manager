@@ -4,89 +4,121 @@
 {% block title %}User Management{% endblock %}
 
 {% block content %}
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title" id="user-form-title">Create User</h3>
+<div class="card mb-4 hidden" id="userFormCard">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-user-plus" id="user-form-icon"></i>
+      <span id="user-form-title">Create New User</span>
+    </div>
+    <button type="button" id="user_form_close_btn" class="btn btn-secondary btn-sm" title="Cancel">
+      <i class="fas fa-times"></i>
+    </button>
   </div>
   <div class="card-body">
-  <form id="user-form" method="post" action="/users/create" class="grid-form" data-current-user-id="{{ current_user.id }}">
-    <label>Username <input id="user_username" name="username" required minlength="3" /></label>
-    <label>Password <input id="user_password" name="password" type="password" required minlength="8" /></label>
-    <label>Confirm Password <input id="user_confirm_password" name="confirm_password" type="password" required minlength="8" /></label>
-    <label>First Name <input name="first_name" /></label>
-    <label>Last Name <input name="last_name" /></label>
-    <label>Email <input name="email" type="email" /></label>
-    <label class="checkbox-field"><input type="checkbox" name="is_admin" value="true" /> Admin User</label>
-    <label class="checkbox-field"><input type="checkbox" name="enabled" value="true" checked /> Enabled</label>
-    <button id="user_submit_btn" type="submit"><i class="fas fa-user-plus"></i>Create User</button>
-    <button id="user_cancel_btn" type="button" class="btn-secondary hidden"><i class="fas fa-xmark"></i>Cancel Edit</button>
-  </form>
+    <form id="user-form" method="post" action="/users/create" class="grid-form" data-current-user-id="{{ current_user.id }}">
+      <label>Username <input id="user_username" name="username" required minlength="3" /></label>
+      <label>Password <input id="user_password" name="password" type="password" required minlength="8" /></label>
+      <label>Confirm Password <input id="user_confirm_password" name="confirm_password" type="password" required minlength="8" /></label>
+      <label>First Name <input name="first_name" /></label>
+      <label>Last Name <input name="last_name" /></label>
+      <label>Email <input name="email" type="email" /></label>
+      <label class="checkbox-field"><input type="checkbox" name="is_admin" value="true" /> Admin User</label>
+      <label class="checkbox-field"><input type="checkbox" name="enabled" value="true" checked /> Enabled</label>
+      <div class="form-actions col-span-2">
+        <button id="user_cancel_btn" type="button" class="btn btn-secondary hidden"><i class="fas fa-times"></i>Cancel</button>
+        <button id="user_submit_btn" type="submit" class="btn btn-primary"><i class="fas fa-user-plus"></i>Create User</button>
+      </div>
+    </form>
   </div>
-</section>
+</div>
 
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">Users</h3>
+<div class="card" id="usersListCard">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-users"></i>
+      <span>User Accounts</span>
+    </div>
+    <button type="button" id="create_user_btn" class="btn btn-primary">
+      <i class="fas fa-user-plus"></i>
+      <span>Create New User</span>
+    </button>
   </div>
-  <div class="card-body">
-  <div class="table-wrap">
-    <table class="table table-striped">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Username</th>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Role</th>
-          <th>Status</th>
-          <th>Created</th>
-          <th>Last Login</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for user in users %}
-        <tr
-          data-user-id="{{ user.id }}"
-          data-user-username="{{ user.username }}"
-          data-user-first-name="{{ user.first_name or '' }}"
-          data-user-last-name="{{ user.last_name or '' }}"
-          data-user-email="{{ user.email or '' }}"
-          data-user-is-admin="{{ 'true' if user.is_admin else 'false' }}"
-          data-user-enabled="{{ 'true' if user.enabled else 'false' }}"
-        >
-          <td>{{ user.id }}</td>
-          <td>{{ user.username }}</td>
-          <td>{{ (user.first_name or '') ~ ' ' ~ (user.last_name or '') }}</td>
-          <td>{{ user.email or '-' }}</td>
-          <td>{{ 'Admin' if user.is_admin else 'User' }}</td>
-          <td>{{ 'Enabled' if user.enabled else 'Disabled' }}</td>
-          <td>{{ format_dt(user.created_at) }}</td>
-          <td>{{ format_dt(user.last_login) }}</td>
-          <td>
-            <button type="button" class="btn-secondary" data-edit-user="{{ user.id }}"><i class="fas fa-pen"></i>Edit</button>
-            <form method="post" action="/users/{{ user.id }}/toggle-enabled" class="d-inline">
-              <button
-                class="btn-secondary"
-                type="submit"
-                {% if user.id == current_user.id %}disabled title="You cannot disable your own account."{% endif %}
-              >
-                <i class="fas {{ 'fa-user-slash' if user.enabled else 'fa-user-check' }}"></i>{{ 'Disable' if user.enabled else 'Enable' }}
-              </button>
-            </form>
-            <form method="post" action="/users/{{ user.id }}/delete" class="d-inline">
-              <button class="btn-danger" type="submit"><i class="fas fa-trash"></i>Delete</button>
-            </form>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="9">No users found.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="card-body p-0">
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th class="hide-mobile">Role</th>
+            <th>Status</th>
+            <th class="hide-mobile">Created</th>
+            <th class="hide-mobile">Last Login</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr
+            data-user-id="{{ user.id }}"
+            data-user-username="{{ user.username }}"
+            data-user-first-name="{{ user.first_name or '' }}"
+            data-user-last-name="{{ user.last_name or '' }}"
+            data-user-email="{{ user.email or '' }}"
+            data-user-is-admin="{{ 'true' if user.is_admin else 'false' }}"
+            data-user-enabled="{{ 'true' if user.enabled else 'false' }}"
+          >
+            <td><strong>{{ user.username }}</strong></td>
+            <td>{{ ((user.first_name or '') ~ ' ' ~ (user.last_name or '')) | trim if user.first_name or user.last_name else '-' }}</td>
+            <td>{{ user.email or '-' }}</td>
+            <td class="hide-mobile">
+              {% if user.is_admin %}
+                <span class="badge badge-primary"><i class="fas fa-user-shield"></i> Admin</span>
+              {% else %}
+                <span class="badge badge-secondary"><i class="fas fa-user"></i> User</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if user.enabled %}
+                <span class="badge badge-success"><i class="fas fa-check"></i> Enabled</span>
+              {% else %}
+                <span class="badge badge-danger"><i class="fas fa-times"></i> Disabled</span>
+              {% endif %}
+            </td>
+            <td class="hide-mobile"><small>{{ format_dt(user.created_at) }}</small></td>
+            <td class="hide-mobile"><small>{{ format_dt(user.last_login) if user.last_login else 'Never' }}</small></td>
+            <td>
+              <div class="flex-gap-8">
+                <button type="button" class="btn btn-secondary btn-sm" title="Edit" data-edit-user="{{ user.id }}">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <form method="post" action="/users/{{ user.id }}/toggle-enabled" class="d-inline">
+                  <button class="btn {% if user.enabled %}btn-warning{% else %}btn-success{% endif %} btn-sm" type="submit" title="{{ 'Disable' if user.enabled else 'Enable' }}" {% if user.id == current_user.id %}disabled{% endif %}>
+                    <i class="fas {% if user.enabled %}fa-ban{% else %}fa-check{% endif %}"></i>
+                  </button>
+                </form>
+                <form method="post" action="/users/{{ user.id }}/delete" class="d-inline" onsubmit="return confirm('Are you sure you want to delete this user?');">
+                  <button class="btn btn-danger btn-sm" type="submit" title="Delete" {% if user.id == current_user.id %}disabled{% endif %}>
+                    <i class="fas fa-trash"></i>
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="text-center empty-state">
+              <div>
+                <i class="fas fa-users empty-icon"></i>
+                <p>No users found.</p>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
-  </div>
-</section>
+</div>
 {% endblock %}

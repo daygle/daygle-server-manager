@@ -615,6 +615,15 @@ pre.code-block code {
     background: #059669;
 }
 
+.btn-warning {
+    background: var(--warning);
+    color: white;
+}
+
+.btn-warning:hover:not(:disabled) {
+    background: #d97706;
+}
+
 .btn-danger {
     background: var(--danger);
     color: white;
