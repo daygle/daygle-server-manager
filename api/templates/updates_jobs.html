@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block page_title %}Update Jobs - Daygle Server Manager{% endblock %}
+{% block title %}Jobs{% endblock %}
+
+{% block content %}
+<div class="card" id="jobsCard">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-tasks"></i>
+      <span>Jobs</span>
+    </div>
+    <a href="/updates/scheduled" class="btn btn-secondary">
+      <i class="fas fa-calendar-alt"></i>
+      <span>Scheduled Updates</span>
+    </a>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Server Name</th>
+            <th>Status</th>
+            <th class="hide-mobile">Package Manager</th>
+            <th class="hide-mobile">Created</th>
+            <th class="hide-mobile">Started</th>
+            <th class="hide-mobile">Finished</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="jobs-body">
+          {% for job in jobs %}
+          <tr data-job-id="{{ job.id }}" class="job-row" title="Click to view output">
+            <td>{{ job.id }}</td>
+            <td>{{ job.server_name or ('Server #' ~ job.server_id) }}</td>
+            <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
+            <td class="hide-mobile">{{ job.package_manager }}</td>
+            <td class="hide-mobile">{{ format_dt(job.created_at) }}</td>
+            <td class="hide-mobile">{{ format_dt(job.started_at) }}</td>
+            <td class="hide-mobile">{{ format_dt(job.finished_at) }}</td>
+            <td>{{ job.summary or ('-' if job.status == 'pending' or job.status == 'running' else 'Update completed') }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="text-center empty-state">No jobs yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

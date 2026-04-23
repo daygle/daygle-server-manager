@@ -9,6 +9,12 @@ const jobsBody = document.getElementById("jobs-body");
 const schedulesBody = document.getElementById("schedules-body");
 const latestLog = document.getElementById("latest-log");
 const selectedJobLabel = document.getElementById("selected-job-label");
+const scheduleFormCard = document.getElementById("scheduleFormCard");
+const scheduledUpdatesCard = document.getElementById("scheduledUpdatesCard");
+const createScheduleBtn = document.getElementById("create_schedule_btn");
+const createScheduleBtnEmpty = document.getElementById("create_schedule_btn_empty");
+const cancelScheduleBtn = document.getElementById("cancel_schedule_btn");
+const scheduleFormCloseBtn = document.getElementById("schedule_form_close_btn");
 const authMethod = document.getElementById("auth_method");
 const passwordLabel = document.getElementById("password_label");
 const keyLabel = document.getElementById("key_label");
@@ -683,6 +689,36 @@ scheduleForm?.addEventListener("submit", async (event) => {
 
   window.location.reload();
 });
+
+function setScheduleFormVisibility(showForm) {
+  if (!scheduleFormCard || !scheduledUpdatesCard) {
+    return;
+  }
+  scheduleFormCard.classList.toggle("hidden", !showForm);
+  scheduledUpdatesCard.classList.toggle("hidden", showForm);
+}
+
+function showCreateScheduleForm() {
+  scheduleForm?.reset();
+  setScheduleFormVisibility(true);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function hideScheduleFormAndReset() {
+  scheduleForm?.reset();
+  setScheduleFormVisibility(false);
+}
+
+createScheduleBtn?.addEventListener("click", showCreateScheduleForm);
+createScheduleBtnEmpty?.addEventListener("click", showCreateScheduleForm);
+cancelScheduleBtn?.addEventListener("click", hideScheduleFormAndReset);
+scheduleFormCloseBtn?.addEventListener("click", hideScheduleFormAndReset);
+
+if (scheduleFormCard && scheduledUpdatesCard) {
+  setScheduleFormVisibility(false);
+  scheduleFormCard.classList.add("visible");
+  scheduledUpdatesCard.classList.add("visible");
+}
 
 document.querySelectorAll("[data-toggle-schedule]").forEach((button) => {
   button.addEventListener("click", async () => {

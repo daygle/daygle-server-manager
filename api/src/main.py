@@ -827,6 +827,11 @@ def servers_page(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/updates", response_class=HTMLResponse)
 def updates_page(request: Request, db: Session = Depends(get_db)):
+    return RedirectResponse(url="/updates/manual", status_code=303)
+
+
+@app.get("/updates/manual", response_class=HTMLResponse)
+def updates_manual_page(request: Request, db: Session = Depends(get_db)):
     if not users_exist(db):
         return RedirectResponse(url="/setup", status_code=303)
 
@@ -834,22 +839,64 @@ def updates_page(request: Request, db: Session = Depends(get_db)):
     if not current_user:
         return RedirectResponse(url="/login", status_code=303)
 
-    log_audit(db, "update.check", request=request, actor=current_user, detail="Opened updates page")
+    log_audit(db, "update.check", request=request, actor=current_user, detail="Opened manual updates page")
 
     servers = db.query(Server).order_by(Server.name.asc()).all()
-    jobs = db.query(UpdateJob).order_by(UpdateJob.created_at.desc()).limit(30).all()
+    return render_app_template(
+        request,
+        "updates_manual.html",
+        "updates-manual",
+        current_user,
+        db,
+        servers=servers,
+    )
+
+
+@app.get("/updates/scheduled", response_class=HTMLResponse)
+def updates_scheduled_page(request: Request, db: Session = Depends(get_db)):
+    if not users_exist(db):
+        return RedirectResponse(url="/setup", status_code=303)
+
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    log_audit(db, "update.check", request=request, actor=current_user, detail="Opened scheduled updates page")
+
+    servers = db.query(Server).order_by(Server.name.asc()).all()
     schedules = db.query(UpdateSchedule).order_by(UpdateSchedule.created_at.desc()).all()
     server_name_map = {s.id: s.name for s in servers}
     return render_app_template(
         request,
-        "updates.html",
-        "updates",
+        "updates_scheduled.html",
+        "updates-scheduled",
         current_user,
         db,
         servers=servers,
-        jobs=jobs,
         schedules=schedules,
         server_name_map=server_name_map,
+    )
+
+
+@app.get("/updates/jobs", response_class=HTMLResponse)
+def updates_jobs_page(request: Request, db: Session = Depends(get_db)):
+    if not users_exist(db):
+        return RedirectResponse(url="/setup", status_code=303)
+
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    log_audit(db, "update.check", request=request, actor=current_user, detail="Opened update jobs page")
+
+    jobs = db.query(UpdateJob).order_by(UpdateJob.created_at.desc()).limit(30).all()
+    return render_app_template(
+        request,
+        "updates_jobs.html",
+        "updates-jobs",
+        current_user,
+        db,
+        jobs=jobs,
     )
 
 
