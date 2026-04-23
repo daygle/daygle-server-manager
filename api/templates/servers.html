@@ -67,7 +67,7 @@
       </div>
 
       <div class="form-group">
-        <label for="server_sudo_password" class="form-label">Sudo Password (optional)</label>
+        <label for="server_sudo_password" class="form-label">Sudo Password (Optional)</label>
         <input id="server_sudo_password" class="form-control" type="password" name="sudo_password" autocomplete="new-password" />
         <small class="form-text">Only needed if sudo asks for a different password.</small>
       </div>
@@ -126,8 +126,8 @@
           <td><strong>{{ server.name }}</strong></td>
           <td>{{ server.host }}:{{ server.port }}</td>
           <td>{{ server.username }}</td>
-          <td class="hide-mobile">{{ server.auth_method }}</td>
-          <td class="hide-mobile">{{ 'set' if server.sudo_password else 'not set' }}</td>
+          <td class="hide-mobile">{{ 'Password' if server.auth_method == 'password' else server.auth_method }}</td>
+          <td class="hide-mobile">{{ 'set' if server.sudo_password else 'N/A' }}</td>
           <td>
             <div class="flex-gap-8">
               <button class="btn btn-secondary btn-sm btn-icon-only" type="button" title="Edit" data-edit-server="{{ server.id }}"><i class="fas fa-pen"></i></button>

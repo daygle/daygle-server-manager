@@ -38,7 +38,7 @@
             <td>{{ job.server_name or ('Server #' ~ job.server_id) }}</td>
             <td>{{ 'Scheduled' if job.job_type == 'scheduled' else 'Manual' }}</td>
             <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
-            <td class="hide-mobile">{{ job.package_manager }}</td>
+            <td class="hide-mobile">{{ 'Automatically Detect' if job.package_manager == 'auto' else job.package_manager }}</td>
             <td class="hide-mobile">{{ format_dt(job.created_at) }}</td>
             <td class="hide-mobile">{{ format_dt(job.started_at) }}</td>
             <td class="hide-mobile">{{ format_dt(job.finished_at) }}</td>

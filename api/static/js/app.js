@@ -546,13 +546,14 @@ function escapeHtml(value) {
 
 function renderJobRow(job) {
   const jobTypeLabel = job.job_type === "scheduled" ? "Scheduled" : "Manual";
+  const packageManagerLabel = job.package_manager === "auto" ? "Automatically Detect" : job.package_manager;
   return `
       <tr data-job-id="${job.id}" class="job-row" title="Click to view output">
         <td>${job.id}</td>
         <td>${escapeHtml(job.server_name || `Server #${job.server_id}`)}</td>
         <td>${escapeHtml(jobTypeLabel)}</td>
         <td>${renderStatus(job.status)}</td>
-        <td>${escapeHtml(job.package_manager)}</td>
+        <td>${escapeHtml(packageManagerLabel)}</td>
         <td>${escapeHtml(formatDateTimeForUi(job.created_at))}</td>
         <td>${escapeHtml(formatDateTimeForUi(job.started_at))}</td>
         <td>${escapeHtml(formatDateTimeForUi(job.finished_at))}</td>
