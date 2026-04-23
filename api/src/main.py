@@ -2511,17 +2511,54 @@ def create_ssh_key(payload: SSHKeyCreate, request: Request, db: Session = Depend
         raise HTTPException(status_code=400, detail="SSH key name already exists")
 
     # Derive the public key and type from the supplied private key
-    import io as _io
-    import paramiko as _paramiko
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
+    import base64
+    
     try:
-        pkey = _paramiko.pkey.load_private_key(_io.StringIO(payload.private_key))
+        # Try to load the private key
+        private_key = serialization.load_pem_private_key(
+            payload.private_key.encode(),
+            password=None,
+            backend=default_backend()
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid private key: {exc}")
 
-    key_type = pkey.get_name()  # e.g. "ssh-ed25519", "ssh-rsa"
-    pub_buf = _io.StringIO()
-    pkey.write_public_key(pub_buf)
-    public_key = pub_buf.getvalue().strip()
+    # Determine key type and format public key
+    public_key_obj = private_key.public_key()
+    
+    if isinstance(private_key, ed25519.Ed25519PrivateKey):
+        key_type = "ssh-ed25519"
+        public_bytes = public_key_obj.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw
+        )
+        public_key = f"ssh-ed25519 {base64.b64encode(public_bytes).decode()}"
+    elif isinstance(private_key, ed448.Ed448PrivateKey):
+        key_type = "ssh-ed448"
+        public_bytes = public_key_obj.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw
+        )
+        public_key = f"ssh-ed448 {base64.b64encode(public_bytes).decode()}"
+    elif isinstance(private_key, rsa.RSAPrivateKey):
+        key_type = "ssh-rsa"
+        public_bytes = public_key_obj.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        public_key = f"ssh-rsa {base64.b64encode(public_bytes).decode()}"
+    elif isinstance(private_key, ec.EllipticCurvePrivateKey):
+        key_type = f"ecdsa-sha2-nistp{private_key.curve.key_size}"
+        public_bytes = public_key_obj.public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        public_key = f"{key_type} {base64.b64encode(public_bytes).decode()}"
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported key type: {type(private_key)}")
 
     ssh_key = SSHKey(
         name=payload.name,
@@ -2556,24 +2593,22 @@ def generate_ssh_key(
         PrivateFormat,
         PublicFormat,
     )
-    import io as _io
-    import paramiko as _paramiko
+    import base64
 
     raw_private = Ed25519PrivateKey.generate()
     pem_bytes = raw_private.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption())
     private_key_pem = pem_bytes.decode()
 
-    pkey = _paramiko.pkey.load_private_key(_io.StringIO(private_key_pem))
-    key_type = pkey.get_name()
-    pub_buf = _io.StringIO()
-    pkey.write_public_key(pub_buf)
-    public_key = pub_buf.getvalue().strip()
+    # Get public key in OpenSSH format
+    raw_public = raw_private.public_key()
+    public_bytes = raw_public.public_bytes(Encoding.Raw, PublicFormat.Raw)
+    public_key = f"ssh-ed25519 {base64.b64encode(public_bytes).decode()}"
 
     ssh_key = SSHKey(
         name=name,
         private_key=private_key_pem.strip(),
         public_key=public_key,
-        key_type=key_type,
+        key_type="ssh-ed25519",
     )
     db.add(ssh_key)
     db.commit()
