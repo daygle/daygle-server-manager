@@ -93,11 +93,14 @@
   </div>
 
   <!-- SMTP Settings Card -->
-  <div class="card mb-4">
+  <div class="card">
     <div class="card-header">
-      <div class="card-title">
-        <i class="fas fa-envelope"></i>
-        <span>SMTP Settings</span>
+      <div class="card-title" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <i class="fas fa-envelope"></i>
+          <span>SMTP Settings</span>
+        </div>
+        <div id="test-smtp-container"></div>
       </div>
     </div>
     <div class="card-body">
@@ -150,23 +153,37 @@
         </label>
       </div>
     </div>
-  </div>
-
-  <!-- Apply Changes Card -->
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">
-        <i class="fas fa-save"></i>
-        <span>Apply Changes</span>
-      </div>
-    </div>
-    <div class="card-body">
-      <div class="form-actions">
-        <button type="submit" class="btn btn-primary"><i class="fas fa-floppy-disk"></i><span>Save All Settings</span></button>
-        <button type="submit" class="btn btn-secondary" formaction="/settings/smtp/test"><i class="fas fa-vial"></i><span>Test SMTP Connection</span></button>
-      </div>
+    <div class="card-footer form-actions">
+      <a href="/dashboard" class="btn btn-secondary">
+        <i class="fas fa-times"></i>
+        <span>Cancel</span>
+      </a>
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-floppy-disk"></i>
+        <span>Save All Settings</span>
+      </button>
     </div>
   </div>
 
 </form>
+
+<!-- Test SMTP form outside the main form to avoid nesting -->
+<form method="post" action="/settings/smtp/test" id="test-smtp-form" style="display: none;">
+  <button type="submit" class="btn btn-secondary" id="test-smtp-btn">
+    <i class="fas fa-vial"></i>
+    <span>Test SMTP</span>
+  </button>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const container = document.getElementById('test-smtp-container');
+  const form = document.getElementById('test-smtp-form');
+  if (container && form) {
+    container.appendChild(form);
+    form.style.display = 'inline';
+  }
+});
+</script>
+
 {% endblock %}
