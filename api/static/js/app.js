@@ -1084,3 +1084,45 @@ if (jobsBody) {
     loadJobs();
   }
 }
+
+const auditLiveUpdatesToggle = document.getElementById("audit_live_updates_toggle");
+if (auditLiveUpdatesToggle && window.location.pathname.startsWith("/audit-log")) {
+  const searchParams = new URLSearchParams(window.location.search);
+  const hasActiveFilters = ["q", "action", "actor", "date_from", "date_to"].some((key) => {
+    const value = (searchParams.get(key) || "").trim();
+    return value.length > 0;
+  }) || Number(searchParams.get("page") || "1") > 1;
+  let refreshTimerId = null;
+
+  const stopLiveRefresh = () => {
+    if (refreshTimerId !== null) {
+      clearInterval(refreshTimerId);
+      refreshTimerId = null;
+    }
+  };
+
+  const startLiveRefresh = () => {
+    stopLiveRefresh();
+    refreshTimerId = setInterval(() => {
+      window.location.reload();
+    }, 10000);
+  };
+
+  if (hasActiveFilters) {
+    auditLiveUpdatesToggle.checked = false;
+    auditLiveUpdatesToggle.disabled = true;
+    auditLiveUpdatesToggle.title = "Clear filters and return to page 1 to enable live updates.";
+  }
+
+  auditLiveUpdatesToggle.addEventListener("change", () => {
+    if (auditLiveUpdatesToggle.checked && !hasActiveFilters) {
+      startLiveRefresh();
+      return;
+    }
+    stopLiveRefresh();
+  });
+
+  if (auditLiveUpdatesToggle.checked && !hasActiveFilters) {
+    startLiveRefresh();
+  }
+}
