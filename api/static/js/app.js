@@ -56,6 +56,7 @@ const deepLinkedJobId = (() => {
 })();
 let pendingAutoOpenJobId = deepLinkedJobId;
 let selectedJobId = null;
+let syncJobsLiveRefreshState = null;
 
 function notify(message, type = "info") {
   if (typeof window.showToast === "function") {
@@ -747,6 +748,7 @@ function setDisplayedJobOutput(job) {
   outputTd.appendChild(pre);
   outputTr.appendChild(outputTd);
   selectedRow.insertAdjacentElement("afterend", outputTr);
+  syncJobsLiveRefreshState?.();
 }
 
 async function viewJobOutput(jobId) {
@@ -755,6 +757,7 @@ async function viewJobOutput(jobId) {
     document.querySelectorAll("#jobs-body tr.job-output-row").forEach((r) => r.remove());
     document.querySelectorAll("#jobs-body tr.job-row").forEach((r) => r.classList.remove("selected-job-row"));
     selectedJobId = null;
+    syncJobsLiveRefreshState?.();
     return;
   }
 
@@ -1060,6 +1063,22 @@ if (jobsBody) {
       }, 10000);
     };
 
+    const updateLiveRefreshState = () => {
+      const hasOpenOutput = selectedJobId !== null || Boolean(document.querySelector("#jobs-body tr.job-output-row"));
+      if (liveUpdatesToggle?.checked && !hasActiveFilters && !hasOpenOutput) {
+        startLiveRefresh();
+        liveUpdatesToggle.title = "Live updates are enabled.";
+        return;
+      }
+
+      stopLiveRefresh();
+      if (liveUpdatesToggle && !hasActiveFilters && hasOpenOutput) {
+        liveUpdatesToggle.title = "Live updates pause automatically while job output is open.";
+      }
+    };
+
+    syncJobsLiveRefreshState = updateLiveRefreshState;
+
     if (liveUpdatesToggle) {
       if (hasActiveFilters) {
         liveUpdatesToggle.checked = false;
@@ -1068,16 +1087,10 @@ if (jobsBody) {
       }
 
       liveUpdatesToggle.addEventListener("change", () => {
-        if (liveUpdatesToggle.checked && !hasActiveFilters) {
-          startLiveRefresh();
-          return;
-        }
-        stopLiveRefresh();
+        updateLiveRefreshState();
       });
 
-      if (liveUpdatesToggle.checked && !hasActiveFilters) {
-        startLiveRefresh();
-      }
+      updateLiveRefreshState();
     }
   } else {
     setInterval(loadJobs, 5000);
