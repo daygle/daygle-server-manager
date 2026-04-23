@@ -19,6 +19,9 @@ const scheduleFormTitle = document.getElementById("schedule-form-title");
 const scheduleFormIcon = document.getElementById("schedule-form-icon");
 const saveScheduleBtn = document.getElementById("save_schedule_btn");
 const scheduleIdInput = document.getElementById("schedule_id");
+const autoDisableOnFailuresInput = document.getElementById("auto_disable_on_failures");
+const failureThresholdInput = document.getElementById("failure_threshold");
+const failureThresholdGroup = document.getElementById("failure_threshold_group");
 const authMethod = document.getElementById("auth_method");
 const passwordLabel = document.getElementById("password_label");
 const keyLabel = document.getElementById("key_label");
@@ -64,6 +67,19 @@ function notify(message, type = "info") {
     return;
   }
   window.alert(message);
+}
+
+function toggleScheduleFailureThreshold() {
+  const enabled = Boolean(autoDisableOnFailuresInput?.checked);
+  if (failureThresholdGroup) {
+    failureThresholdGroup.classList.toggle("hidden", !enabled);
+  }
+  if (failureThresholdInput) {
+    failureThresholdInput.required = enabled;
+    if (!enabled && !failureThresholdInput.value) {
+      failureThresholdInput.value = "3";
+    }
+  }
 }
 
 if (sidebar && localStorage.getItem("sidebarCollapsed") === "true") {
@@ -853,7 +869,14 @@ scheduleForm?.addEventListener("submit", async (event) => {
     cron_expression: document.getElementById("cron_expression")?.value,
     package_manager: document.getElementById("schedule_package_manager")?.value || "auto",
     server_ids: scheduleServers,
+    auto_disable_on_failures: Boolean(autoDisableOnFailuresInput?.checked),
+    failure_threshold: autoDisableOnFailuresInput?.checked ? Number(failureThresholdInput?.value || 0) : null,
   };
+
+  if (payload.auto_disable_on_failures && (!payload.failure_threshold || payload.failure_threshold < 1)) {
+    notify("Enter a valid failure threshold of at least 1.", "error");
+    return;
+  }
 
   const editingScheduleId = scheduleIdInput?.value ? Number(scheduleIdInput.value) : null;
 
@@ -902,6 +925,10 @@ function showCreateScheduleForm() {
   if (saveScheduleBtn) {
     saveScheduleBtn.innerHTML = '<i class="fas fa-calendar-plus"></i><span>Create Schedule</span>';
   }
+  if (failureThresholdInput) {
+    failureThresholdInput.value = "3";
+  }
+  toggleScheduleFailureThreshold();
   setScheduleFormVisibility(true);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -920,6 +947,10 @@ function hideScheduleFormAndReset() {
   if (saveScheduleBtn) {
     saveScheduleBtn.innerHTML = '<i class="fas fa-calendar-plus"></i><span>Create Schedule</span>';
   }
+  if (failureThresholdInput) {
+    failureThresholdInput.value = "3";
+  }
+  toggleScheduleFailureThreshold();
   setScheduleFormVisibility(false);
 }
 
@@ -927,12 +958,14 @@ createScheduleBtn?.addEventListener("click", showCreateScheduleForm);
 createScheduleBtnEmpty?.addEventListener("click", showCreateScheduleForm);
 cancelScheduleBtn?.addEventListener("click", hideScheduleFormAndReset);
 scheduleFormCloseBtn?.addEventListener("click", hideScheduleFormAndReset);
+autoDisableOnFailuresInput?.addEventListener("change", toggleScheduleFailureThreshold);
 
 if (scheduleFormCard && scheduledUpdatesCard) {
   setScheduleFormVisibility(false);
   scheduleFormCard.classList.add("visible");
   scheduledUpdatesCard.classList.add("visible");
 }
+toggleScheduleFailureThreshold();
 
 document.querySelectorAll("[data-edit-schedule]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -954,6 +987,8 @@ document.querySelectorAll("[data-edit-schedule]").forEach((button) => {
     const scheduleCron = button.getAttribute("data-schedule-cron") || "";
     const schedulePackageManager = button.getAttribute("data-schedule-package-manager") || "auto";
     const scheduleServerIdsRaw = button.getAttribute("data-schedule-server-ids") || "";
+    const scheduleAutoDisableOnFailures = button.getAttribute("data-schedule-auto-disable-on-failures") === "true";
+    const scheduleFailureThreshold = button.getAttribute("data-schedule-failure-threshold") || "3";
     const scheduleServerIds = scheduleServerIdsRaw
       .split(",")
       .map((value) => value.trim())
@@ -972,6 +1007,13 @@ document.querySelectorAll("[data-edit-schedule]").forEach((button) => {
     if (packageManagerField) {
       packageManagerField.value = schedulePackageManager;
     }
+    if (autoDisableOnFailuresInput) {
+      autoDisableOnFailuresInput.checked = scheduleAutoDisableOnFailures;
+    }
+    if (failureThresholdInput) {
+      failureThresholdInput.value = scheduleFailureThreshold;
+    }
+    toggleScheduleFailureThreshold();
 
     document.querySelectorAll("#schedule-server-checks input[type='checkbox']").forEach((checkbox) => {
       if (checkbox instanceof HTMLInputElement) {

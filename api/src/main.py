@@ -151,12 +151,16 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
         "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS summary VARCHAR(255)",
         "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS job_type VARCHAR(20) DEFAULT 'manual'",
+        "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS schedule_id INTEGER",
         "UPDATE update_jobs SET job_type = 'manual' WHERE job_type IS NULL OR job_type = ''",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format VARCHAR(32)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(16)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color VARCHAR(16)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS page_size INTEGER",
+        "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS auto_disable_on_failures BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS failure_threshold INTEGER",
+        "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS disabled_server_ids TEXT NOT NULL DEFAULT ''",
         (
             "CREATE TABLE IF NOT EXISTS audit_logs ("
             "id SERIAL PRIMARY KEY, "
@@ -590,11 +594,22 @@ def purge_old_history(db: Session) -> None:
 
 
 def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str, job_type: str = "manual") -> list[int]:
+    return enqueue_update_jobs_for_schedule(db, servers, package_manager, None, job_type)
+
+
+def enqueue_update_jobs_for_schedule(
+    db: Session,
+    servers: list[Server],
+    package_manager: str,
+    schedule_id: int | None,
+    job_type: str = "manual",
+) -> list[int]:
     safe_job_type = "scheduled" if job_type == "scheduled" else "manual"
     created_jobs: list[int] = []
     for server in servers:
         job = UpdateJob(
             server_id=server.id,
+            schedule_id=schedule_id if safe_job_type == "scheduled" else None,
             job_type=safe_job_type,
             package_manager=package_manager,
             status="pending",
@@ -624,9 +639,10 @@ def run_schedule_loop() -> None:
             )
 
             for schedule in due_schedules:
-                servers = db.query(Server).filter(Server.id.in_(schedule.server_ids)).all()
+                active_server_ids = [server_id for server_id in schedule.server_ids if server_id not in schedule.disabled_server_ids]
+                servers = db.query(Server).filter(Server.id.in_(active_server_ids)).all()
                 if servers:
-                    enqueue_update_jobs(db, servers, schedule.package_manager, job_type="scheduled")
+                    enqueue_update_jobs_for_schedule(db, servers, schedule.package_manager, schedule.id, job_type="scheduled")
 
                 schedule.last_run_at = now
                 schedule.next_run_at = get_next_schedule_run(schedule, now)
@@ -651,6 +667,9 @@ def process_job_async(job_id: int) -> None:
         run_update_job(db, job_id)
 
         job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
+        if job:
+            apply_schedule_failure_guard(db, job)
+
         if not job or job.status != "failed":
             return
 
@@ -674,6 +693,85 @@ def process_job_async(job_id: int) -> None:
         )
     finally:
         db.close()
+
+
+def count_consecutive_schedule_failures(db: Session, schedule_id: int, server_id: int) -> int:
+    recent_jobs = (
+        db.query(UpdateJob)
+        .filter(
+            UpdateJob.schedule_id == schedule_id,
+            UpdateJob.server_id == server_id,
+            UpdateJob.job_type == "scheduled",
+        )
+        .order_by(UpdateJob.created_at.desc())
+        .limit(100)
+        .all()
+    )
+
+    consecutive_failures = 0
+    for scheduled_job in recent_jobs:
+        if scheduled_job.status == "failed":
+            consecutive_failures += 1
+            continue
+        break
+    return consecutive_failures
+
+
+def apply_schedule_failure_guard(db: Session, job: UpdateJob) -> None:
+    if job.job_type != "scheduled" or not job.schedule_id:
+        return
+
+    schedule = db.query(UpdateSchedule).filter(UpdateSchedule.id == job.schedule_id).first()
+    if not schedule:
+        return
+    if not schedule.auto_disable_on_failures:
+        return
+
+    threshold = schedule.failure_threshold or 0
+    if threshold <= 0:
+        return
+
+    if job.status != "failed":
+        return
+
+    consecutive_failures = count_consecutive_schedule_failures(db, schedule.id, job.server_id)
+    if consecutive_failures < threshold:
+        return
+
+    disabled_server_ids = set(schedule.disabled_server_ids)
+    if job.server_id in disabled_server_ids:
+        return
+
+    disabled_server_ids.add(job.server_id)
+    schedule.disabled_server_ids = sorted(disabled_server_ids)
+    db.commit()
+
+    server = db.query(Server).filter(Server.id == job.server_id).first()
+    server_label = server.name if server else f"Server #{job.server_id}"
+    log_audit(
+        db,
+        "schedule.auto_disable_server",
+        actor=None,
+        target_type="schedule",
+        target_id=schedule.id,
+        target_label=schedule.name,
+        detail=(
+            f"Auto-disabled {server_label} after {consecutive_failures} consecutive failed "
+            f"scheduled update attempts"
+        ),
+    )
+    create_alert(
+        db,
+        level="warning",
+        title=f"Server auto-disabled in schedule {schedule.name}",
+        message=(
+            f"{server_label} has been excluded from schedule '{schedule.name}' after "
+            f"{consecutive_failures} consecutive failed scheduled update attempts."
+        ),
+        source_type="schedule",
+        source_id=schedule.id,
+        send_email=False,
+    )
 
 
 def users_exist(db: Session) -> bool:
@@ -2940,6 +3038,9 @@ def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session
     if not croniter.is_valid(cron_expr):
         raise HTTPException(status_code=400, detail="Invalid cron expression")
 
+    if payload.auto_disable_on_failures and not payload.failure_threshold:
+        raise HTTPException(status_code=400, detail="Failure threshold is required when automatic disable is enabled")
+
     schedule = UpdateSchedule(
         name=payload.name.strip(),
         package_manager=payload.package_manager,
@@ -2947,9 +3048,12 @@ def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session
         timezone=get_effective_timezone(current_user),
         interval_minutes=payload.interval_minutes or 60,
         enabled=payload.enabled,
+        auto_disable_on_failures=payload.auto_disable_on_failures,
+        failure_threshold=payload.failure_threshold if payload.auto_disable_on_failures else None,
         next_run_at=datetime.utcnow(),
     )
     schedule.server_ids = sorted(set(payload.server_ids))
+    schedule.disabled_server_ids = []
     schedule.next_run_at = get_next_schedule_run(schedule, datetime.utcnow())
 
     db.add(schedule)
@@ -2958,7 +3062,10 @@ def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session
     server_names = ", ".join(server.name for server in servers)
     log_audit(db, "schedule.create", request=request, actor=current_user,
               target_type="schedule", target_id=schedule.id, target_label=schedule.name,
-              detail=f"Servers: {server_names}; cron: {schedule.cron_expression}; package_manager: {schedule.package_manager}")
+              detail=(
+                  f"Servers: {server_names}; cron: {schedule.cron_expression}; package_manager: {schedule.package_manager}; "
+                  f"auto_disable_on_failures={schedule.auto_disable_on_failures}; failure_threshold={schedule.failure_threshold or 'off'}"
+              ))
     return schedule
 
 
@@ -2987,10 +3094,16 @@ def update_schedule(schedule_id: int, payload: UpdateScheduleUpdate, request: Re
     if not croniter.is_valid(cron_expr):
         raise HTTPException(status_code=400, detail="Invalid cron expression")
 
+    if payload.auto_disable_on_failures and not payload.failure_threshold:
+        raise HTTPException(status_code=400, detail="Failure threshold is required when automatic disable is enabled")
+
     schedule.name = clean_name
     schedule.package_manager = payload.package_manager
     schedule.cron_expression = cron_expr
     schedule.server_ids = sorted(set(payload.server_ids))
+    schedule.auto_disable_on_failures = payload.auto_disable_on_failures
+    schedule.failure_threshold = payload.failure_threshold if payload.auto_disable_on_failures else None
+    schedule.disabled_server_ids = []
     if payload.enabled is not None:
         schedule.enabled = payload.enabled
 
@@ -3002,7 +3115,11 @@ def update_schedule(schedule_id: int, payload: UpdateScheduleUpdate, request: Re
     server_names = ", ".join(server.name for server in servers)
     log_audit(db, "schedule.update", request=request, actor=current_user,
               target_type="schedule", target_id=schedule.id, target_label=schedule.name,
-              detail=f"Servers: {server_names}; cron: {schedule.cron_expression}; package_manager: {schedule.package_manager}; enabled: {schedule.enabled}")
+              detail=(
+                  f"Servers: {server_names}; cron: {schedule.cron_expression}; package_manager: {schedule.package_manager}; "
+                  f"enabled: {schedule.enabled}; auto_disable_on_failures={schedule.auto_disable_on_failures}; "
+                  f"failure_threshold={schedule.failure_threshold or 'off'}; disabled servers reset"
+              ))
     return schedule
 
 

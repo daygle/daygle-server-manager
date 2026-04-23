@@ -54,6 +54,23 @@
         </div>
       </div>
 
+      <div class="form-group">
+        <label class="form-label">Failure Guard</label>
+        <div class="form-check mt-2">
+          <input id="auto_disable_on_failures" type="checkbox" class="form-check-input" name="auto_disable_on_failures" />
+          <label for="auto_disable_on_failures" class="form-check-label">
+            <strong>Disable server schedule updates when repeated failures are detected</strong>
+            <small class="d-block text-secondary">Saving the schedule resets any currently auto-disabled servers for this schedule.</small>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group mt-3" id="failure_threshold_group">
+        <label for="failure_threshold" class="form-label">Disable after failed attempts</label>
+        <input id="failure_threshold" class="form-control" type="number" min="1" max="100" name="failure_threshold" value="3" />
+        <small class="form-text">Number of consecutive failed scheduled update attempts before a server is excluded from this schedule.</small>
+      </div>
+
       <div class="form-actions">
         <button type="button" id="cancel_schedule_btn" class="btn btn-secondary">
           <i class="fas fa-times"></i>
@@ -108,7 +125,12 @@
           {% for schedule in schedules %}
           <tr>
             <td><strong>{{ schedule.name }}</strong></td>
-            <td>{% for sid in schedule.server_ids %}{{ server_name_map.get(sid, 'Server #' ~ sid) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+            <td>
+              {% for sid in schedule.server_ids %}{{ server_name_map.get(sid, 'Server #' ~ sid) }}{% if not loop.last %}, {% endif %}{% endfor %}
+              {% if schedule.disabled_server_ids %}
+              <div><small class="text-secondary">Auto-disabled: {% for sid in schedule.disabled_server_ids %}{{ server_name_map.get(sid, 'Server #' ~ sid) }}{% if not loop.last %}, {% endif %}{% endfor %}</small></div>
+              {% endif %}
+            </td>
             <td>{{ schedule.cron_expression or ('every ' ~ schedule.interval_minutes ~ ' min (legacy)') }}</td>
             <td class="hide-mobile">{{ format_dt(schedule.next_run_at) }}</td>
             <td class="hide-mobile">{{ format_dt(schedule.last_run_at) }}</td>
@@ -116,6 +138,9 @@
               <span class="status {% if schedule.enabled %}status-success{% else %}status-failed{% endif %}">
                 {{ 'enabled' if schedule.enabled else 'disabled' }}
               </span>
+              {% if schedule.auto_disable_on_failures and schedule.failure_threshold %}
+              <div><small class="text-secondary">Auto-disable after {{ schedule.failure_threshold }} failed attempts</small></div>
+              {% endif %}
             </td>
             {% if current_user.is_admin %}
             <td>
@@ -129,6 +154,8 @@
                   data-schedule-cron="{{ schedule.cron_expression or '' }}"
                   data-schedule-package-manager="{{ schedule.package_manager }}"
                   data-schedule-server-ids="{{ schedule.server_ids|join(',') }}"
+                  data-schedule-auto-disable-on-failures="{{ 'true' if schedule.auto_disable_on_failures else 'false' }}"
+                  data-schedule-failure-threshold="{{ schedule.failure_threshold or '' }}"
                   data-schedule-enabled="{{ 'true' if schedule.enabled else 'false' }}"
                 >
                   <i class="fas fa-pen"></i>

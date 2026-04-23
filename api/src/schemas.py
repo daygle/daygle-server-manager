@@ -73,6 +73,7 @@ class UpdateRequest(BaseModel):
 class UpdateJobRead(BaseModel):
     id: int
     server_id: int
+    schedule_id: int | None = None
     server_name: str | None
     job_type: str
     package_manager: str
@@ -95,6 +96,8 @@ class UpdateScheduleCreate(BaseModel):
     cron_expression: str = Field(min_length=5, max_length=120)
     interval_minutes: int | None = Field(default=None, ge=5, le=10080)
     enabled: bool = True
+    auto_disable_on_failures: bool = False
+    failure_threshold: int | None = Field(default=None, ge=1, le=100)
 
 
 class UpdateScheduleUpdate(BaseModel):
@@ -103,17 +106,22 @@ class UpdateScheduleUpdate(BaseModel):
     package_manager: str = Field(default="auto", pattern="^(auto|apt|dnf|yum)$")
     cron_expression: str = Field(min_length=5, max_length=120)
     enabled: bool | None = None
+    auto_disable_on_failures: bool = False
+    failure_threshold: int | None = Field(default=None, ge=1, le=100)
 
 
 class UpdateScheduleRead(BaseModel):
     id: int
     name: str
     server_ids: list[int]
+    disabled_server_ids: list[int]
     package_manager: str
     cron_expression: str | None
     timezone: str | None
     interval_minutes: int
     enabled: bool
+    auto_disable_on_failures: bool
+    failure_threshold: int | None
     next_run_at: datetime
     last_run_at: datetime | None
     created_at: datetime

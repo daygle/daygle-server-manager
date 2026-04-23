@@ -62,6 +62,7 @@ class UpdateJob(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     server_id: Mapped[int] = mapped_column(ForeignKey("servers.id"), nullable=False)
+    schedule_id: Mapped[int | None] = mapped_column(ForeignKey("update_schedules.id"), nullable=True)
     job_type: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")
     package_manager: Mapped[str] = mapped_column(String(20), nullable=False, default="auto")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
@@ -90,6 +91,9 @@ class UpdateSchedule(Base):
     timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     interval_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    auto_disable_on_failures: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    failure_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    disabled_server_ids_raw: Mapped[str] = mapped_column("disabled_server_ids", Text, nullable=False, default="")
     next_run_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -101,6 +105,14 @@ class UpdateSchedule(Base):
     @server_ids.setter
     def server_ids(self, values: list[int]) -> None:
         self.server_ids_raw = ",".join(str(value) for value in values)
+
+    @property
+    def disabled_server_ids(self) -> list[int]:
+        return [int(value) for value in self.disabled_server_ids_raw.split(",") if value.strip()]
+
+    @disabled_server_ids.setter
+    def disabled_server_ids(self, values: list[int]) -> None:
+        self.disabled_server_ids_raw = ",".join(str(value) for value in values)
 
 
 class AppSetting(Base):
