@@ -6,7 +6,41 @@
 {% block content %}
 <section class="panel prose">
   <h2>Daygle Server Manager</h2>
-  <p>Daygle Server Manager is a Python and Docker Compose web application for remotely patching Linux servers over SSH and tracking update outcomes.</p>
-  <p>The UI structure follows the same sidebar and operational navigation style as Daygle Mail Archiver.</p>
+  <p>Daygle Server Manager is a self-hosted web application for remotely patching and maintaining Linux servers over SSH. It provides a central dashboard to trigger package manager updates, schedule recurring maintenance windows, track job outcomes, and receive email alerts when something goes wrong.</p>
+  <p>The application is built with Python (FastAPI) and deployed exclusively via Docker Compose. All configuration lives in a single <code>daygle_server_manager.conf</code> file — no per-container environment files or secrets scattered across the project.</p>
+</section>
+
+<section class="panel prose">
+  <h2>Key Features</h2>
+  <ul>
+    <li><strong>SSH-based updates</strong> — Connect to any Linux server using stored SSH keys and run package manager updates (<code>apt</code>, <code>dnf</code>, <code>yum</code>, or auto-detected).</li>
+    <li><strong>Scheduled updates</strong> — Define cron-based schedules with per-schedule timezone support to automate recurring patch windows across your fleet.</li>
+    <li><strong>Job history</strong> — Every update run is recorded with its status, output summary, and timestamps for full auditability.</li>
+    <li><strong>Alerts</strong> — Failed jobs automatically generate alerts visible in the UI. Optionally configure SMTP to email all admin users when an alert is raised.</li>
+    <li><strong>Audit log</strong> — Administrative actions such as server changes, user management, and settings updates are logged for traceability.</li>
+    <li><strong>SSH key management</strong> — Generate or import SSH key pairs directly in the UI. Public keys can be copied and deployed to target servers without leaving the interface.</li>
+    <li><strong>Multi-user support</strong> — Create multiple user accounts with optional admin privileges. Per-user date format and timezone preferences are supported.</li>
+  </ul>
+</section>
+
+<section class="panel prose">
+  <h2>Technology Stack</h2>
+  <ul>
+    <li><strong>API</strong> — Python 3, FastAPI, SQLAlchemy, Jinja2</li>
+    <li><strong>Worker</strong> — Python background process handling SSH update jobs and schedule execution</li>
+    <li><strong>Database</strong> — PostgreSQL</li>
+    <li><strong>Deployment</strong> — Docker Compose</li>
+  </ul>
+</section>
+
+<section class="panel prose">
+  <h2>Getting Started</h2>
+  <p>After the initial setup wizard (<code>/setup</code>), the recommended workflow is:</p>
+  <ol>
+    <li>Go to <a href="/ssh-keys">SSH Keys</a> and generate or import an SSH key pair.</li>
+    <li>Copy the public key to each target server's <code>~/.ssh/authorized_keys</code>.</li>
+    <li>Add your servers under <a href="/servers">Servers</a>.</li>
+    <li>Trigger a manual update from <a href="/updates">System Updates</a>, or create a schedule for automated patching.</li>
+  </ol>
 </section>
 {% endblock %}
