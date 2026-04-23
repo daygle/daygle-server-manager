@@ -133,7 +133,7 @@
             <td class="hide-mobile"><small>{{ format_dt(user.last_login) if user.last_login else 'Never' }}</small></td>
             <td class="user-actions-col">
               <div class="flex-gap-8">
-                <button type="button" class="btn btn-secondary btn-sm btn-icon-only" title="Edit" data-edit-user="{{ user.id }}">
+                <button type="button" class="btn btn-primary btn-sm btn-icon-only" title="Edit" data-edit-user="{{ user.id }}">
                   <i class="fas fa-edit"></i>
                 </button>
                 <form method="post" action="/users/{{ user.id }}/toggle-enabled" class="d-inline">
