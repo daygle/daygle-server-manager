@@ -16,6 +16,10 @@
   box-sizing: border-box;
 }
 
+html {
+  font-size: 95%;
+}
+
 body {
   margin: 0;
   font-family: "Space Grotesk", sans-serif;
