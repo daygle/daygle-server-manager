@@ -51,6 +51,12 @@ class Server(Base):
     password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     ssh_key_id: Mapped[int | None] = mapped_column(ForeignKey("ssh_keys.id"), nullable=True)
     sudo_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_health_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    last_health_check_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_health_message: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_cpu_usage: Mapped[float | None] = mapped_column(nullable=True)
+    last_ram_usage: Mapped[float | None] = mapped_column(nullable=True)
+    last_storage_usage: Mapped[float | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
     ssh_key: Mapped["SSHKey | None"] = relationship("SSHKey", back_populates="servers")

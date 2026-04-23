@@ -146,6 +146,12 @@ def on_startup() -> None:
 def ensure_schema_columns() -> None:
     # Add compatibility columns/types on existing databases without requiring migrations.
     statements = [
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_health_status VARCHAR(20)",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_health_check_at TIMESTAMP",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_health_message VARCHAR(255)",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_cpu_usage DOUBLE PRECISION",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_ram_usage DOUBLE PRECISION",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_storage_usage DOUBLE PRECISION",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS cron_expression VARCHAR(120)",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
@@ -866,6 +872,189 @@ def require_api_user(request: Request, db: Session, admin: bool = False) -> User
     return user
 
 
+def build_server_connect_kwargs(
+    db: Session,
+    *,
+    host: str,
+    port: int,
+    username: str,
+    auth_method: str,
+    password: str | None,
+    ssh_key_id: int | None,
+    existing_server: Server | None = None,
+) -> dict:
+    resolved_auth_method = auth_method if auth_method == "password" else "key"
+    resolved_password = password or None
+    resolved_ssh_key_id = ssh_key_id
+
+    if resolved_auth_method == "password":
+        if not resolved_password and existing_server and existing_server.auth_method == "password":
+            resolved_password = existing_server.password
+        if not resolved_password:
+            raise HTTPException(status_code=400, detail="SSH password is required for password auth")
+    else:
+        if not resolved_ssh_key_id and existing_server and existing_server.auth_method == "key":
+            resolved_ssh_key_id = existing_server.ssh_key_id
+        if not resolved_ssh_key_id:
+            raise HTTPException(status_code=400, detail="SSH key is required for key auth")
+
+    connect_kwargs = {
+        "hostname": host,
+        "port": port,
+        "username": username,
+        "timeout": 15,
+        "banner_timeout": 15,
+        "auth_timeout": 15,
+        "allow_agent": False,
+        "look_for_keys": False,
+    }
+
+    if resolved_auth_method == "password":
+        connect_kwargs["password"] = resolved_password
+    else:
+        ssh_key = db.query(SSHKey).filter(SSHKey.id == resolved_ssh_key_id).first()
+        if not ssh_key:
+            raise HTTPException(status_code=400, detail="Selected SSH key does not exist")
+        connect_kwargs["pkey"] = load_private_key_for_ssh(ssh_key.private_key)
+
+    return connect_kwargs
+
+
+def run_ssh_connection_check(connect_kwargs: dict) -> tuple[bool, str]:
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    try:
+        client.connect(**connect_kwargs)
+    except paramiko.AuthenticationException:
+        return False, "Authentication failed. Check username and credentials."
+    except Exception as exc:
+        return False, f"Connection failed: {str(exc)}"
+    finally:
+        client.close()
+
+    return True, f"Connection successful to {connect_kwargs['hostname']}:{connect_kwargs['port']}"
+
+
+def run_ssh_command(client: paramiko.SSHClient, command: str, timeout: int = 15) -> str:
+    _stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
+    exit_code = stdout.channel.recv_exit_status()
+    output = stdout.read().decode("utf-8", errors="ignore").strip()
+    error_text = stderr.read().decode("utf-8", errors="ignore").strip()
+    if exit_code != 0:
+        raise RuntimeError(error_text or output or "Command execution failed")
+    return output
+
+
+def collect_server_usage_metrics(client: paramiko.SSHClient) -> tuple[float | None, float | None, float | None]:
+    cpu_usage: float | None = None
+    ram_usage: float | None = None
+    storage_usage: float | None = None
+
+    try:
+        cpu_output = run_ssh_command(
+            client,
+            "sh -c 'read _ u1 n1 s1 i1 ow1 irq1 sirq1 st1 _ < /proc/stat; "
+            "t1=$((u1+n1+s1+i1+ow1+irq1+sirq1+st1)); "
+            "idle1=$((i1+ow1)); "
+            "sleep 1; "
+            "read _ u2 n2 s2 i2 ow2 irq2 sirq2 st2 _ < /proc/stat; "
+            "t2=$((u2+n2+s2+i2+ow2+irq2+sirq2+st2)); "
+            "idle2=$((i2+ow2)); "
+            "dt=$((t2-t1)); didle=$((idle2-idle1)); "
+            "if [ $dt -le 0 ]; then echo 0; else awk -v dt=$dt -v didle=$didle \"BEGIN{printf \\\"%.1f\\\", ((dt-didle)/dt)*100}\"; fi'",
+            timeout=20,
+        )
+        cpu_usage = max(0.0, min(100.0, float(cpu_output)))
+    except Exception:
+        cpu_usage = None
+
+    try:
+        ram_output = run_ssh_command(
+            client,
+            "free | awk '/^Mem:/ { if ($2 > 0) printf \"%.1f\", ($3/$2)*100; else print 0 }'",
+        )
+        ram_usage = max(0.0, min(100.0, float(ram_output)))
+    except Exception:
+        ram_usage = None
+
+    try:
+        storage_output = run_ssh_command(
+            client,
+            "df -P / | awk 'NR==2 { gsub(/%/, \"\", $5); print $5 }'",
+        )
+        storage_usage = max(0.0, min(100.0, float(storage_output)))
+    except Exception:
+        storage_usage = None
+
+    return cpu_usage, ram_usage, storage_usage
+
+
+def serialize_server_health(server: Server) -> dict:
+    return {
+        "id": server.id,
+        "name": server.name,
+        "host": server.host,
+        "port": server.port,
+        "username": server.username,
+        "auth_method": server.auth_method,
+        "last_health_status": server.last_health_status or "unknown",
+        "last_health_check_at": server.last_health_check_at.isoformat() if server.last_health_check_at else None,
+        "last_health_message": server.last_health_message,
+        "last_cpu_usage": server.last_cpu_usage,
+        "last_ram_usage": server.last_ram_usage,
+        "last_storage_usage": server.last_storage_usage,
+    }
+
+
+def run_saved_server_health_check(db: Session, server: Server) -> dict:
+    checked_at = datetime.utcnow()
+
+    try:
+        connect_kwargs = build_server_connect_kwargs(
+            db,
+            host=server.host,
+            port=server.port,
+            username=server.username,
+            auth_method=server.auth_method,
+            password=server.password,
+            ssh_key_id=server.ssh_key_id,
+            existing_server=server,
+        )
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            client.connect(**connect_kwargs)
+            is_online = True
+            message = f"Connection successful to {server.host}:{server.port}"
+            cpu_usage, ram_usage, storage_usage = collect_server_usage_metrics(client)
+        except paramiko.AuthenticationException:
+            is_online = False
+            message = "Authentication failed. Check username and credentials."
+            cpu_usage, ram_usage, storage_usage = None, None, None
+        except Exception as exc:
+            is_online = False
+            message = f"Connection failed: {str(exc)}"
+            cpu_usage, ram_usage, storage_usage = None, None, None
+        finally:
+            client.close()
+    except HTTPException as exc:
+        is_online = False
+        message = str(exc.detail)
+        cpu_usage, ram_usage, storage_usage = None, None, None
+
+    server.last_health_status = "online" if is_online else "offline"
+    server.last_health_check_at = checked_at
+    server.last_health_message = message[:255] if message else None
+    server.last_cpu_usage = cpu_usage
+    server.last_ram_usage = ram_usage
+    server.last_storage_usage = storage_usage
+    db.add(server)
+    db.commit()
+    db.refresh(server)
+    return serialize_server_health(server)
+
+
 @app.get("/")
 def root(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
     if not users_exist(db):
@@ -1065,6 +1254,26 @@ def servers_page(request: Request, db: Session = Depends(get_db)):
         db,
         servers=servers,
         ssh_keys=db.query(SSHKey).order_by(SSHKey.name.asc()).all(),
+    )
+
+
+@app.get("/servers/status", response_class=HTMLResponse)
+def server_status_page(request: Request, db: Session = Depends(get_db)):
+    if not users_exist(db):
+        return RedirectResponse(url="/setup", status_code=303)
+
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    servers = db.query(Server).order_by(Server.name.asc()).all()
+    return render_app_template(
+        request,
+        "server_status.html",
+        "server-status",
+        current_user,
+        db,
+        servers=servers,
     )
 
 
@@ -2844,49 +3053,56 @@ def test_server_connection(payload: ServerConnectionTestRequest, request: Reques
     if payload.server_id:
         existing_server = db.query(Server).filter(Server.id == payload.server_id).first()
 
-    if auth_method == "password":
-        if not password and existing_server and existing_server.auth_method == "password":
-            password = existing_server.password
-        if not password:
-            raise HTTPException(status_code=400, detail="SSH password is required for password auth")
-    else:
-        if not ssh_key_id and existing_server and existing_server.auth_method == "key":
-            ssh_key_id = existing_server.ssh_key_id
-        if not ssh_key_id:
-            raise HTTPException(status_code=400, detail="SSH key is required for key auth")
+    connect_kwargs = build_server_connect_kwargs(
+        db,
+        host=host,
+        port=payload.port,
+        username=username,
+        auth_method=auth_method,
+        password=password,
+        ssh_key_id=ssh_key_id,
+        existing_server=existing_server,
+    )
+    ok, message = run_ssh_connection_check(connect_kwargs)
+    if not ok:
+        if existing_server:
+            existing_server.last_health_status = "offline"
+            existing_server.last_health_check_at = datetime.utcnow()
+            existing_server.last_health_message = message[:255]
+            db.add(existing_server)
+            db.commit()
+        raise HTTPException(status_code=400, detail=message)
 
-    connect_kwargs = {
-        "hostname": host,
-        "port": payload.port,
-        "username": username,
-        "timeout": 15,
-        "banner_timeout": 15,
-        "auth_timeout": 15,
-        "allow_agent": False,
-        "look_for_keys": False,
+    if existing_server:
+        existing_server.last_health_status = "online"
+        existing_server.last_health_check_at = datetime.utcnow()
+        existing_server.last_health_message = message[:255]
+        db.add(existing_server)
+        db.commit()
+
+    return {"ok": True, "message": message}
+
+
+@app.post("/api/server-status/{server_id}/check")
+def check_server_status(server_id: int, request: Request, db: Session = Depends(get_db)):
+    require_api_user(request, db)
+
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    return run_saved_server_health_check(db, server)
+
+
+@app.post("/api/server-status/check-all")
+def check_all_server_statuses(request: Request, db: Session = Depends(get_db)):
+    require_api_user(request, db)
+
+    servers = db.query(Server).order_by(Server.name.asc()).all()
+    return {
+        "items": [run_saved_server_health_check(db, server) for server in servers],
+        "checked_at": datetime.utcnow().isoformat(),
     }
-
-    if auth_method == "password":
-        connect_kwargs["password"] = password
-    else:
-        ssh_key = db.query(SSHKey).filter(SSHKey.id == ssh_key_id).first()
-        if not ssh_key:
-            raise HTTPException(status_code=400, detail="Selected SSH key does not exist")
-        connect_kwargs["pkey"] = load_private_key_for_ssh(ssh_key.private_key)
-
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-    try:
-        client.connect(**connect_kwargs)
-    except paramiko.AuthenticationException:
-        raise HTTPException(status_code=400, detail="Authentication failed. Check username and credentials.")
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Connection failed: {str(exc)}")
-    finally:
-        client.close()
-
-    return {"ok": True, "message": f"Connection successful to {host}:{payload.port}"}
 
 
 @app.post("/api/servers", response_model=ServerRead)

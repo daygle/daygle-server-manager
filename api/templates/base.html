@@ -54,6 +54,10 @@
               <i class="fas fa-server"></i>
               <span>Servers</span>
             </a>
+            <a href="/servers/status" class="nav-link {% if active_page == 'server-status' %}active{% endif %}">
+              <i class="fas fa-heart-pulse"></i>
+              <span>Server Status</span>
+            </a>
             {% if current_user.is_admin %}
             <a href="/updates/manual" class="nav-link {% if active_page == 'updates-manual' %}active{% endif %}">
               <i class="fas fa-play-circle"></i>

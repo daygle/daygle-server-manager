@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block page_title %}Server Status - Daygle Server Manager{% endblock %}
+{% block title %}Server Status{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-heart-pulse"></i>
+      <span>Online Status Checks</span>
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" id="refresh_all_server_status_btn">
+      <i class="fas fa-rotate-right"></i>
+      <span>Refresh All</span>
+    </button>
+  </div>
+  <div class="card-body">
+    <p class="text-secondary">
+      This page checks whether each configured server is reachable over SSH with its saved credentials and stores the latest result.
+    </p>
+    <p class="text-secondary" id="server_status_last_updated">
+      {% if servers and servers|selectattr('last_health_check_at')|list %}
+      Latest stored result: {{ format_dt((servers|selectattr('last_health_check_at')|map(attribute='last_health_check_at')|list|max)) }}
+      {% else %}
+      Latest stored result: no checks yet
+      {% endif %}
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-server"></i>
+      <span>Configured Servers</span>
+    </div>
+    <span class="badge badge-secondary">Read-only monitoring</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Host</th>
+            <th>User</th>
+            <th>Status</th>
+            <th class="hide-mobile">CPU</th>
+            <th class="hide-mobile">RAM</th>
+            <th class="hide-mobile">Storage</th>
+            <th class="hide-mobile">Last Check</th>
+            <th class="hide-mobile">Details</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="server-status-body">
+          {% for server in servers %}
+          <tr data-server-status-row="{{ server.id }}">
+            <td><strong>{{ server.name }}</strong></td>
+            <td>{{ server.host }}:{{ server.port }}</td>
+            <td>{{ server.username }}</td>
+            <td data-server-status-cell="status">
+              {% if server.last_health_status == 'online' %}
+              <span class="status status-success">online</span>
+              {% elif server.last_health_status == 'offline' %}
+              <span class="status status-failed">offline</span>
+              {% else %}
+              <span class="status status-pending">unknown</span>
+              {% endif %}
+            </td>
+            <td class="hide-mobile" data-server-status-cell="cpu">{{ ('%.1f%%'|format(server.last_cpu_usage)) if server.last_cpu_usage is not none else '-' }}</td>
+            <td class="hide-mobile" data-server-status-cell="ram">{{ ('%.1f%%'|format(server.last_ram_usage)) if server.last_ram_usage is not none else '-' }}</td>
+            <td class="hide-mobile" data-server-status-cell="storage">{{ ('%.1f%%'|format(server.last_storage_usage)) if server.last_storage_usage is not none else '-' }}</td>
+            <td class="hide-mobile" data-server-status-cell="last-check">{{ format_dt(server.last_health_check_at) if server.last_health_check_at else 'Not checked yet' }}</td>
+            <td class="hide-mobile" data-server-status-cell="message">{{ server.last_health_message or 'No checks recorded yet.' }}</td>
+            <td>
+              <button type="button" class="btn btn-primary btn-sm" data-refresh-server-status="{{ server.id }}">
+                <i class="fas fa-rotate-right"></i>
+                <span>Check Now</span>
+              </button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="10" class="text-center empty-state">
+              <div>
+                <i class="fas fa-server empty-icon"></i>
+                <p>No servers configured yet.</p>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

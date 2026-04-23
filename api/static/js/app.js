@@ -7,6 +7,9 @@ const runForm = document.getElementById("run-form");
 const scheduleForm = document.getElementById("schedule-form");
 const jobsBody = document.getElementById("jobs-body");
 const schedulesBody = document.getElementById("schedules-body");
+const serverStatusBody = document.getElementById("server-status-body");
+const refreshAllServerStatusBtn = document.getElementById("refresh_all_server_status_btn");
+const serverStatusLastUpdated = document.getElementById("server_status_last_updated");
 const latestLog = document.getElementById("latest-log");
 const selectedJobLabel = document.getElementById("selected-job-label");
 const scheduleFormCard = document.getElementById("scheduleFormCard");
@@ -556,6 +559,83 @@ document.querySelectorAll("[data-test-server]").forEach((button) => {
   });
 });
 
+refreshAllServerStatusBtn?.addEventListener("click", async () => {
+  const originalButtonHtml = refreshAllServerStatusBtn.innerHTML;
+  refreshAllServerStatusBtn.disabled = true;
+  refreshAllServerStatusBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Checking...</span>';
+
+  try {
+    const response = await fetch("/api/server-status/check-all", { method: "POST" });
+    const responseText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      notify(`Server error (${response.status}): ${response.statusText}`, "error");
+      return;
+    }
+
+    if (!response.ok) {
+      notify(data.detail || "Failed to refresh server status.", "error");
+      return;
+    }
+
+    renderServerStatusTable(Array.isArray(data.items) ? data.items : []);
+    setServerStatusLastUpdated(data.checked_at || null);
+    notify("Server status checks completed.", "success");
+  } catch (error) {
+    notify(`Failed to refresh server status: ${error.message}`, "error");
+  } finally {
+    refreshAllServerStatusBtn.disabled = false;
+    refreshAllServerStatusBtn.innerHTML = originalButtonHtml;
+  }
+});
+
+serverStatusBody?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-refresh-server-status]");
+  if (!(button instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const serverId = button.getAttribute("data-refresh-server-status");
+  if (!serverId) {
+    return;
+  }
+
+  const row = button.closest("tr");
+  const originalButtonHtml = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Checking...</span>';
+
+  try {
+    const response = await fetch(`/api/server-status/${serverId}/check`, { method: "POST" });
+    const responseText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      notify(`Server error (${response.status}): ${response.statusText}`, "error");
+      return;
+    }
+
+    if (!response.ok) {
+      notify(data.detail || "Failed to refresh server status.", "error");
+      return;
+    }
+
+    if (row) {
+      row.outerHTML = renderServerStatusRow(data);
+    }
+    setServerStatusLastUpdated(data.last_health_check_at || null);
+    notify(`${data.name || "Server"}: ${data.last_health_message || "status updated."}`, data.last_health_status === "online" ? "success" : "error");
+  } catch (error) {
+    notify(`Failed to refresh server status: ${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalButtonHtml;
+  }
+});
+
 document.querySelectorAll("[data-delete-server]").forEach((button) => {
   button.addEventListener("click", async () => {
     const serverId = button.getAttribute("data-delete-server");
@@ -683,6 +763,78 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function renderServerHealthStatus(status) {
+  if (status === "online") {
+    return '<span class="status status-success">online</span>';
+  }
+  if (status === "offline") {
+    return '<span class="status status-failed">offline</span>';
+  }
+  return '<span class="status status-pending">unknown</span>';
+}
+
+function formatPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "-";
+  }
+  return `${numeric.toFixed(1)}%`;
+}
+
+function renderServerStatusRow(server) {
+  return `
+    <tr data-server-status-row="${escapeHtml(server.id)}">
+      <td><strong>${escapeHtml(server.name)}</strong></td>
+      <td>${escapeHtml(server.host)}:${escapeHtml(server.port)}</td>
+      <td>${escapeHtml(server.username)}</td>
+      <td data-server-status-cell="status">${renderServerHealthStatus(server.last_health_status)}</td>
+      <td class="hide-mobile" data-server-status-cell="cpu">${escapeHtml(formatPercent(server.last_cpu_usage))}</td>
+      <td class="hide-mobile" data-server-status-cell="ram">${escapeHtml(formatPercent(server.last_ram_usage))}</td>
+      <td class="hide-mobile" data-server-status-cell="storage">${escapeHtml(formatPercent(server.last_storage_usage))}</td>
+      <td class="hide-mobile" data-server-status-cell="last-check">${escapeHtml(server.last_health_check_at ? formatDateTimeForUi(server.last_health_check_at) : "Not checked yet")}</td>
+      <td class="hide-mobile" data-server-status-cell="message">${escapeHtml(server.last_health_message || "No checks recorded yet.")}</td>
+      <td>
+        <button type="button" class="btn btn-primary btn-sm" data-refresh-server-status="${escapeHtml(server.id)}">
+          <i class="fas fa-rotate-right"></i>
+          <span>Check Now</span>
+        </button>
+      </td>
+    </tr>
+  `;
+}
+
+function renderServerStatusTable(items) {
+  if (!serverStatusBody) {
+    return;
+  }
+
+  if (!items.length) {
+    serverStatusBody.innerHTML = `
+      <tr>
+        <td colspan="10" class="text-center empty-state">
+          <div>
+            <i class="fas fa-server empty-icon"></i>
+            <p>No servers configured yet.</p>
+          </div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  serverStatusBody.innerHTML = items.map((item) => renderServerStatusRow(item)).join("");
+}
+
+function setServerStatusLastUpdated(value) {
+  if (!serverStatusLastUpdated) {
+    return;
+  }
+
+  serverStatusLastUpdated.textContent = value
+    ? `Latest stored result: ${formatDateTimeForUi(value)}`
+    : "Latest stored result: no checks yet";
 }
 
 function renderJobRow(job) {
