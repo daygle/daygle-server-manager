@@ -870,8 +870,8 @@ def users_page(request: Request, db: Session = Depends(get_db)):
     return render_app_template(request, "users.html", "users", current_user, db, users=users)
 
 
-@app.get("/my-settings", response_class=HTMLResponse)
-def my_settings_page(request: Request, db: Session = Depends(get_db)):
+@app.get("/user-settings", response_class=HTMLResponse)
+def user_settings_page(request: Request, db: Session = Depends(get_db)):
     if not users_exist(db):
         return RedirectResponse(url="/setup", status_code=303)
 
@@ -881,13 +881,71 @@ def my_settings_page(request: Request, db: Session = Depends(get_db)):
 
     return render_app_template(
         request,
-        "my_settings.html",
-        "my-settings",
+        "user_settings.html",
+        "user-settings",
         current_user,
         db,
         selected_user_date_format=current_user.date_format or USER_DATE_FORMAT_GLOBAL,
         selected_user_timezone=current_user.timezone or USER_TIMEZONE_GLOBAL,
     )
+
+
+@app.post("/user-settings/save-all")
+def save_user_settings(
+    request: Request,
+    date_format: str = Form(...),
+    timezone_name: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    changed: list[str] = []
+
+    # Date format
+    prev_date_format = current_user.date_format
+    if date_format == USER_DATE_FORMAT_GLOBAL:
+        current_user.date_format = None
+    else:
+        normalized_date_format = normalize_date_format(date_format)
+        if not normalized_date_format:
+            set_flash(request, "Invalid date format selection.", "error")
+            return RedirectResponse(url="/user-settings", status_code=303)
+        current_user.date_format = normalized_date_format
+    if current_user.date_format != prev_date_format:
+        changed.append("date format")
+
+    # Timezone
+    prev_timezone = current_user.timezone
+    if timezone_name == USER_TIMEZONE_GLOBAL:
+        current_user.timezone = None
+    else:
+        normalized_timezone = normalize_timezone(timezone_name)
+        if not normalized_timezone or normalized_timezone not in TIMEZONE_OPTION_KEYS:
+            set_flash(request, "Invalid timezone selection.", "error")
+            return RedirectResponse(url="/user-settings", status_code=303)
+        current_user.timezone = normalized_timezone
+    if current_user.timezone != prev_timezone:
+        changed.append("timezone")
+
+    db.commit()
+
+    if changed:
+        set_flash(request, f"Saved your settings: {', '.join(changed)}.", "success")
+    else:
+        set_flash(request, "No settings changed.", "info")
+    return RedirectResponse(url="/user-settings", status_code=303)
+
+
+@app.get("/my-settings", response_class=HTMLResponse)
+def legacy_my_settings_page() -> RedirectResponse:
+    return RedirectResponse(url="/user-settings", status_code=307)
+
+
+@app.post("/my-settings/save-all")
+def legacy_save_my_settings() -> RedirectResponse:
+    return RedirectResponse(url="/user-settings", status_code=307)
 
 
 @app.post("/my-settings/date-format")
@@ -904,17 +962,17 @@ def update_my_date_format(
         current_user.date_format = None
         db.commit()
         set_flash(request, "Your date format now follows the global setting.", "success")
-        return RedirectResponse(url="/my-settings", status_code=303)
+        return RedirectResponse(url="/user-settings", status_code=303)
 
     normalized = normalize_date_format(date_format)
     if not normalized:
         set_flash(request, "Invalid date format selection.", "error")
-        return RedirectResponse(url="/my-settings", status_code=303)
+        return RedirectResponse(url="/user-settings", status_code=303)
 
     current_user.date_format = normalized
     db.commit()
     set_flash(request, "Your personal date format was updated.", "success")
-    return RedirectResponse(url="/my-settings", status_code=303)
+    return RedirectResponse(url="/user-settings", status_code=303)
 
 
 @app.post("/my-settings/timezone")
@@ -931,17 +989,35 @@ def update_my_timezone(
         current_user.timezone = None
         db.commit()
         set_flash(request, "Your timezone now follows the global setting.", "success")
-        return RedirectResponse(url="/my-settings", status_code=303)
+        return RedirectResponse(url="/user-settings", status_code=303)
 
     normalized = normalize_timezone(timezone_name)
     if not normalized or normalized not in TIMEZONE_OPTION_KEYS:
         set_flash(request, "Invalid timezone selection.", "error")
-        return RedirectResponse(url="/my-settings", status_code=303)
+        return RedirectResponse(url="/user-settings", status_code=303)
 
     current_user.timezone = normalized
     db.commit()
     set_flash(request, "Your personal timezone was updated.", "success")
-    return RedirectResponse(url="/my-settings", status_code=303)
+    return RedirectResponse(url="/user-settings", status_code=303)
+
+
+@app.post("/user-settings/date-format")
+def update_user_date_format(
+    request: Request,
+    date_format: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    return update_my_date_format(request=request, date_format=date_format, db=db)
+
+
+@app.post("/user-settings/timezone")
+def update_user_timezone(
+    request: Request,
+    timezone_name: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    return update_my_timezone(request=request, timezone_name=timezone_name, db=db)
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -975,6 +1051,196 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         selected_smtp_from=get_smtp_setting(db, SMTP_FROM_SETTING_KEY, "SMTP_FROM", "daygle-server-manager@localhost"),
         smtp_password_set=bool(get_smtp_setting(db, SMTP_PASSWORD_SETTING_KEY, "SMTP_PASSWORD", "")),
     )
+
+
+@app.post("/settings/save-all")
+def save_all_settings(
+    request: Request,
+    date_format: str = Form(...),
+    timezone_name: str = Form(...),
+    retention_days: int = Form(...),
+    login_timeout_minutes: int = Form(...),
+    email_alerts_enabled: str | None = Form(None),
+    smtp_host: str = Form(...),
+    smtp_port: int = Form(...),
+    smtp_username: str = Form(""),
+    smtp_password: str = Form(""),
+    clear_smtp_password: str | None = Form(None),
+    smtp_use_tls: str | None = Form(None),
+    smtp_from: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    normalized_date_format = normalize_date_format(date_format)
+    if not normalized_date_format:
+        set_flash(request, "Invalid date format selection.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    normalized_timezone = normalize_timezone(timezone_name)
+    if not normalized_timezone or normalized_timezone not in TIMEZONE_OPTION_KEYS:
+        set_flash(request, "Invalid timezone selection.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    normalized_retention = normalize_history_retention_days(retention_days)
+    if normalized_retention is None:
+        set_flash(request, "Invalid retention period.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    normalized_timeout = normalize_login_timeout_minutes(login_timeout_minutes)
+    if normalized_timeout is None:
+        set_flash(request, "Invalid login timeout. Enter between 1 and 43200 minutes.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    host = smtp_host.strip()
+    sender = smtp_from.strip()
+    if not host:
+        set_flash(request, "SMTP host is required.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+    if smtp_port < 1 or smtp_port > 65535:
+        set_flash(request, "SMTP port must be between 1 and 65535.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+    if not sender or "@" not in sender:
+        set_flash(request, "SMTP from address must be a valid email.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    normalized_email_alerts = parse_bool_setting(email_alerts_enabled, False)
+    normalized_smtp_tls = parse_bool_setting(smtp_use_tls, False)
+    normalized_clear_smtp_password = parse_bool_setting(clear_smtp_password, False)
+    smtp_username_clean = smtp_username.strip()
+
+    changed: list[str] = []
+
+    prev_date_format = get_date_format_setting(db)
+    if normalized_date_format != prev_date_format:
+        set_app_setting(db, DATE_FORMAT_SETTING_KEY, normalized_date_format)
+        app.state.date_format = normalized_date_format
+        log_audit(
+            db,
+            "settings.date_format",
+            request=request,
+            actor=current_user,
+            detail=f"Changed from {prev_date_format} to {normalized_date_format}",
+        )
+        changed.append("date format")
+
+    prev_timezone = get_timezone_setting(db)
+    if normalized_timezone != prev_timezone:
+        set_app_setting(db, TIMEZONE_SETTING_KEY, normalized_timezone)
+        app.state.timezone = normalized_timezone
+        log_audit(
+            db,
+            "settings.timezone",
+            request=request,
+            actor=current_user,
+            detail=f"Changed from {prev_timezone} to {normalized_timezone}",
+        )
+        changed.append("timezone")
+
+    prev_retention = get_history_retention_days(db)
+    if normalized_retention != prev_retention:
+        set_app_setting(db, HISTORY_RETENTION_SETTING_KEY, str(normalized_retention))
+        old_label = "keep forever" if prev_retention == 0 else f"{prev_retention} days"
+        new_label = "keep forever" if normalized_retention == 0 else f"{normalized_retention} days"
+        log_audit(
+            db,
+            "settings.history_retention",
+            request=request,
+            actor=current_user,
+            detail=f"Changed from {old_label} to {new_label}",
+        )
+        changed.append("history retention")
+
+    prev_timeout = get_login_timeout_minutes(db)
+    if normalized_timeout != prev_timeout:
+        set_app_setting(db, LOGIN_TIMEOUT_SETTING_KEY, str(normalized_timeout))
+        app.state.login_timeout_minutes = normalized_timeout
+        log_audit(
+            db,
+            "settings.login_timeout",
+            request=request,
+            actor=current_user,
+            detail=f"Changed from {prev_timeout} minutes to {normalized_timeout} minutes",
+        )
+        changed.append("login timeout")
+
+    prev_email_alerts = get_email_alerts_enabled(db)
+    if normalized_email_alerts != prev_email_alerts:
+        set_app_setting(db, EMAIL_ALERTS_ENABLED_SETTING_KEY, "true" if normalized_email_alerts else "false")
+        app.state.email_alerts_enabled = normalized_email_alerts
+        log_audit(
+            db,
+            "settings.email_alerts",
+            request=request,
+            actor=current_user,
+            detail=(
+                f"Changed from {'enabled' if prev_email_alerts else 'disabled'} "
+                f"to {'enabled' if normalized_email_alerts else 'disabled'}"
+            ),
+        )
+        changed.append("email alerts")
+
+    prev_smtp_host = get_smtp_setting(db, SMTP_HOST_SETTING_KEY, "SMTP_HOST", "localhost")
+    prev_smtp_port = get_smtp_setting(db, SMTP_PORT_SETTING_KEY, "SMTP_PORT", "25")
+    prev_smtp_username = get_smtp_setting(db, SMTP_USERNAME_SETTING_KEY, "SMTP_USERNAME", "")
+    prev_smtp_use_tls = parse_bool_setting(get_smtp_setting(db, SMTP_USE_TLS_SETTING_KEY, "SMTP_USE_TLS", "false"), False)
+    prev_smtp_from = get_smtp_setting(db, SMTP_FROM_SETTING_KEY, "SMTP_FROM", "daygle-server-manager@localhost")
+    prev_smtp_password = get_smtp_setting(db, SMTP_PASSWORD_SETTING_KEY, "SMTP_PASSWORD", "")
+
+    new_smtp_password = prev_smtp_password
+    password_updated = False
+    if normalized_clear_smtp_password:
+        new_smtp_password = ""
+        password_updated = new_smtp_password != prev_smtp_password
+    elif smtp_password:
+        new_smtp_password = smtp_password
+        password_updated = True
+
+    smtp_changed = any(
+        [
+            host != prev_smtp_host,
+            str(smtp_port) != str(prev_smtp_port),
+            smtp_username_clean != prev_smtp_username,
+            normalized_smtp_tls != prev_smtp_use_tls,
+            sender != prev_smtp_from,
+            password_updated,
+        ]
+    )
+
+    if smtp_changed:
+        set_app_setting(db, SMTP_HOST_SETTING_KEY, host)
+        set_app_setting(db, SMTP_PORT_SETTING_KEY, str(smtp_port))
+        set_app_setting(db, SMTP_USERNAME_SETTING_KEY, smtp_username_clean)
+        set_app_setting(db, SMTP_USE_TLS_SETTING_KEY, "true" if normalized_smtp_tls else "false")
+        set_app_setting(db, SMTP_FROM_SETTING_KEY, sender)
+        if password_updated:
+            set_app_setting(db, SMTP_PASSWORD_SETTING_KEY, new_smtp_password)
+
+        log_audit(
+            db,
+            "settings.smtp",
+            request=request,
+            actor=current_user,
+            detail=(
+                f"Updated SMTP host={host}, port={smtp_port}, user={'set' if smtp_username_clean else 'empty'}, "
+                f"tls={'enabled' if normalized_smtp_tls else 'disabled'}, from={sender}, "
+                f"password={'updated' if password_updated else 'unchanged'}"
+            ),
+        )
+        changed.append("SMTP settings")
+
+    if changed:
+        set_flash(request, f"Saved settings: {', '.join(changed)}.", "success")
+    else:
+        set_flash(request, "No settings changed.", "info")
+
+    return RedirectResponse(url="/settings", status_code=303)
 
 
 @app.post("/settings/date-format")

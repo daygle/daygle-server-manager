@@ -4,9 +4,10 @@
 {% block title %}Global Settings{% endblock %}
 
 {% block content %}
+<form method="post" action="/settings/save-all">
 <section class="panel">
   <h2>Display Preferences</h2>
-  <form method="post" action="/settings/date-format" class="grid-form">
+  <div class="grid-form">
     <label>
       Date and Time Format
       <select name="date_format" required>
@@ -17,9 +18,6 @@
         {% endfor %}
       </select>
     </label>
-    <button type="submit">Save Settings</button>
-  </form>
-  <form method="post" action="/settings/timezone" class="grid-form" style="margin-top: 12px;">
     <label>
       Timezone
       <select name="timezone_name" required>
@@ -28,50 +26,46 @@
         {% endfor %}
       </select>
     </label>
-    <button type="submit">Save Timezone</button>
-  </form>
+  </div>
   <p class="field-help">These settings apply globally to all users and pages.</p>
 </section>
 
 <section class="panel">
   <h2>History Retention</h2>
-  <form method="post" action="/settings/history-retention" class="grid-form">
+  <div class="grid-form">
     <label>
       Keep job &amp; audit records for (days)
       <input name="retention_days" type="number" min="0" max="3650" step="1" required value="{{ selected_retention_days }}" />
     </label>
-    <button type="submit">Save</button>
-  </form>
+  </div>
   <p class="field-help">Enter the number of days to retain records. Use 0 to keep history forever. Update job records and audit log entries older than this will be automatically deleted. Purging runs once per hour.</p>
 </section>
 
 <section class="panel">
   <h2>Session Security</h2>
-  <form method="post" action="/settings/login-timeout" class="grid-form">
+  <div class="grid-form">
     <label>
       Login timeout (minutes)
       <input name="login_timeout_minutes" type="number" min="1" max="43200" step="1" required value="{{ selected_login_timeout_minutes }}" />
     </label>
-    <button type="submit">Save</button>
-  </form>
+  </div>
   <p class="field-help">Users are logged out after this many minutes of inactivity.</p>
 </section>
 
 <section class="panel">
   <h2>Alert Notifications</h2>
-  <form method="post" action="/settings/email-alerts" class="grid-form">
+  <div class="grid-form">
     <label class="checkbox-field">
       <input type="checkbox" name="email_alerts_enabled" {% if selected_email_alerts_enabled %}checked{% endif %} />
       <span>Email admins when alerts are generated</span>
     </label>
-    <button type="submit">Save</button>
-  </form>
+  </div>
   <p class="field-help">When enabled, failed update alerts are emailed to enabled admin users with an email address.</p>
 </section>
 
 <section class="panel">
   <h2>SMTP Settings</h2>
-  <form method="post" action="/settings/smtp" class="grid-form">
+  <div class="grid-form">
     <label>
       SMTP Host
       <input name="smtp_host" required value="{{ selected_smtp_host }}" />
@@ -103,11 +97,16 @@
       <input type="checkbox" name="clear_smtp_password" />
       <span>Clear saved SMTP password</span>
     </label>
-    <div class="form-actions">
-      <button type="submit">Save SMTP Settings</button>
-      <button type="submit" class="btn-secondary" formaction="/settings/smtp/test">Test SMTP Connection</button>
-    </div>
-  </form>
+  </div>
   <p class="field-help">These credentials are used for admin alert emails.</p>
 </section>
+
+<section class="panel">
+  <h2>Apply Changes</h2>
+  <div class="form-actions">
+    <button type="submit">Save All Settings</button>
+    <button type="submit" class="btn-secondary" formaction="/settings/smtp/test">Test SMTP Connection</button>
+  </div>
+</section>
+</form>
 {% endblock %}
