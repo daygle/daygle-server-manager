@@ -329,7 +329,7 @@ div.field {
   gap: 4px;
 }
 
-div.field label {
+div.field .field-label {
   font-weight: 500;
   font-size: 0.92rem;
 }

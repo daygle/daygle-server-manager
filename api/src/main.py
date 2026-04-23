@@ -512,6 +512,7 @@ def updates_page(request: Request, db: Session = Depends(get_db)):
     servers = db.query(Server).order_by(Server.name.asc()).all()
     jobs = db.query(UpdateJob).order_by(UpdateJob.created_at.desc()).limit(30).all()
     schedules = db.query(UpdateSchedule).order_by(UpdateSchedule.created_at.desc()).all()
+    server_name_map = {s.id: s.name for s in servers}
     return render_app_template(
         request,
         "updates.html",
@@ -521,6 +522,7 @@ def updates_page(request: Request, db: Session = Depends(get_db)):
         servers=servers,
         jobs=jobs,
         schedules=schedules,
+        server_name_map=server_name_map,
     )
 
 

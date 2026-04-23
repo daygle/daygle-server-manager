@@ -41,7 +41,7 @@
     </label>
     <div class="field">
       <span class="label-with-info">
-        <label for="cron_expression">Cron Expression</label>
+        <span class="field-label">Cron Expression</span>
         <details class="info-tip">
           <summary aria-label="Cron expression help">
             <i class="fas fa-circle-info" aria-hidden="true"></i>
@@ -95,7 +95,7 @@
         {% for schedule in schedules %}
         <tr>
           <td>{{ schedule.name }}</td>
-          <td>{{ schedule.server_ids|join(', ') }}</td>
+          <td>{% for sid in schedule.server_ids %}{{ server_name_map.get(sid, 'Server #' ~ sid) }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
           <td>{{ schedule.cron_expression or ('every ' ~ schedule.interval_minutes ~ ' min (legacy)') }}</td>
           <td>{{ schedule.timezone or global_timezone }}</td>
           <td>{{ format_dt(schedule.next_run_at) }}</td>

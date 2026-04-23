@@ -60,7 +60,7 @@ def should_skip_output_line(package_manager: str, line: str) -> bool:
     if line == REDACTION_PLACEHOLDER:
         return True
 
-    return package_manager == "apt" and is_noisy_apt_line(line)
+    return False
 
 
 def is_noisy_apt_line(line: str) -> bool:
