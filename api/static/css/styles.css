@@ -288,6 +288,10 @@ body {
   gap: 18px;
 }
 
+.content-container > form {
+  display: contents;
+}
+
 .panel {
   backdrop-filter: blur(8px);
   background: var(--panel);
