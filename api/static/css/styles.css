@@ -151,6 +151,18 @@ body {
   gap: 10px;
 }
 
+.user-menu {
+  position: relative;
+}
+
+.user-menu summary {
+  list-style: none;
+}
+
+.user-menu summary::-webkit-details-marker {
+  display: none;
+}
+
 .user-chip {
   display: inline-flex;
   align-items: center;
@@ -159,6 +171,50 @@ body {
   border: 1px solid #dfd3bf;
   padding: 8px 10px;
   border-radius: 10px;
+  cursor: pointer;
+}
+
+.user-menu-caret {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.user-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 210px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid #dfd3bf;
+  background: #fff8eb;
+  box-shadow: 0 12px 30px rgba(33, 24, 13, 0.18);
+  z-index: 20;
+}
+
+.user-menu:not([open]) .user-menu-panel {
+  display: none;
+}
+
+.user-menu-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.user-menu-link:hover {
+  background: #f1e8d8;
+}
+
+.user-menu-link.active {
+  background: #ece3d2;
+  font-weight: 600;
 }
 
 .logout-link {

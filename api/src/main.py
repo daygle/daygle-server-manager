@@ -46,6 +46,7 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 DATE_FORMAT_SETTING_KEY = "date_format"
 DEFAULT_DATE_FORMAT = "iso-24"
+USER_DATE_FORMAT_GLOBAL = "global"
 DATE_FORMAT_OPTIONS: list[tuple[str, str, str]] = [
     ("iso-24", "YYYY-MM-DD HH:MM:SS", "%Y-%m-%d %H:%M:%S"),
     ("us-24", "MM/DD/YYYY HH:MM:SS", "%m/%d/%Y %H:%M:%S"),
@@ -76,6 +77,7 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS cron_expression VARCHAR(120)",
         "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
         "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS summary VARCHAR(255)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format VARCHAR(32)",
     ]
     with engine.begin() as conn:
         for statement in statements:
@@ -128,6 +130,13 @@ def format_datetime_value(value: datetime | None, date_format: str) -> str:
 
 def get_active_date_format() -> str:
     return getattr(app.state, "date_format", DEFAULT_DATE_FORMAT)
+
+
+def get_effective_date_format(current_user: User) -> str:
+    user_format = normalize_date_format(current_user.date_format)
+    if user_format:
+        return user_format
+    return get_active_date_format()
 
 
 def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str) -> list[int]:
@@ -217,7 +226,7 @@ def render_app_template(
     db: Session,
     **context,
 ):
-    date_format = get_active_date_format()
+    date_format = get_effective_date_format(current_user)
 
     template_context = {
         "active_page": active_page,
@@ -462,6 +471,52 @@ def users_page(request: Request, db: Session = Depends(get_db)):
 
     users = db.query(User).order_by(User.created_at.desc()).all()
     return render_app_template(request, "users.html", "users", current_user, db, users=users)
+
+
+@app.get("/my-settings", response_class=HTMLResponse)
+def my_settings_page(request: Request, db: Session = Depends(get_db)):
+    if not users_exist(db):
+        return RedirectResponse(url="/setup", status_code=303)
+
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    return render_app_template(
+        request,
+        "my_settings.html",
+        "my-settings",
+        current_user,
+        db,
+        selected_user_date_format=current_user.date_format or USER_DATE_FORMAT_GLOBAL,
+    )
+
+
+@app.post("/my-settings/date-format")
+def update_my_date_format(
+    request: Request,
+    date_format: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if date_format == USER_DATE_FORMAT_GLOBAL:
+        current_user.date_format = None
+        db.commit()
+        set_flash(request, "Your date format now follows the global setting.", "success")
+        return RedirectResponse(url="/my-settings", status_code=303)
+
+    normalized = normalize_date_format(date_format)
+    if not normalized:
+        set_flash(request, "Invalid date format selection.", "error")
+        return RedirectResponse(url="/my-settings", status_code=303)
+
+    current_user.date_format = normalized
+    db.commit()
+    set_flash(request, "Your personal date format was updated.", "success")
+    return RedirectResponse(url="/my-settings", status_code=303)
 
 
 @app.get("/settings", response_class=HTMLResponse)
