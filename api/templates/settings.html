@@ -169,6 +169,11 @@
 
 <!-- Test SMTP form outside the main form to avoid nesting -->
 <form method="post" action="/settings/smtp/test" id="test-smtp-form" style="display: none;">
+  <input type="hidden" id="test-smtp_host" name="smtp_host" />
+  <input type="hidden" id="test-smtp_port" name="smtp_port" />
+  <input type="hidden" id="test-smtp_username" name="smtp_username" />
+  <input type="hidden" id="test-smtp_password" name="smtp_password" />
+  <input type="hidden" id="test-smtp_use_tls" name="smtp_use_tls" />
   <button type="submit" class="btn btn-secondary" id="test-smtp-btn">
     <i class="fas fa-vial"></i>
     <span>Test SMTP</span>
@@ -176,12 +181,49 @@
 </form>
 
 <script>
+function handleTestSmtpClick(e) {
+  e.preventDefault();
+  
+  // Collect values from the main form
+  const hostField = document.getElementById('smtp_host');
+  const portField = document.getElementById('smtp_port');
+  const usernameField = document.getElementById('smtp_username');
+  const passwordField = document.getElementById('smtp_password');
+  const tlsField = document.getElementById('smtp_use_tls');
+  
+  // Validate required fields
+  if (!hostField.value.trim()) {
+    alert('SMTP Host is required');
+    hostField.focus();
+    return;
+  }
+  
+  if (!portField.value) {
+    alert('SMTP Port is required');
+    portField.focus();
+    return;
+  }
+  
+  // Populate hidden form fields
+  document.getElementById('test-smtp_host').value = hostField.value;
+  document.getElementById('test-smtp_port').value = portField.value;
+  document.getElementById('test-smtp_username').value = usernameField.value;
+  document.getElementById('test-smtp_password').value = passwordField.value;
+  document.getElementById('test-smtp_use_tls').value = tlsField.checked ? 'on' : '';
+  
+  // Submit the hidden form
+  document.getElementById('test-smtp-form').submit();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
   const container = document.getElementById('test-smtp-container');
   const form = document.getElementById('test-smtp-form');
-  if (container && form) {
+  const btn = document.getElementById('test-smtp-btn');
+  
+  if (container && form && btn) {
     container.appendChild(form);
     form.style.display = 'inline';
+    btn.addEventListener('click', handleTestSmtpClick);
   }
 });
 </script>
