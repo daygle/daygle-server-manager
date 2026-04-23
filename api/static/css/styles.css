@@ -396,9 +396,19 @@ td {
   font-weight: 600;
 }
 
+.job-log {
+  min-width: 0;
+}
+
 #selected-job-label {
   font-weight: 700;
   color: var(--ink);
+}
+
+#latest-log {
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 pre {
