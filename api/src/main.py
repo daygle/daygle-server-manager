@@ -624,18 +624,25 @@ def send_admin_alert_email(db: Session, alert: Alert) -> None:
     password = get_smtp_setting(db, SMTP_PASSWORD_SETTING_KEY, "SMTP_PASSWORD", "")
     use_tls = parse_bool_setting(get_smtp_setting(db, SMTP_USE_TLS_SETTING_KEY, "SMTP_USE_TLS", "false"), False)
     sender = get_smtp_setting(db, SMTP_FROM_SETTING_KEY, "SMTP_FROM", "daygle-server-manager@localhost")
+    site_timezone = get_active_timezone()
+    site_date_format = get_active_date_format()
+    occurred_local = format_datetime_value(alert.created_at, site_date_format, site_timezone)
+    severity = (alert.level or "info").upper()
+    source_label = f"{alert.source_type or '-'} {alert.source_id or ''}".strip()
 
     msg = EmailMessage()
-    msg["Subject"] = f"[Daygle Alert] {alert.title}"
+    msg["Subject"] = f"[Daygle Alert][{severity}] {alert.title}"
     msg["From"] = sender
     msg["To"] = ", ".join(recipients)
     msg.set_content(
-        f"A server alert was generated.\n\n"
-        f"Level: {alert.level}\n"
-        f"Title: {alert.title}\n"
-        f"Message: {alert.message}\n"
-        f"Source: {alert.source_type or '-'} {alert.source_id or ''}\n"
-        f"Time (UTC): {alert.created_at.isoformat()}\n"
+        f"Daygle Server Manager detected a new alert that may require attention.\n\n"
+        f"Summary\n"
+        f"- Severity: {severity}\n"
+        f"- Alert: {alert.title}\n"
+        f"- Details: {alert.message}\n"
+        f"- Source: {source_label}\n"
+        f"- Occurred: {occurred_local} ({site_timezone})\n\n"
+        f"You can review and acknowledge this alert in the Alerts page.\n"
     )
 
     with smtplib.SMTP(host=host, port=port, timeout=get_smtp_timeout(db)) as smtp:
