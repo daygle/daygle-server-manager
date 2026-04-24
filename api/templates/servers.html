@@ -178,7 +178,7 @@
           data-server-alert-load-avg-15-threshold="{{ server.alert_load_avg_15_threshold }}"
         >
           <td>{{ server.id }}</td>
-          <td><strong>{{ server.name }}</strong></td>
+          <td><strong>{{ server.name }}</strong>{% if server.needs_reboot %} <i class="fas fa-power-off reboot-required-icon" title="Reboot required"></i>{% endif %}</td>
           <td>{{ server.host }}:{{ server.port }}</td>
           <td>{{ server.username }}</td>
           <td class="hide-mobile">{{ 'Password' if server.auth_method == 'password' else 'Key' }}</td>
@@ -187,6 +187,7 @@
           <td>
             <div class="flex-gap-8">
               <button class="btn btn-success btn-sm btn-icon-only" type="button" title="Test Connection" data-test-server="{{ server.id }}"><i class="fas fa-plug"></i></button>
+              <button class="btn btn-warning btn-sm btn-icon-only" type="button" title="Reboot" data-reboot-server="{{ server.id }}" data-server-name="{{ server.name }}"><i class="fas fa-power-off"></i></button>
               <button class="btn btn-primary btn-sm btn-icon-only" type="button" title="Edit" data-edit-server="{{ server.id }}"><i class="fas fa-pen"></i></button>
               <button class="btn btn-danger btn-sm btn-icon-only" type="button" title="Delete" data-delete-server="{{ server.id }}"><i class="fas fa-trash"></i></button>
             </div>

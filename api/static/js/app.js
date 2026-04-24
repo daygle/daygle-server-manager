@@ -804,8 +804,8 @@ document.querySelectorAll("[data-delete-server]").forEach((button) => {
   });
 });
 
-// Reboot server handler (server status page)
-serverStatusBody?.addEventListener("click", async (event) => {
+// Reboot server handler
+document.addEventListener("click", async (event) => {
   const rebootButton = event.target.closest("[data-reboot-server]");
   if (!(rebootButton instanceof HTMLButtonElement)) {
     return;
@@ -849,6 +849,8 @@ serverStatusBody?.addEventListener("click", async (event) => {
     rebootButton.innerHTML = originalButtonHtml;
   }
 });
+
+runForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const checkedServers = [...document.querySelectorAll("#server-checks input:checked")].map((x) => Number(x.value));
 
