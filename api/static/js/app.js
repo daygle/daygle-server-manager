@@ -70,6 +70,71 @@ let serverStatusAutoCheckInFlight = false;
 const SERVER_STATUS_AUTO_CHECK_ENABLED_KEY = "serverStatusAutoCheckEnabled";
 const SERVER_STATUS_AUTO_CHECK_INTERVAL_KEY = "serverStatusAutoCheckInterval";
 
+function getLocalServerStatusPreferences() {
+  try {
+    return {
+      enabled: localStorage.getItem(SERVER_STATUS_AUTO_CHECK_ENABLED_KEY) === "true",
+      interval: localStorage.getItem(SERVER_STATUS_AUTO_CHECK_INTERVAL_KEY),
+    };
+  } catch (error) {
+    return { enabled: false, interval: null };
+  }
+}
+
+function setLocalServerStatusPreferences(enabled, interval) {
+  try {
+    localStorage.setItem(SERVER_STATUS_AUTO_CHECK_ENABLED_KEY, String(Boolean(enabled)));
+    if (interval != null) {
+      localStorage.setItem(SERVER_STATUS_AUTO_CHECK_INTERVAL_KEY, String(interval));
+    }
+  } catch (error) {
+    // Ignore storage errors (private mode / restricted storage)
+  }
+}
+
+async function persistServerStatusPreferences(enabled, interval) {
+  setLocalServerStatusPreferences(enabled, interval);
+  try {
+    await fetch(
+      `/api/server-status/preferences?enabled=${encodeURIComponent(String(Boolean(enabled)))}&interval_seconds=${encodeURIComponent(String(interval))}`,
+      { method: "POST" }
+    );
+  } catch (error) {
+    // Keep local fallback if server persistence is temporarily unavailable.
+  }
+}
+
+async function loadServerStatusPreferences() {
+  if (!serverStatusAutoCheckToggle || !serverStatusAutoCheckInterval) {
+    return;
+  }
+
+  const localPrefs = getLocalServerStatusPreferences();
+  if (localPrefs.interval && [...serverStatusAutoCheckInterval.options].some((option) => option.value === localPrefs.interval)) {
+    serverStatusAutoCheckInterval.value = localPrefs.interval;
+  }
+  serverStatusAutoCheckToggle.checked = Boolean(localPrefs.enabled);
+
+  try {
+    const response = await fetch("/api/server-status/preferences");
+    if (!response.ok) {
+      applyServerStatusAutoCheckState();
+      return;
+    }
+    const data = await response.json();
+    const intervalValue = String(data.interval_seconds ?? "");
+    if ([...serverStatusAutoCheckInterval.options].some((option) => option.value === intervalValue)) {
+      serverStatusAutoCheckInterval.value = intervalValue;
+    }
+    serverStatusAutoCheckToggle.checked = data.enabled === true;
+    setLocalServerStatusPreferences(serverStatusAutoCheckToggle.checked, serverStatusAutoCheckInterval.value);
+  } catch (error) {
+    // Keep local fallback if preferences endpoint is unreachable.
+  }
+
+  applyServerStatusAutoCheckState();
+}
+
 function notify(message, type = "info") {
   if (typeof window.showToast === "function") {
     window.showToast(message, type);
@@ -709,25 +774,17 @@ refreshAllServerStatusBtn?.addEventListener("click", async () => {
 });
 
 if (serverStatusAutoCheckToggle && serverStatusAutoCheckInterval) {
-  const storedEnabled = localStorage.getItem(SERVER_STATUS_AUTO_CHECK_ENABLED_KEY);
-  const storedInterval = localStorage.getItem(SERVER_STATUS_AUTO_CHECK_INTERVAL_KEY);
-
-  if (storedInterval && [...serverStatusAutoCheckInterval.options].some((option) => option.value === storedInterval)) {
-    serverStatusAutoCheckInterval.value = storedInterval;
-  }
-  serverStatusAutoCheckToggle.checked = storedEnabled === "true";
-
   serverStatusAutoCheckToggle.addEventListener("change", () => {
-    localStorage.setItem(SERVER_STATUS_AUTO_CHECK_ENABLED_KEY, String(serverStatusAutoCheckToggle.checked));
+    void persistServerStatusPreferences(serverStatusAutoCheckToggle.checked, serverStatusAutoCheckInterval.value);
     applyServerStatusAutoCheckState();
   });
 
   serverStatusAutoCheckInterval.addEventListener("change", () => {
-    localStorage.setItem(SERVER_STATUS_AUTO_CHECK_INTERVAL_KEY, serverStatusAutoCheckInterval.value);
+    void persistServerStatusPreferences(serverStatusAutoCheckToggle.checked, serverStatusAutoCheckInterval.value);
     applyServerStatusAutoCheckState();
   });
 
-  applyServerStatusAutoCheckState();
+  void loadServerStatusPreferences();
 }
 
 window.addEventListener("beforeunload", () => {

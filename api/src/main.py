@@ -75,6 +75,10 @@ SSH_CONNECT_TIMEOUT_SETTING_KEY = "ssh_connect_timeout_seconds"
 REMOTE_COMMAND_TIMEOUT_SETTING_KEY = "remote_command_timeout_seconds"
 SMTP_TIMEOUT_SETTING_KEY = "smtp_timeout_seconds"
 SCHEDULE_POLL_INTERVAL_SETTING_KEY = "schedule_poll_interval_seconds"
+SERVER_STATUS_AUTO_CHECK_ENABLED_SETTING_PREFIX = "server_status_auto_check_enabled_user_"
+SERVER_STATUS_AUTO_CHECK_INTERVAL_SETTING_PREFIX = "server_status_auto_check_interval_user_"
+SERVER_STATUS_AUTO_CHECK_DEFAULT_INTERVAL_SECONDS = 60
+SERVER_STATUS_AUTO_CHECK_ALLOWED_INTERVAL_SECONDS = {30, 60, 300, 600}
 DEFAULT_APT_LOCK_TIMEOUT_SECONDS = 120
 MAX_APT_LOCK_TIMEOUT_SECONDS = 3600
 DEFAULT_SSH_CONNECT_TIMEOUT_SECONDS = 30
@@ -335,6 +339,67 @@ def normalize_login_timeout_minutes(value: str | int | None) -> int | None:
     if timeout_minutes < 1 or timeout_minutes > MAX_LOGIN_TIMEOUT_MINUTES:
         return None
     return timeout_minutes
+
+
+def normalize_server_status_auto_check_interval(value: str | int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        interval_seconds = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if interval_seconds not in SERVER_STATUS_AUTO_CHECK_ALLOWED_INTERVAL_SECONDS:
+        return None
+    return interval_seconds
+
+
+def get_server_status_auto_check_enabled_setting_key(user_id: int) -> str:
+    return f"{SERVER_STATUS_AUTO_CHECK_ENABLED_SETTING_PREFIX}{user_id}"
+
+
+def get_server_status_auto_check_interval_setting_key(user_id: int) -> str:
+    return f"{SERVER_STATUS_AUTO_CHECK_INTERVAL_SETTING_PREFIX}{user_id}"
+
+
+def get_server_status_auto_check_preferences(db: Session, user_id: int) -> tuple[bool, int]:
+    enabled_raw = get_app_setting(
+        db,
+        get_server_status_auto_check_enabled_setting_key(user_id),
+        "false",
+    )
+    enabled = str(enabled_raw).strip().lower() == "true"
+
+    interval_raw = get_app_setting(
+        db,
+        get_server_status_auto_check_interval_setting_key(user_id),
+        str(SERVER_STATUS_AUTO_CHECK_DEFAULT_INTERVAL_SECONDS),
+    )
+    interval = normalize_server_status_auto_check_interval(interval_raw) or SERVER_STATUS_AUTO_CHECK_DEFAULT_INTERVAL_SECONDS
+    return enabled, interval
+
+
+def set_server_status_auto_check_preferences(
+    db: Session,
+    user_id: int,
+    *,
+    enabled: bool,
+    interval_seconds: int,
+) -> tuple[bool, int]:
+    normalized_interval = (
+        normalize_server_status_auto_check_interval(interval_seconds)
+        or SERVER_STATUS_AUTO_CHECK_DEFAULT_INTERVAL_SECONDS
+    )
+    set_app_setting(
+        db,
+        get_server_status_auto_check_enabled_setting_key(user_id),
+        "true" if enabled else "false",
+    )
+    set_app_setting(
+        db,
+        get_server_status_auto_check_interval_setting_key(user_id),
+        str(normalized_interval),
+    )
+    return enabled, normalized_interval
 
 
 def get_app_setting(db: Session, key: str, default: str) -> str:
@@ -3691,6 +3756,41 @@ def check_all_server_statuses(request: Request, db: Session = Depends(get_db)):
     return {
         "items": [run_saved_server_health_check(db, server) for server in servers],
         "checked_at": datetime.utcnow().isoformat(),
+    }
+
+
+@app.get("/api/server-status/preferences")
+def get_server_status_preferences(request: Request, db: Session = Depends(get_db)):
+    current_user = require_api_user(request, db)
+    enabled, interval_seconds = get_server_status_auto_check_preferences(db, current_user.id)
+    return {
+        "enabled": enabled,
+        "interval_seconds": interval_seconds,
+    }
+
+
+@app.post("/api/server-status/preferences")
+def update_server_status_preferences(
+    request: Request,
+    enabled: bool = Query(...),
+    interval_seconds: int = Query(SERVER_STATUS_AUTO_CHECK_DEFAULT_INTERVAL_SECONDS),
+    db: Session = Depends(get_db),
+):
+    current_user = require_api_user(request, db)
+    normalized_interval = normalize_server_status_auto_check_interval(interval_seconds)
+    if normalized_interval is None:
+        raise HTTPException(status_code=400, detail="Invalid auto-check interval.")
+
+    persisted_enabled, persisted_interval = set_server_status_auto_check_preferences(
+        db,
+        current_user.id,
+        enabled=bool(enabled),
+        interval_seconds=normalized_interval,
+    )
+    return {
+        "ok": True,
+        "enabled": persisted_enabled,
+        "interval_seconds": persisted_interval,
     }
 
 
