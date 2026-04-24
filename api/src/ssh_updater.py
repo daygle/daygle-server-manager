@@ -669,7 +669,12 @@ def run_update_job(
             + lock_hint
         ).strip()
 
-        job.status = "success" if exit_code == 0 and not timed_out else "failed"
+        if exit_code == 0 and not timed_out:
+            job.status = "success"
+        elif lock_hint:
+            job.status = "skipped"
+        else:
+            job.status = "failed"
         job.output = output_with_steps
         job.summary = summary
         job.finished_at = datetime.utcnow()

@@ -1930,7 +1930,7 @@ def updates_jobs_page(request: Request, db: Session = Depends(get_db)):
     page_size = max(10, min(page_size, 200))
 
     query = db.query(UpdateJob)
-    if status_filter and status_filter in {"pending", "running", "success", "failed"}:
+    if status_filter and status_filter in {"pending", "running", "success", "failed", "skipped"}:
         query = query.filter(UpdateJob.status == status_filter)
     if job_type_filter and job_type_filter in {"manual", "scheduled"}:
         query = query.filter(UpdateJob.job_type == job_type_filter)
@@ -1986,7 +1986,7 @@ def updates_jobs_page(request: Request, db: Session = Depends(get_db)):
         showing_from = ((page - 1) * page_size) + 1
         showing_to = min(((page - 1) * page_size) + len(jobs), total_count)
 
-    status_options = ["pending", "running", "success", "failed"]
+    status_options = ["pending", "running", "success", "failed", "skipped"]
     job_type_options = ["manual", "scheduled"]
 
     base_query = {
