@@ -78,6 +78,15 @@ function notify(message, type = "info") {
   window.alert(message);
 }
 
+function clearScheduleAptExtraSteps() {
+  ["full_upgrade", "fix_dpkg", "fix_broken", "autoremove", "clean"].forEach((step) => {
+    const el = document.getElementById(`sched_apt_step_${step}`);
+    if (el instanceof HTMLInputElement) {
+      el.checked = false;
+    }
+  });
+}
+
 function toggleScheduleFailureThreshold() {
   const enabled = Boolean(autoDisableOnFailuresInput?.checked);
   if (failureThresholdGroup) {
@@ -765,9 +774,11 @@ runForm?.addEventListener("submit", async (event) => {
   }
 
   const packageManager = document.getElementById("package_manager");
+  const aptExtraStepCheckboxes = document.querySelectorAll("#apt_extra_steps_group input[type='checkbox']:checked");
   const payload = {
     server_ids: checkedServers,
     package_manager: packageManager ? packageManager.value : "auto",
+    apt_extra_steps: [...aptExtraStepCheckboxes].map((x) => x.value),
   };
 
   const response = await fetch("/api/updates/run", {
@@ -1117,6 +1128,9 @@ scheduleForm?.addEventListener("submit", async (event) => {
     server_ids: scheduleServers,
     auto_disable_on_failures: Boolean(autoDisableOnFailuresInput?.checked),
     failure_threshold: autoDisableOnFailuresInput?.checked ? Number(failureThresholdInput?.value || 0) : null,
+    apt_extra_steps: [...document.querySelectorAll("#sched_apt_step_full_upgrade, #sched_apt_step_fix_dpkg, #sched_apt_step_fix_broken, #sched_apt_step_autoremove, #sched_apt_step_clean")]
+      .filter((el) => el instanceof HTMLInputElement && el.checked)
+      .map((el) => el.value),
   };
 
   if (payload.auto_disable_on_failures && (!payload.failure_threshold || payload.failure_threshold < 1)) {
@@ -1174,6 +1188,7 @@ function showCreateScheduleForm() {
   if (failureThresholdInput) {
     failureThresholdInput.value = "3";
   }
+  clearScheduleAptExtraSteps();
   toggleScheduleFailureThreshold();
   setScheduleFormVisibility(true);
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1196,6 +1211,7 @@ function hideScheduleFormAndReset() {
   if (failureThresholdInput) {
     failureThresholdInput.value = "3";
   }
+  clearScheduleAptExtraSteps();
   toggleScheduleFailureThreshold();
   setScheduleFormVisibility(false);
 }
@@ -1235,6 +1251,8 @@ document.querySelectorAll("[data-edit-schedule]").forEach((button) => {
     const scheduleServerIdsRaw = button.getAttribute("data-schedule-server-ids") || "";
     const scheduleAutoDisableOnFailures = button.getAttribute("data-schedule-auto-disable-on-failures") === "true";
     const scheduleFailureThreshold = button.getAttribute("data-schedule-failure-threshold") || "3";
+    const scheduleAptExtraStepsRaw = button.getAttribute("data-schedule-apt-extra-steps") || "";
+    const scheduleAptExtraSteps = scheduleAptExtraStepsRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
     const scheduleServerIds = scheduleServerIdsRaw
       .split(",")
       .map((value) => value.trim())
@@ -1260,6 +1278,13 @@ document.querySelectorAll("[data-edit-schedule]").forEach((button) => {
       failureThresholdInput.value = scheduleFailureThreshold;
     }
     toggleScheduleFailureThreshold();
+
+    ["full_upgrade", "fix_dpkg", "fix_broken", "autoremove", "clean"].forEach((step) => {
+      const el = document.getElementById(`sched_apt_step_${step}`);
+      if (el instanceof HTMLInputElement) {
+        el.checked = scheduleAptExtraSteps.includes(step);
+      }
+    });
 
     document.querySelectorAll("#schedule-server-checks input[type='checkbox']").forEach((checkbox) => {
       if (checkbox instanceof HTMLInputElement) {

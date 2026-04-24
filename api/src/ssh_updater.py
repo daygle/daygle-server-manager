@@ -106,15 +106,34 @@ def load_private_key_for_ssh(private_key_pem: str) -> paramiko.PKey:
     raise ValueError("Unsupported private key format")
 
 
-def build_update_command(package_manager: str) -> str:
+VALID_APT_EXTRA_STEPS = {"full_upgrade", "fix_dpkg", "fix_broken", "autoremove", "clean"}
+
+
+def build_update_command(package_manager: str, apt_extra_steps: list[str] | None = None) -> str:
     if package_manager == "apt":
+        extra_steps = [s for s in (apt_extra_steps or []) if s in VALID_APT_EXTRA_STEPS]
+
         # Extra noninteractive and lock-timeout options reduce chances of hanging.
         apt_common = (
             "sudo -S env DEBIAN_FRONTEND=noninteractive "
             "apt-get -o DPkg::Lock::Timeout=120 -o Dpkg::Options::=--force-confdef "
             "-o Dpkg::Options::=--force-confold -y"
         )
-        return f"{apt_common} update && {apt_common} upgrade"
+
+        # full_upgrade replaces the standard upgrade step; it can remove packages to resolve deps.
+        upgrade_cmd = f"{apt_common} full-upgrade" if "full_upgrade" in extra_steps else f"{apt_common} upgrade"
+        parts = [f"{apt_common} update", upgrade_cmd]
+
+        if "fix_dpkg" in extra_steps:
+            parts.append("sudo -S dpkg --configure -a")
+        if "fix_broken" in extra_steps:
+            parts.append(f"{apt_common} --fix-broken install")
+        if "autoremove" in extra_steps:
+            parts.append(f"{apt_common} autoremove --purge")
+        if "clean" in extra_steps:
+            parts.append("sudo -S apt-get clean")
+
+        return " && ".join(parts)
     if package_manager == "dnf":
         return "sudo -S dnf -y upgrade --refresh"
     if package_manager == "yum":
@@ -265,7 +284,7 @@ def run_update_job(db: Session, job_id: int) -> None:
                 raise RuntimeError("Could not detect supported package manager (apt, dnf, yum)")
             step_logs.append(f"[{datetime.utcnow().isoformat()}] Detected package manager: {package_manager}")
 
-        command = build_update_command(package_manager)
+        command = build_update_command(package_manager, job.apt_extra_steps)
         job.command = command
         db.commit()
         step_logs.append(f"[{datetime.utcnow().isoformat()}] Running update command")

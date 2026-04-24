@@ -68,6 +68,7 @@ class ServerRead(BaseModel):
 class UpdateRequest(BaseModel):
     server_ids: list[int] = Field(min_length=1)
     package_manager: str = Field(default="auto", pattern="^(auto|apt|dnf|yum)$")
+    apt_extra_steps: list[str] = Field(default_factory=list)
 
 
 class UpdateJobRead(BaseModel):
@@ -98,6 +99,7 @@ class UpdateScheduleCreate(BaseModel):
     enabled: bool = True
     auto_disable_on_failures: bool = False
     failure_threshold: int | None = Field(default=None, ge=1, le=100)
+    apt_extra_steps: list[str] = Field(default_factory=list)
 
 
 class UpdateScheduleUpdate(BaseModel):
@@ -108,6 +110,7 @@ class UpdateScheduleUpdate(BaseModel):
     enabled: bool | None = None
     auto_disable_on_failures: bool = False
     failure_threshold: int | None = Field(default=None, ge=1, le=100)
+    apt_extra_steps: list[str] = Field(default_factory=list)
 
 
 class UpdateScheduleRead(BaseModel):
@@ -122,6 +125,7 @@ class UpdateScheduleRead(BaseModel):
     enabled: bool
     auto_disable_on_failures: bool
     failure_threshold: int | None
+    apt_extra_steps: list[str]
     next_run_at: datetime
     last_run_at: datetime | None
     created_at: datetime

@@ -75,6 +75,7 @@ class UpdateJob(Base):
     command: Mapped[str] = mapped_column(Text, nullable=False)
     output: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    apt_extra_steps_raw: Mapped[str] = mapped_column("apt_extra_steps", Text, nullable=False, default="")
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -84,6 +85,14 @@ class UpdateJob(Base):
     @property
     def server_name(self) -> str | None:
         return self.server.name if self.server else None
+
+    @property
+    def apt_extra_steps(self) -> list[str]:
+        return [v for v in self.apt_extra_steps_raw.split(",") if v.strip()]
+
+    @apt_extra_steps.setter
+    def apt_extra_steps(self, values: list[str]) -> None:
+        self.apt_extra_steps_raw = ",".join(values)
 
 
 class UpdateSchedule(Base):
@@ -100,6 +109,7 @@ class UpdateSchedule(Base):
     auto_disable_on_failures: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     failure_threshold: Mapped[int | None] = mapped_column(Integer, nullable=True)
     disabled_server_ids_raw: Mapped[str] = mapped_column("disabled_server_ids", Text, nullable=False, default="")
+    apt_extra_steps_raw: Mapped[str] = mapped_column("apt_extra_steps", Text, nullable=False, default="")
     next_run_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
@@ -119,6 +129,14 @@ class UpdateSchedule(Base):
     @disabled_server_ids.setter
     def disabled_server_ids(self, values: list[int]) -> None:
         self.disabled_server_ids_raw = ",".join(str(value) for value in values)
+
+    @property
+    def apt_extra_steps(self) -> list[str]:
+        return [v for v in self.apt_extra_steps_raw.split(",") if v.strip()]
+
+    @apt_extra_steps.setter
+    def apt_extra_steps(self, values: list[str]) -> None:
+        self.apt_extra_steps_raw = ",".join(values)
 
 
 class AppSetting(Base):

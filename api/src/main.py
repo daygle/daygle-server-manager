@@ -167,6 +167,8 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS auto_disable_on_failures BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS failure_threshold INTEGER",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS disabled_server_ids TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS apt_extra_steps TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS apt_extra_steps TEXT NOT NULL DEFAULT ''",
         (
             "CREATE TABLE IF NOT EXISTS audit_logs ("
             "id SERIAL PRIMARY KEY, "
@@ -599,8 +601,8 @@ def purge_old_history(db: Session) -> None:
     db.commit()
 
 
-def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str, job_type: str = "manual") -> list[int]:
-    return enqueue_update_jobs_for_schedule(db, servers, package_manager, None, job_type)
+def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str, apt_extra_steps: list[str] | None = None, job_type: str = "manual") -> list[int]:
+    return enqueue_update_jobs_for_schedule(db, servers, package_manager, None, job_type, apt_extra_steps)
 
 
 def enqueue_update_jobs_for_schedule(
@@ -609,6 +611,7 @@ def enqueue_update_jobs_for_schedule(
     package_manager: str,
     schedule_id: int | None,
     job_type: str = "manual",
+    apt_extra_steps: list[str] | None = None,
 ) -> list[int]:
     safe_job_type = "scheduled" if job_type == "scheduled" else "manual"
     created_jobs: list[int] = []
@@ -621,6 +624,7 @@ def enqueue_update_jobs_for_schedule(
             status="pending",
             command="Pending package manager detection...",
         )
+        job.apt_extra_steps = [s for s in (apt_extra_steps or []) if s]
         db.add(job)
         db.commit()
         db.refresh(job)
@@ -648,7 +652,7 @@ def run_schedule_loop() -> None:
                 active_server_ids = [server_id for server_id in schedule.server_ids if server_id not in schedule.disabled_server_ids]
                 servers = db.query(Server).filter(Server.id.in_(active_server_ids)).all()
                 if servers:
-                    enqueue_update_jobs_for_schedule(db, servers, schedule.package_manager, schedule.id, job_type="scheduled")
+                    enqueue_update_jobs_for_schedule(db, servers, schedule.package_manager, schedule.id, job_type="scheduled", apt_extra_steps=schedule.apt_extra_steps)
 
                 schedule.last_run_at = now
                 schedule.next_run_at = get_next_schedule_run(schedule, now)
@@ -3231,11 +3235,11 @@ def run_updates(payload: UpdateRequest, request: Request, db: Session = Depends(
     if not servers:
         raise HTTPException(status_code=404, detail="No matching servers found")
 
-    created_jobs = enqueue_update_jobs(db, servers, payload.package_manager, job_type="manual")
+    created_jobs = enqueue_update_jobs(db, servers, payload.package_manager, apt_extra_steps=payload.apt_extra_steps, job_type="manual")
     actor = get_session_user(request, db)
     server_names = ", ".join(s.name for s in servers)
     log_audit(db, "update.run", request=request, actor=actor,
-              detail=f"Servers: {server_names}; package_manager: {payload.package_manager}")
+              detail=f"Servers: {server_names}; package_manager: {payload.package_manager}; apt_extra_steps: {','.join(payload.apt_extra_steps) or 'none'}")
     return {"job_ids": created_jobs}
 
 
@@ -3270,6 +3274,7 @@ def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session
     )
     schedule.server_ids = sorted(set(payload.server_ids))
     schedule.disabled_server_ids = []
+    schedule.apt_extra_steps = [s for s in payload.apt_extra_steps if s]
     schedule.next_run_at = get_next_schedule_run(schedule, datetime.utcnow())
 
     db.add(schedule)
@@ -3280,6 +3285,7 @@ def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session
               target_type="schedule", target_id=schedule.id, target_label=schedule.name,
               detail=(
                   f"Servers: {server_names}; cron: {schedule.cron_expression}; package_manager: {schedule.package_manager}; "
+                  f"apt_extra_steps: {','.join(payload.apt_extra_steps) or 'none'}; "
                   f"auto_disable_on_failures={schedule.auto_disable_on_failures}; failure_threshold={schedule.failure_threshold or 'off'}"
               ))
     return schedule
@@ -3320,6 +3326,7 @@ def update_schedule(schedule_id: int, payload: UpdateScheduleUpdate, request: Re
     schedule.auto_disable_on_failures = payload.auto_disable_on_failures
     schedule.failure_threshold = payload.failure_threshold if payload.auto_disable_on_failures else None
     schedule.disabled_server_ids = []
+    schedule.apt_extra_steps = [s for s in payload.apt_extra_steps if s]
     if payload.enabled is not None:
         schedule.enabled = payload.enabled
 
@@ -3333,6 +3340,7 @@ def update_schedule(schedule_id: int, payload: UpdateScheduleUpdate, request: Re
               target_type="schedule", target_id=schedule.id, target_label=schedule.name,
               detail=(
                   f"Servers: {server_names}; cron: {schedule.cron_expression}; package_manager: {schedule.package_manager}; "
+                  f"apt_extra_steps: {','.join(schedule.apt_extra_steps) or 'none'}; "
                   f"enabled: {schedule.enabled}; auto_disable_on_failures={schedule.auto_disable_on_failures}; "
                   f"failure_threshold={schedule.failure_threshold or 'off'}; disabled servers reset"
               ))

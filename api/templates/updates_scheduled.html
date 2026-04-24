@@ -71,6 +71,45 @@
         <small class="form-text">Number of consecutive failed scheduled update attempts before that server is excluded from this schedule. Other servers on the same schedule keep running.</small>
       </div>
 
+      <div class="form-group mt-3">
+        <label class="form-label">Additional apt Steps <small class="text-secondary">(apt only — ignored for dnf/yum)</small></label>
+        <div class="check-item mt-2">
+          <input type="checkbox" id="sched_apt_step_full_upgrade" value="full_upgrade" />
+          <span>
+            <strong>Use full-upgrade instead of upgrade</strong>
+            <small class="d-block text-secondary">Resolves dependency conflicts by removing packages if needed. Safer than upgrade on complex systems but <em>can remove packages</em>. ⚠️</small>
+          </span>
+        </div>
+        <div class="check-item mt-2">
+          <input type="checkbox" id="sched_apt_step_fix_dpkg" value="fix_dpkg" />
+          <span>
+            <strong>Fix interrupted installs (dpkg --configure -a)</strong>
+            <small class="d-block text-secondary">Re-runs configuration for packages left in an incomplete state by a previous interrupted install. Safe to run anytime. ✅</small>
+          </span>
+        </div>
+        <div class="check-item mt-2">
+          <input type="checkbox" id="sched_apt_step_fix_broken" value="fix_broken" />
+          <span>
+            <strong>Fix broken dependencies (apt --fix-broken install)</strong>
+            <small class="d-block text-secondary">Attempts to correct broken package dependencies. Safe — installs missing deps or removes conflicting ones. ✅</small>
+          </span>
+        </div>
+        <div class="check-item mt-2">
+          <input type="checkbox" id="sched_apt_step_autoremove" value="autoremove" />
+          <span>
+            <strong>Remove unused packages (autoremove --purge)</strong>
+            <small class="d-block text-secondary">Removes packages that were auto-installed but are no longer needed, <em>including their configuration files</em>. Frees disk space but may remove packages you wish to keep. ⚠️</small>
+          </span>
+        </div>
+        <div class="check-item mt-2">
+          <input type="checkbox" id="sched_apt_step_clean" value="clean" />
+          <span>
+            <strong>Clear package cache (apt clean)</strong>
+            <small class="d-block text-secondary">Removes downloaded .deb files from the local cache to free disk space. Has no effect on installed packages. ✅</small>
+          </span>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button type="button" id="cancel_schedule_btn" class="btn btn-secondary">
           <i class="fas fa-times"></i>
@@ -141,6 +180,9 @@
               {% if schedule.auto_disable_on_failures and schedule.failure_threshold %}
               <div><small class="text-secondary">Auto-disable individual servers after {{ schedule.failure_threshold }} failed attempts; the schedule remains active for other servers</small></div>
               {% endif %}
+              {% if schedule.apt_extra_steps %}
+              <div><small class="text-secondary">Extra apt steps: {{ schedule.apt_extra_steps | join(', ') }}</small></div>
+              {% endif %}
             </td>
             {% if current_user.is_admin %}
             <td>
@@ -156,6 +198,7 @@
                   data-schedule-server-ids="{{ schedule.server_ids|join(',') }}"
                   data-schedule-auto-disable-on-failures="{{ 'true' if schedule.auto_disable_on_failures else 'false' }}"
                   data-schedule-failure-threshold="{{ schedule.failure_threshold or '' }}"
+                  data-schedule-apt-extra-steps="{{ schedule.apt_extra_steps | join(',') }}"
                   data-schedule-enabled="{{ 'true' if schedule.enabled else 'false' }}"
                 >
                   <i class="fas fa-pen"></i>
