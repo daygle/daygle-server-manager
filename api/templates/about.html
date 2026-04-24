@@ -4,43 +4,99 @@
 {% block title %}About{% endblock %}
 
 {% block content %}
-<div class="docs-layout">
-<section class="card prose">
-  <div class="card-header">
-    <h3 class="card-title">Daygle Server Manager</h3>
-  </div>
-  <div class="card-body">
-  <p>Daygle Server Manager is a self-hosted web application for remotely patching and maintaining Linux servers over SSH. It provides a central dashboard to trigger package manager updates, schedule recurring maintenance windows, track job outcomes, and receive email alerts when something goes wrong.</p>
-  <p>The application is built with Python (FastAPI) and deployed exclusively via Docker Compose. All configuration lives in a single <code>daygle_server_manager.conf</code> file and avoids scattered environment files and secrets.</p>
+<div class="help-docs-layout">
+  <!-- Table of Contents -->
+  <aside class="help-toc-card">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">
+          <i class="fas fa-info-circle"></i>
+          <span>Contents</span>
+        </h4>
+      </div>
+      <div class="card-body p-0">
+        <nav class="help-toc-nav">
+          <a href="#overview" class="help-toc-link"><i class="fas fa-home"></i> Overview</a>
+          <a href="#features" class="help-toc-link"><i class="fas fa-star"></i> Key Features</a>
+          <a href="#tech-stack" class="help-toc-link"><i class="fas fa-layer-group"></i> Technology Stack</a>
+          <a href="#getting-started" class="help-toc-link"><i class="fas fa-rocket"></i> Getting Started</a>
+        </nav>
+      </div>
+    </div>
+  </aside>
 
-  <h3>Key Features</h3>
-  <ul>
-    <li><strong>SSH-based updates</strong>: Run package manager updates using stored SSH credentials (<code>apt</code>, <code>dnf</code>, <code>yum</code>, or auto-detected).</li>
-    <li><strong>Scheduled updates</strong>: Define cron-based schedules with timezone support for recurring maintenance windows.</li>
-    <li><strong>Job history</strong>: Track run status, output summary, and timestamps for every update operation.</li>
-    <li><strong>Alerts</strong>: Failed jobs create alerts in the UI and can optionally send SMTP notifications to admin users.</li>
-    <li><strong>Audit log</strong>: Records administrative and configuration actions for traceability.</li>
-    <li><strong>SSH key management</strong>: Generate or import key pairs directly in the UI.</li>
-    <li><strong>Multi-user support</strong>: Manage multiple users with optional admin privileges and per-user display preferences.</li>
-  </ul>
+  <!-- Main Content -->
+  <main class="help-content">
+    <section class="card prose">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="fas fa-info-circle"></i>
+          <span>About Daygle Server Manager</span>
+        </h2>
+      </div>
+      <div class="card-body help-body">
 
-  <h3>Technology Stack</h3>
-  <ul>
-    <li><strong>API</strong> - Python 3, FastAPI, SQLAlchemy, Jinja2</li>
-    <li><strong>Worker</strong> - Python background process handling SSH update jobs and schedule execution</li>
-    <li><strong>Database</strong> - PostgreSQL</li>
-    <li><strong>Deployment</strong> - Docker Compose</li>
-  </ul>
+        <section id="overview" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-home help-icon"></i>
+            <span>Overview</span>
+          </h3>
+          <p class="help-intro">Daygle Server Manager is a self-hosted web application for remotely patching and maintaining Linux servers over SSH.</p>
+          <p>It provides a central control panel to trigger package manager updates, define recurring maintenance schedules, track job history, and receive notifications when something needs attention — all without requiring direct shell access to each server.</p>
+          <p>The application is built with Python and FastAPI, deployed via Docker Compose. All configuration is stored in a single <code>daygle_server_manager.conf</code> file, keeping setup straightforward and portable.</p>
+          <p>For step-by-step usage instructions, see the <a href="/help">Help</a> page.</p>
+        </section>
 
-  <h3>Getting Started</h3>
-  <p>After the initial setup wizard (<code>/setup</code>), the recommended workflow is:</p>
-  <ol>
-    <li>Go to <a href="/ssh-keys">SSH Keys</a> and generate or import an SSH key pair.</li>
-    <li>Copy the public key to each target server's <code>~/.ssh/authorized_keys</code>.</li>
-    <li>Add your servers under <a href="/servers">Servers</a>.</li>
-    <li>Trigger a manual update from <a href="/updates">System Updates</a>, or create a schedule for automated patching.</li>
-  </ol>
-  </div>
-</section>
+        <section id="features" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-star help-icon"></i>
+            <span>Key Features</span>
+          </h3>
+          <ul>
+            <li><strong>SSH-based updates</strong> — run package manager updates on remote servers using stored credentials. Supports <code>apt</code>, <code>dnf</code>, <code>yum</code>, and auto-detection.</li>
+            <li><strong>Scheduled updates</strong> — define cron-based schedules with full timezone support for fully automated, recurring maintenance windows.</li>
+            <li><strong>Job history</strong> — every update operation is logged with status, output, and timestamps for a complete audit trail.</li>
+            <li><strong>Alerts</strong> — failed jobs and post-update reboot requirements generate alerts in the UI. Optional SMTP delivery notifies admins by email.</li>
+            <li><strong>Audit log</strong> — records all administrative actions, configuration changes, and system events for traceability and compliance.</li>
+            <li><strong>SSH key management</strong> — generate or import SSH key pairs directly in the UI. Private keys are encrypted at rest.</li>
+            <li><strong>File explorer</strong> — browse, view, edit, upload, and download files on remote servers over SFTP without leaving the browser.</li>
+            <li><strong>SSH terminal</strong> — run ad-hoc commands on a server via an in-browser terminal session.</li>
+            <li><strong>Server status</strong> — monitor CPU, RAM, storage, and load across all configured servers at a glance.</li>
+            <li><strong>Multi-user support</strong> — manage multiple users with admin or standard roles, per-user display preferences, and individual timezone settings.</li>
+          </ul>
+        </section>
+
+        <section id="tech-stack" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-layer-group help-icon"></i>
+            <span>Technology Stack</span>
+          </h3>
+          <ul>
+            <li><strong>API</strong> — Python 3, FastAPI, SQLAlchemy, Jinja2</li>
+            <li><strong>Worker</strong> — Python background process managing SSH update jobs and cron schedule execution</li>
+            <li><strong>Database</strong> — PostgreSQL</li>
+            <li><strong>Deployment</strong> — Docker Compose</li>
+          </ul>
+        </section>
+
+        <section id="getting-started" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-rocket help-icon"></i>
+            <span>Getting Started</span>
+          </h3>
+          <p class="help-intro">After completing the setup wizard, follow these steps to get up and running:</p>
+          <ol>
+            <li>Go to <a href="/ssh-keys">SSH Keys</a> and generate or import an SSH key pair.</li>
+            <li>Copy the public key to <code>~/.ssh/authorized_keys</code> on each target server.</li>
+            <li>Add your servers under <a href="/servers">Servers</a> and verify connectivity with the <strong>Test Connection</strong> button.</li>
+            <li>Run a manual update from <a href="/updates/manual">System Updates</a>, or create a recurring schedule under <a href="/updates/scheduled">Scheduled Updates</a>.</li>
+            <li>Configure SMTP in <a href="/settings">Global Settings</a> if you want email alerts for failures and reboot notifications.</li>
+          </ol>
+          <p>For detailed guidance on any feature, visit the <a href="/help">Help</a> page.</p>
+        </section>
+
+      </div>
+    </section>
+  </main>
 </div>
 {% endblock %}

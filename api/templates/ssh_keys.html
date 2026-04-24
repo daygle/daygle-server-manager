@@ -92,7 +92,7 @@
             <td><strong>{{ key.name }}</strong></td>
             <td><span class="badge badge-info">{{ key.key_type }}</span></td>
             <td>
-              <code class="key-preview">{{ key.public_key[:60] }}…</code>
+              <code class="key-preview">{{ key.public_key[:20] }}…{{ key.public_key[-6:] }}</code>
             </td>
             <td class="hide-mobile"><small>{{ format_dt(key.created_at) }}</small></td>
             <td>
@@ -307,7 +307,7 @@ document.getElementById('import-form').addEventListener('submit', async (e) => {
 function addKeyRow(key) {
   document.getElementById('no-keys-row')?.remove();
   const tbody = document.getElementById('keys-table');
-  const preview = key.public_key.substring(0, 60) + '…';
+  const preview = key.public_key.substring(0, 20) + '…' + key.public_key.slice(-6);
   const tr = document.createElement('tr');
   tr.id = `key-row-${key.id}`;
   tr.innerHTML = `

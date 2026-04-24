@@ -16,6 +16,7 @@
       </div>
       <div class="card-body p-0">
         <nav class="help-toc-nav">
+          <a href="#getting-started" class="help-toc-link"><i class="fas fa-rocket"></i> Getting Started</a>
           <a href="#dashboard" class="help-toc-link"><i class="fas fa-chart-line"></i> Dashboard</a>
           <a href="#servers" class="help-toc-link"><i class="fas fa-server"></i> Servers</a>
           <a href="#updates-run" class="help-toc-link"><i class="fas fa-play-circle"></i> System Updates (Run Now)</a>
@@ -44,6 +45,24 @@
         </h2>
       </div>
       <div class="card-body help-body">
+
+        <!-- 0. Getting Started -->
+        <section id="getting-started" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-rocket help-icon"></i>
+            <span>Getting Started</span>
+          </h3>
+          <p class="help-intro">New to Daygle Server Manager? Follow these steps after the setup wizard completes.</p>
+          <ol>
+            <li>Go to <a href="/ssh-keys">SSH Keys</a> and generate or import an SSH key pair. Ed25519 is recommended for new setups.</li>
+            <li>Copy the public key to <code>~/.ssh/authorized_keys</code> on each target server. Use the <strong>Copy authorized_keys entry</strong> button to get the correctly formatted line.</li>
+            <li>Add your servers under <a href="/servers">Servers</a>. Fill in the hostname, SSH port, username, and select your key. Use <strong>Test Connection</strong> to verify access before saving.</li>
+            <li>Run a manual update from <a href="/updates/manual">System Updates</a> on a non-critical server first to confirm everything works end-to-end.</li>
+            <li>Once satisfied, create recurring schedules under <a href="/updates/scheduled">Scheduled Updates</a> to automate patching on a cron timetable.</li>
+            <li>Configure SMTP in <a href="/settings">Global Settings</a> if you want email notifications for failures and reboot requirements.</li>
+          </ol>
+          <p>See each section below for detailed guidance on every feature.</p>
+        </section>
 
         <!-- 1. Dashboard -->
         <section id="dashboard" class="help-section">
