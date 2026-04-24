@@ -287,6 +287,8 @@ def run_update_job(db: Session, job_id: int) -> None:
         command = build_update_command(package_manager, job.apt_extra_steps)
         job.command = command
         db.commit()
+        if job.apt_extra_steps and package_manager == "apt":
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Extra apt steps requested: {', '.join(job.apt_extra_steps)}")
         step_logs.append(f"[{datetime.utcnow().isoformat()}] Running update command")
 
         sudo_password = server.sudo_password or server.password
@@ -303,9 +305,24 @@ def run_update_job(db: Session, job_id: int) -> None:
                 "Another update process may be running on the server."
             )
 
+        apt_extra_steps_section = ""
+        if job.apt_extra_steps and package_manager == "apt":
+            step_labels = {
+                "full_upgrade": "Use full-upgrade instead of upgrade",
+                "fix_dpkg": "Fix interrupted installs (dpkg --configure -a)",
+                "fix_broken": "Fix broken dependencies (apt --fix-broken install)",
+                "autoremove": "Remove unused packages (autoremove --purge)",
+                "clean": "Clear package cache (apt clean)",
+            }
+            steps_detail = "\n".join(
+                f"- {step_labels.get(s, s)}" for s in job.apt_extra_steps
+            )
+            apt_extra_steps_section = f"\n\n[apt-extra-steps]\n{steps_detail}"
+
         output_with_steps = (
             "[summary]\n"
             + summary
+            + apt_extra_steps_section
             + "\n\n[steps]\n"
             + "\n".join(step_logs)
             + "\n\n[command-output]\n"

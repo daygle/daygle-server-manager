@@ -962,6 +962,7 @@ function renderJobRow(job) {
 
 const SECTION_LABELS = {
   summary: "Summary",
+  "apt-extra-steps": "Additional apt Steps",
   steps: "Steps",
   "command-output": "Command Output",
   hint: "Hint",
