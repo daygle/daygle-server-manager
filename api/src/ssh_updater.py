@@ -502,13 +502,20 @@ def run_update_job(db: Session, job_id: int, lock_timeout_seconds: int = 120) ->
         cleaned_output = clean_command_output(package_manager, output)
 
         # Common lock wording for apt/dpkg. Keep message concise and actionable.
+        lock_hint = ""
+        if any(
+            marker in output
+            for marker in (
+                "Could not get lock",
+                "Unable to acquire the dpkg frontend lock",
+                "Unable to lock directory",
+            )
+        ):
             lock_hint = (
                 f"\n\n[hint]\nPackage manager lock timed out after waiting {lock_timeout_seconds} seconds. "
                 "Another apt or dpkg process was still holding the lock. "
                 "Check for long-running unattended-upgrades or apt processes on the server, "
-                "or increase the lock timeout in Settings \u2192 Package Manager."
-            )
-                "or increase the lock timeout in your server configuration."
+                "or increase the lock timeout in Settings -> Package Manager."
             )
 
         apt_extra_steps_section = ""
