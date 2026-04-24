@@ -93,7 +93,7 @@
             <td class="hide-mobile" data-server-status-cell="ram">{{ ('%.1f%%'|format(server.last_ram_usage)) if server.last_ram_usage is not none else '-' }}</td>
             <td class="hide-mobile" data-server-status-cell="storage">{{ ('%.1f%%'|format(server.last_storage_usage)) if server.last_storage_usage is not none else '-' }}</td>
             <td class="hide-mobile" data-server-status-cell="last-check">{{ format_dt(server.last_health_check_at) if server.last_health_check_at else 'Not checked yet' }}</td>
-            <td class="hide-mobile" data-server-status-cell="message">{{ server.last_health_message or 'No checks recorded yet.' }}</td>
+            <td class="hide-mobile" data-server-status-cell="message">{% if server.last_health_status != 'online' %}{{ server.last_health_message or 'No checks recorded yet.' }}{% else %}-{% endif %}</td>
             <td>
               <button type="button" class="btn btn-primary btn-sm" data-refresh-server-status="{{ server.id }}">
                 <i class="fas fa-rotate-right"></i>

@@ -888,7 +888,7 @@ function renderServerStatusRow(server) {
       <td class="hide-mobile" data-server-status-cell="ram">${escapeHtml(formatPercent(server.last_ram_usage))}</td>
       <td class="hide-mobile" data-server-status-cell="storage">${escapeHtml(formatPercent(server.last_storage_usage))}</td>
       <td class="hide-mobile" data-server-status-cell="last-check">${escapeHtml(server.last_health_check_at ? formatDateTimeForUi(server.last_health_check_at) : "Not checked yet")}</td>
-      <td class="hide-mobile" data-server-status-cell="message">${escapeHtml(server.last_health_message || "No checks recorded yet.")}</td>
+      <td class="hide-mobile" data-server-status-cell="message">${server.last_health_status === "online" ? "-" : escapeHtml(server.last_health_message || "No checks recorded yet.")}</td>
       <td>
         <button type="button" class="btn btn-primary btn-sm" data-refresh-server-status="${escapeHtml(server.id)}">
           <i class="fas fa-rotate-right"></i>
