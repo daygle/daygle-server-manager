@@ -109,14 +109,16 @@ def load_private_key_for_ssh(private_key_pem: str) -> paramiko.PKey:
 VALID_APT_EXTRA_STEPS = {"full_upgrade", "fix_dpkg", "fix_broken", "autoremove", "clean"}
 
 
-def build_update_command(package_manager: str, apt_extra_steps: list[str] | None = None) -> str:
+def build_update_command(package_manager: str, apt_extra_steps: list[str] | None = None, lock_timeout_seconds: int = 120) -> str:
     if package_manager == "apt":
         extra_steps = [s for s in (apt_extra_steps or []) if s in VALID_APT_EXTRA_STEPS]
 
-        # Extra noninteractive and lock-timeout options reduce chances of hanging.
+        # Acquire::Lock::Timeout covers the apt lists lock (/var/lib/apt/lists/lock);
+        # DPkg::Lock::Timeout covers the dpkg frontend lock. Both wait up to lock_timeout_seconds.
         apt_common = (
             "sudo -S env DEBIAN_FRONTEND=noninteractive "
-            "apt-get -o DPkg::Lock::Timeout=120 -o Dpkg::Options::=--force-confdef "
+            f"apt-get -o Acquire::Lock::Timeout={lock_timeout_seconds} -o DPkg::Lock::Timeout={lock_timeout_seconds} "
+            "-o Dpkg::Options::=--force-confdef "
             "-o Dpkg::Options::=--force-confold -y"
         )
 
@@ -258,12 +260,13 @@ def summarize_update_result(package_manager: str, output: str, exit_code: int, t
     return "Update completed"
 
 
-def build_check_command(package_manager: str) -> str:
+def build_check_command(package_manager: str, lock_timeout_seconds: int = 120) -> str:
     """Return a command that lists available updates without installing anything."""
     if package_manager == "apt":
         # apt-get update refreshes the index; apt list --upgradable shows pending packages.
+        # Acquire::Lock::Timeout waits up to lock_timeout_seconds for the lists lock before failing.
         return (
-            "sudo -S apt-get -o DPkg::Lock::Timeout=120 -q update 2>&1 "
+            f"sudo -S apt-get -o Acquire::Lock::Timeout={lock_timeout_seconds} -o DPkg::Lock::Timeout={lock_timeout_seconds} -q update 2>&1 "
             "&& apt list --upgradable 2>/dev/null"
         )
     if package_manager == "dnf":
@@ -312,7 +315,7 @@ def parse_check_result(package_manager: str, output: str, exit_code: int, timed_
     return False, 0, "No updates available"
 
 
-def run_check_job(db: Session, job_id: int, create_alert_fn) -> None:
+def run_check_job(db: Session, job_id: int, create_alert_fn, lock_timeout_seconds: int = 120) -> None:
     """SSH into the server and check for available updates without installing.
 
     If updates are found, creates an alert via *create_alert_fn* so admins are notified.
@@ -370,7 +373,7 @@ def run_check_job(db: Session, job_id: int, create_alert_fn) -> None:
                 raise RuntimeError("Could not detect supported package manager (apt, dnf, yum)")
             step_logs.append(f"[{datetime.utcnow().isoformat()}] Detected package manager: {package_manager}")
 
-        command = build_check_command(package_manager)
+        command = build_check_command(package_manager, lock_timeout_seconds)
         job.command = command
         db.commit()
 
@@ -432,7 +435,7 @@ def run_check_job(db: Session, job_id: int, create_alert_fn) -> None:
         client.close()
 
 
-def run_update_job(db: Session, job_id: int) -> None:
+def run_update_job(db: Session, job_id: int, lock_timeout_seconds: int = 120) -> None:
     job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
     if not job:
         return
@@ -485,7 +488,7 @@ def run_update_job(db: Session, job_id: int) -> None:
                 raise RuntimeError("Could not detect supported package manager (apt, dnf, yum)")
             step_logs.append(f"[{datetime.utcnow().isoformat()}] Detected package manager: {package_manager}")
 
-        command = build_update_command(package_manager, job.apt_extra_steps)
+        command = build_update_command(package_manager, job.apt_extra_steps, lock_timeout_seconds)
         job.command = command
         db.commit()
         if job.apt_extra_steps and package_manager == "apt":
@@ -499,11 +502,13 @@ def run_update_job(db: Session, job_id: int) -> None:
         cleaned_output = clean_command_output(package_manager, output)
 
         # Common lock wording for apt/dpkg. Keep message concise and actionable.
-        lock_hint = ""
-        if "Could not get lock" in output or "Unable to acquire the dpkg frontend lock" in output:
             lock_hint = (
-                "\n\n[hint]\nPackage manager lock detected. "
-                "Another update process may be running on the server."
+                f"\n\n[hint]\nPackage manager lock timed out after waiting {lock_timeout_seconds} seconds. "
+                "Another apt or dpkg process was still holding the lock. "
+                "Check for long-running unattended-upgrades or apt processes on the server, "
+                "or increase the lock timeout in Settings \u2192 Package Manager."
+            )
+                "or increase the lock timeout in your server configuration."
             )
 
         apt_extra_steps_section = ""

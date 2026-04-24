@@ -58,6 +58,8 @@ class Server(Base):
     last_ram_usage: Mapped[float | None] = mapped_column(nullable=True)
     last_storage_usage: Mapped[float | None] = mapped_column(nullable=True)
     last_load_avg: Mapped[float | None] = mapped_column(nullable=True)
+    last_load_avg_5: Mapped[float | None] = mapped_column(nullable=True)
+    last_load_avg_15: Mapped[float | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
     ssh_key: Mapped["SSHKey | None"] = relationship("SSHKey", back_populates="servers")

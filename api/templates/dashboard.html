@@ -53,7 +53,9 @@
             <th class="hide-mobile">CPU</th>
             <th class="hide-mobile">RAM</th>
             <th class="hide-mobile">Storage</th>
-            <th class="hide-mobile">Load Avg</th>
+            <th class="hide-mobile">Load 1m</th>
+            <th class="hide-mobile">Load 5m</th>
+            <th class="hide-mobile">Load 15m</th>
             <th class="hide-mobile">Last Check</th>
           </tr>
         </thead>
@@ -80,11 +82,13 @@
             <td class="hide-mobile">{{ ('%.1f%%'|format(server.last_ram_usage)) if server.last_ram_usage is not none else '-' }}</td>
             <td class="hide-mobile">{{ ('%.1f%%'|format(server.last_storage_usage)) if server.last_storage_usage is not none else '-' }}</td>
             <td class="hide-mobile">{{ ('%.2f'|format(server.last_load_avg)) if server.last_load_avg is not none else '-' }}</td>
+            <td class="hide-mobile">{{ ('%.2f'|format(server.last_load_avg_5)) if server.last_load_avg_5 is not none else '-' }}</td>
+            <td class="hide-mobile">{{ ('%.2f'|format(server.last_load_avg_15)) if server.last_load_avg_15 is not none else '-' }}</td>
             <td class="hide-mobile">{{ format_dt(server.last_health_check_at) if server.last_health_check_at else 'Not checked yet' }}</td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="7" class="text-center empty-state">
+            <td colspan="9" class="text-center empty-state">
               <div>
                 <i class="fas fa-server empty-icon"></i>
                 <p>No servers configured yet.</p>

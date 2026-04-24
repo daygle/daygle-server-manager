@@ -923,7 +923,9 @@ function renderServerStatusRow(server) {
       <td class="hide-mobile" data-server-status-cell="cpu">${escapeHtml(formatPercent(server.last_cpu_usage))}</td>
       <td class="hide-mobile" data-server-status-cell="ram">${escapeHtml(formatPercent(server.last_ram_usage))}</td>
       <td class="hide-mobile" data-server-status-cell="storage">${escapeHtml(formatPercent(server.last_storage_usage))}</td>
-      <td class="hide-mobile" data-server-status-cell="load-avg">${server.last_load_avg != null ? escapeHtml(Number(server.last_load_avg).toFixed(2)) : "-"}</td>
+      <td class="hide-mobile" data-server-status-cell="load-avg-1">${server.last_load_avg != null ? escapeHtml(Number(server.last_load_avg).toFixed(2)) : "-"}</td>
+      <td class="hide-mobile" data-server-status-cell="load-avg-5">${server.last_load_avg_5 != null ? escapeHtml(Number(server.last_load_avg_5).toFixed(2)) : "-"}</td>
+      <td class="hide-mobile" data-server-status-cell="load-avg-15">${server.last_load_avg_15 != null ? escapeHtml(Number(server.last_load_avg_15).toFixed(2)) : "-"}</td>
       <td class="hide-mobile" data-server-status-cell="last-check">${escapeHtml(server.last_health_check_at ? formatDateTimeForUi(server.last_health_check_at) : "Not checked yet")}</td>
       <td class="hide-mobile" data-server-status-cell="message">${server.last_health_status === "online" ? "-" : escapeHtml(server.last_health_message || "No checks recorded yet.")}</td>
       <td>
@@ -944,7 +946,7 @@ function renderServerStatusTable(items) {
   if (!items.length) {
     serverStatusBody.innerHTML = `
       <tr>
-        <td colspan="11" class="text-center empty-state">
+        <td colspan="13" class="text-center empty-state">
           <div>
             <i class="fas fa-server empty-icon"></i>
             <p>No servers configured yet.</p>

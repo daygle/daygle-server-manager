@@ -150,10 +150,31 @@
           <small class="form-text text-secondary">Alert when root partition disk usage reaches this percentage. 0 = disabled.</small>
         </div>
         <div class="form-group">
-          <label for="alert_load_avg_threshold" class="form-label">Load average threshold (1-min)</label>
+          <label for="alert_load_avg_threshold" class="form-label">1-minute load average threshold</label>
           <input id="alert_load_avg_threshold" class="form-control" type="number" name="alert_load_avg_threshold" min="0" step="0.1" value="{{ selected_alert_load_avg_threshold }}" />
           <small class="form-text text-secondary">Alert when the 1-minute load average reaches this value. Use your server's CPU count as a guide — e.g. 4.0 on a 4-core server. 0 = disabled.</small>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Package Manager Card -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fas fa-box-open"></i>
+        <span>Package Manager</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-group">
+        <label for="apt_lock_timeout_seconds" class="form-label">apt lock timeout (seconds)</label>
+        <input id="apt_lock_timeout_seconds" class="form-control" type="number" name="apt_lock_timeout_seconds" min="10" max="3600" step="10" required value="{{ selected_apt_lock_timeout }}" />
+        <small class="form-text text-secondary">
+          How long to wait for the apt lists lock (<code>/var/lib/apt/lists/lock</code>) and the dpkg frontend lock before failing a job.
+          Increase this if you see lock timeout errors caused by <strong>unattended-upgrades</strong> or other background apt processes.
+          Range: 10–3600 seconds. Default: 120.
+        </small>
       </div>
     </div>
   </div>

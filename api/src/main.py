@@ -71,10 +71,13 @@ ALERT_CPU_THRESHOLD_SETTING_KEY = "alert_cpu_threshold"
 ALERT_RAM_THRESHOLD_SETTING_KEY = "alert_ram_threshold"
 ALERT_STORAGE_THRESHOLD_SETTING_KEY = "alert_storage_threshold"
 ALERT_LOAD_AVG_THRESHOLD_SETTING_KEY = "alert_load_avg_threshold"
+APT_LOCK_TIMEOUT_SETTING_KEY = "apt_lock_timeout_seconds"
 DEFAULT_ALERT_CPU_THRESHOLD = 90
 DEFAULT_ALERT_RAM_THRESHOLD = 90
 DEFAULT_ALERT_STORAGE_THRESHOLD = 90
 DEFAULT_ALERT_LOAD_AVG_THRESHOLD = 0  # 0 = disabled
+DEFAULT_APT_LOCK_TIMEOUT_SECONDS = 120
+MAX_APT_LOCK_TIMEOUT_SECONDS = 3600
 DEFAULT_DATE_FORMAT = "iso-24"
 DEFAULT_TIMEZONE = "UTC"
 DEFAULT_THEME = "system"
@@ -161,6 +164,8 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_ram_usage DOUBLE PRECISION",
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_storage_usage DOUBLE PRECISION",
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_load_avg DOUBLE PRECISION",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_load_avg_5 DOUBLE PRECISION",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_load_avg_15 DOUBLE PRECISION",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS cron_expression VARCHAR(120)",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
@@ -545,6 +550,23 @@ def get_alert_load_avg_threshold(db: Session) -> float:
     return normalized if normalized is not None else float(DEFAULT_ALERT_LOAD_AVG_THRESHOLD)
 
 
+def normalize_apt_lock_timeout(value: str | int | None) -> int | None:
+    """Return 10–3600 seconds. None means invalid."""
+    if value is None:
+        return None
+    try:
+        v = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return v if 10 <= v <= MAX_APT_LOCK_TIMEOUT_SECONDS else None
+
+
+def get_apt_lock_timeout(db: Session) -> int:
+    raw = get_app_setting(db, APT_LOCK_TIMEOUT_SETTING_KEY, str(DEFAULT_APT_LOCK_TIMEOUT_SECONDS))
+    normalized = normalize_apt_lock_timeout(raw)
+    return normalized if normalized is not None else DEFAULT_APT_LOCK_TIMEOUT_SECONDS
+
+
 def send_admin_alert_email(db: Session, alert: Alert) -> None:
     if not get_active_email_alerts_enabled():
         return
@@ -735,11 +757,12 @@ def process_job_async(job_id: int) -> None:
     try:
         job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
         is_check = job.alert_only if job else False
+        lock_timeout = get_apt_lock_timeout(db)
 
         if is_check:
-            run_check_job(db, job_id, create_alert)
+            run_check_job(db, job_id, create_alert, lock_timeout_seconds=lock_timeout)
         else:
-            run_update_job(db, job_id)
+            run_update_job(db, job_id, lock_timeout_seconds=lock_timeout)
 
         job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
         if job:
@@ -1020,11 +1043,15 @@ def run_ssh_command(client: paramiko.SSHClient, command: str, timeout: int = 15)
     return output
 
 
-def collect_server_usage_metrics(client: paramiko.SSHClient) -> tuple[float | None, float | None, float | None, float | None]:
+def collect_server_usage_metrics(
+    client: paramiko.SSHClient,
+) -> tuple[float | None, float | None, float | None, float | None, float | None, float | None]:
     cpu_usage: float | None = None
     ram_usage: float | None = None
     storage_usage: float | None = None
-    load_avg: float | None = None
+    load_avg_1: float | None = None
+    load_avg_5: float | None = None
+    load_avg_15: float | None = None
 
     try:
         cpu_output = run_ssh_command(
@@ -1065,13 +1092,19 @@ def collect_server_usage_metrics(client: paramiko.SSHClient) -> tuple[float | No
     try:
         load_output = run_ssh_command(
             client,
-            "awk '{printf \"%.2f\", $1}' /proc/loadavg",
+            "awk '{printf \"%.2f %.2f %.2f\", $1, $2, $3}' /proc/loadavg",
         )
-        load_avg = max(0.0, float(load_output))
+        load_avg_parts = load_output.split()
+        if len(load_avg_parts) >= 3:
+            load_avg_1 = max(0.0, float(load_avg_parts[0]))
+            load_avg_5 = max(0.0, float(load_avg_parts[1]))
+            load_avg_15 = max(0.0, float(load_avg_parts[2]))
     except Exception:
-        load_avg = None
+        load_avg_1 = None
+        load_avg_5 = None
+        load_avg_15 = None
 
-    return cpu_usage, ram_usage, storage_usage, load_avg
+    return cpu_usage, ram_usage, storage_usage, load_avg_1, load_avg_5, load_avg_15
 
 
 def serialize_server_health(server: Server) -> dict:
@@ -1089,6 +1122,8 @@ def serialize_server_health(server: Server) -> dict:
         "last_ram_usage": server.last_ram_usage,
         "last_storage_usage": server.last_storage_usage,
         "last_load_avg": server.last_load_avg,
+        "last_load_avg_5": server.last_load_avg_5,
+        "last_load_avg_15": server.last_load_avg_15,
     }
 
 
@@ -1112,21 +1147,21 @@ def run_saved_server_health_check(db: Session, server: Server) -> dict:
             client.connect(**connect_kwargs)
             is_online = True
             message = f"Connection successful to {server.host}:{server.port}"
-            cpu_usage, ram_usage, storage_usage, load_avg = collect_server_usage_metrics(client)
+            cpu_usage, ram_usage, storage_usage, load_avg_1, load_avg_5, load_avg_15 = collect_server_usage_metrics(client)
         except paramiko.AuthenticationException:
             is_online = False
             message = "Authentication failed. Check username and credentials."
-            cpu_usage, ram_usage, storage_usage, load_avg = None, None, None, None
+            cpu_usage, ram_usage, storage_usage, load_avg_1, load_avg_5, load_avg_15 = None, None, None, None, None, None
         except Exception as exc:
             is_online = False
             message = f"Connection failed: {str(exc)}"
-            cpu_usage, ram_usage, storage_usage, load_avg = None, None, None, None
+            cpu_usage, ram_usage, storage_usage, load_avg_1, load_avg_5, load_avg_15 = None, None, None, None, None, None
         finally:
             client.close()
     except HTTPException as exc:
         is_online = False
         message = str(exc.detail)
-        cpu_usage, ram_usage, storage_usage, load_avg = None, None, None, None
+        cpu_usage, ram_usage, storage_usage, load_avg_1, load_avg_5, load_avg_15 = None, None, None, None, None, None
 
     server.last_health_status = "online" if is_online else "offline"
     server.last_health_check_at = checked_at
@@ -1134,7 +1169,9 @@ def run_saved_server_health_check(db: Session, server: Server) -> dict:
     server.last_cpu_usage = cpu_usage
     server.last_ram_usage = ram_usage
     server.last_storage_usage = storage_usage
-    server.last_load_avg = load_avg
+    server.last_load_avg = load_avg_1
+    server.last_load_avg_5 = load_avg_5
+    server.last_load_avg_15 = load_avg_15
     db.add(server)
     db.commit()
     db.refresh(server)
@@ -1173,12 +1210,12 @@ def run_saved_server_health_check(db: Session, server: Server) -> dict:
                 source_type="server",
                 source_id=server.id,
             )
-        if load_threshold > 0 and load_avg is not None and load_avg >= load_threshold:
+        if load_threshold > 0 and load_avg_1 is not None and load_avg_1 >= load_threshold:
             create_alert(
                 db,
                 level="warning",
-                title=f"High load average on {server.name}",
-                message=f"1-minute load average is {load_avg:.2f} (threshold: {load_threshold}) on {server.name} ({server.host}).",
+                title=f"High 1-minute load average on {server.name}",
+                message=f"1-minute load average is {load_avg_1:.2f} (threshold: {load_threshold}) on {server.name} ({server.host}).",
                 source_type="server",
                 source_id=server.id,
             )
@@ -1897,6 +1934,7 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         selected_alert_ram_threshold=get_alert_ram_threshold(db),
         selected_alert_storage_threshold=get_alert_storage_threshold(db),
         selected_alert_load_avg_threshold=get_alert_load_avg_threshold(db),
+        selected_apt_lock_timeout=get_apt_lock_timeout(db),
     )
 
 
@@ -1922,6 +1960,7 @@ def save_all_settings(
     alert_ram_threshold: int = Form(DEFAULT_ALERT_RAM_THRESHOLD),
     alert_storage_threshold: int = Form(DEFAULT_ALERT_STORAGE_THRESHOLD),
     alert_load_avg_threshold: str = Form("0"),
+    apt_lock_timeout_seconds: int = Form(DEFAULT_APT_LOCK_TIMEOUT_SECONDS),
     db: Session = Depends(get_db),
 ):
     current_user = get_session_user(request, db)
@@ -2159,7 +2198,7 @@ def save_all_settings(
         return RedirectResponse(url="/settings", status_code=303)
     normalized_load_threshold = normalize_load_avg_threshold(alert_load_avg_threshold)
     if normalized_load_threshold is None:
-        set_flash(request, "Invalid load average threshold (must be 0 or a positive number).", "error")
+        set_flash(request, "Invalid 1-minute load average threshold (must be 0 or a positive number).", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
     threshold_changes: list[str] = []
@@ -2184,6 +2223,22 @@ def save_all_settings(
             detail=f"Updated alert thresholds: {', '.join(threshold_changes)}",
         )
         changed.append("alert thresholds")
+
+    normalized_lock_timeout = normalize_apt_lock_timeout(apt_lock_timeout_seconds)
+    if normalized_lock_timeout is None:
+        set_flash(request, f"Invalid apt lock timeout (10–{MAX_APT_LOCK_TIMEOUT_SECONDS} seconds).", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+    prev_lock_timeout = get_apt_lock_timeout(db)
+    if normalized_lock_timeout != prev_lock_timeout:
+        set_app_setting(db, APT_LOCK_TIMEOUT_SETTING_KEY, str(normalized_lock_timeout))
+        log_audit(
+            db,
+            "settings.apt_lock_timeout",
+            request=request,
+            actor=current_user,
+            detail=f"Changed from {prev_lock_timeout}s to {normalized_lock_timeout}s",
+        )
+        changed.append("apt lock timeout")
 
     if changed:
         set_flash(request, f"Saved settings: {', '.join(changed)}.", "success")
