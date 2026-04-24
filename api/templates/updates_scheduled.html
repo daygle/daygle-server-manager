@@ -55,6 +55,17 @@
       </div>
 
       <div class="form-group">
+        <label class="form-label">Update Mode</label>
+        <label class="check-item">
+          <input type="checkbox" id="sched_alert_only" />
+          <span>
+            <strong>Alert Only — check for updates without installing</strong>
+            <small class="d-block text-secondary">On each run, checks for available updates and creates an alert if any are found. Nothing is installed. Additional apt steps below are ignored when this is enabled.</small>
+          </span>
+        </label>
+      </div>
+
+      <div class="form-group">
         <label class="form-label">Failure Guard</label>
         <div class="form-check mt-2">
           <input id="auto_disable_on_failures" type="checkbox" class="form-check-input" name="auto_disable_on_failures" />
@@ -180,6 +191,9 @@
               {% if schedule.auto_disable_on_failures and schedule.failure_threshold %}
               <div><small class="text-secondary">Auto-disable individual servers after {{ schedule.failure_threshold }} failed attempts; the schedule remains active for other servers</small></div>
               {% endif %}
+              {% if schedule.alert_only %}
+              <div><small class="text-secondary">Mode: alert only (no installs)</small></div>
+              {% endif %}
               {% if schedule.apt_extra_steps %}
               <div><small class="text-secondary">Extra apt steps: {{ schedule.apt_extra_steps | join(', ') }}</small></div>
               {% endif %}
@@ -199,6 +213,7 @@
                   data-schedule-auto-disable-on-failures="{{ 'true' if schedule.auto_disable_on_failures else 'false' }}"
                   data-schedule-failure-threshold="{{ schedule.failure_threshold or '' }}"
                   data-schedule-apt-extra-steps="{{ schedule.apt_extra_steps | join(',') }}"
+                  data-schedule-alert-only="{{ 'true' if schedule.alert_only else 'false' }}"
                   data-schedule-enabled="{{ 'true' if schedule.enabled else 'false' }}"
                 >
                   <i class="fas fa-pen"></i>

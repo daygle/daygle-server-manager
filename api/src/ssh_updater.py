@@ -258,6 +258,180 @@ def summarize_update_result(package_manager: str, output: str, exit_code: int, t
     return "Update completed"
 
 
+def build_check_command(package_manager: str) -> str:
+    """Return a command that lists available updates without installing anything."""
+    if package_manager == "apt":
+        # apt-get update refreshes the index; apt list --upgradable shows pending packages.
+        return (
+            "sudo -S apt-get -o DPkg::Lock::Timeout=120 -q update 2>&1 "
+            "&& apt list --upgradable 2>/dev/null"
+        )
+    if package_manager == "dnf":
+        return "sudo -S dnf check-update; true"
+    if package_manager == "yum":
+        return "sudo -S yum check-update; true"
+    raise ValueError("Unsupported package manager")
+
+
+def parse_check_result(package_manager: str, output: str, exit_code: int, timed_out: bool) -> tuple[bool, int, str]:
+    """Return (updates_available, count, summary_text).
+
+    count is 0 if we couldn't determine a precise number.
+    """
+    if timed_out:
+        return False, 0, "Timed out checking for updates"
+    if exit_code not in (0, 1, 100):
+        # dnf/yum returns 100 when updates are available; 1 = error for some managers
+        return False, 0, "Check failed (see details)"
+
+    lower = output.lower()
+
+    if package_manager == "apt":
+        # apt list --upgradable prints one line per upgradable package (plus a header)
+        lines = [
+            line for line in output.splitlines()
+            if "/" in line and ("upgradable from" in line.lower() or "upgradable" in line.lower())
+        ]
+        count = len(lines)
+        if count == 0:
+            return False, 0, "No updates available"
+        return True, count, f"{count} update{'s' if count != 1 else ''} available"
+
+    if package_manager in {"dnf", "yum"}:
+        # dnf/yum check-update: exit code 100 = updates available, 0 = none
+        if exit_code == 100:
+            # Count non-blank, non-header lines after "Last metadata" or similar
+            pkg_lines = [
+                line for line in output.splitlines()
+                if line.strip() and not line.startswith("Last metadata") and not line.startswith("Loaded plugins") and not line.startswith("Loading mirror")
+            ]
+            count = len(pkg_lines)
+            return True, count, f"{count} update{'s' if count != 1 else ''} available"
+        return False, 0, "No updates available"
+
+    return False, 0, "No updates available"
+
+
+def run_check_job(db: Session, job_id: int, create_alert_fn) -> None:
+    """SSH into the server and check for available updates without installing.
+
+    If updates are found, creates an alert via *create_alert_fn* so admins are notified.
+    *create_alert_fn* signature: (db, level, title, message, source_type, source_id) -> Alert
+    """
+    job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
+    if not job:
+        return
+
+    server = db.query(Server).filter(Server.id == job.server_id).first()
+    if not server:
+        job.status = "failed"
+        job.output = "Server not found"
+        job.summary = "Server not found"
+        job.finished_at = datetime.utcnow()
+        db.commit()
+        return
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    step_logs: list[str] = []
+    server_password = server.password
+    server_sudo_password = server.sudo_password
+
+    try:
+        step_logs.append(f"[{datetime.utcnow().isoformat()}] Starting update check (alert-only)")
+        job.status = "running"
+        job.started_at = datetime.utcnow()
+        db.commit()
+
+        connect_kwargs = {
+            "hostname": server.host,
+            "port": server.port,
+            "username": server.username,
+            "timeout": SSH_CONNECT_TIMEOUT_SECONDS,
+            "banner_timeout": SSH_CONNECT_TIMEOUT_SECONDS,
+            "auth_timeout": SSH_CONNECT_TIMEOUT_SECONDS,
+        }
+
+        if server.auth_method == "password":
+            connect_kwargs["password"] = server.password
+        elif server.ssh_key_id and server.ssh_key:
+            pkey = load_private_key_for_ssh(server.ssh_key.private_key)
+            connect_kwargs["pkey"] = pkey
+
+        step_logs.append(f"[{datetime.utcnow().isoformat()}] Connecting to {server.host}:{server.port} as {server.username}")
+        client.connect(**connect_kwargs)
+        step_logs.append(f"[{datetime.utcnow().isoformat()}] SSH connection established")
+
+        package_manager = job.package_manager
+        if package_manager == "auto":
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Detecting package manager")
+            package_manager = detect_package_manager(client)
+            if package_manager == "unknown":
+                raise RuntimeError("Could not detect supported package manager (apt, dnf, yum)")
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Detected package manager: {package_manager}")
+
+        command = build_check_command(package_manager)
+        job.command = command
+        db.commit()
+
+        step_logs.append(f"[{datetime.utcnow().isoformat()}] Checking for available updates")
+        sudo_password = server.sudo_password or server.password
+        exit_code, output, timed_out = run_remote_command(client, command, sudo_password)
+        output = redact_secrets(output, [server_password, server_sudo_password])
+
+        updates_available, count, summary = parse_check_result(package_manager, output, exit_code, timed_out)
+
+        if updates_available:
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] {summary} — creating alert")
+            create_alert_fn(
+                db,
+                "warning",
+                f"Updates available: {server.name}",
+                f"{summary} on {server.name} ({server.host}). Log in and run updates when ready.",
+                "update_job",
+                str(job_id),
+            )
+        else:
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] {summary}")
+
+        cleaned_output = clean_command_output(package_manager, output)
+        output_with_steps = (
+            "[summary]\n"
+            + summary
+            + "\n\n[steps]\n"
+            + "\n".join(step_logs)
+            + "\n\n[command-output]\n"
+            + (cleaned_output or "No relevant command output.")
+        ).strip()
+
+        job.status = "success" if exit_code in (0, 100) and not timed_out else "failed"
+        job.output = output_with_steps
+        job.summary = summary
+        job.finished_at = datetime.utcnow()
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        job.status = "failed"
+        failure_text = f"{type(exc).__name__}: {exc}"
+        failure_text = redact_secrets(failure_text, [server_password, server_sudo_password])
+        hint_text = ""
+        if isinstance(exc, paramiko.AuthenticationException):
+            hint_text = (
+                "\n\n[hint]\n"
+                "SSH authentication failed. Verify the selected username, ensure the matching public key is in "
+                "~/.ssh/authorized_keys for that user, and confirm SSH directory/file permissions (700 for ~/.ssh, "
+                "600 for authorized_keys). If using root, also check sshd_config allows key-based root login "
+                "(PermitRootLogin prohibit-password or yes)."
+            )
+        step_text = "\n".join(step_logs)
+        job.output = f"[summary]\nCheck failed\n\n[steps]\n{step_text}\n\n[error]\n{failure_text}{hint_text}".strip()
+        job.summary = "Check failed"
+        job.finished_at = datetime.utcnow()
+        db.commit()
+    finally:
+        client.close()
+
+
 def run_update_job(db: Session, job_id: int) -> None:
     job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
     if not job:

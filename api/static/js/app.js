@@ -85,6 +85,10 @@ function clearScheduleAptExtraSteps() {
       el.checked = false;
     }
   });
+  const schedAlertOnly = document.getElementById("sched_alert_only");
+  if (schedAlertOnly instanceof HTMLInputElement) {
+    schedAlertOnly.checked = false;
+  }
 }
 
 function toggleScheduleFailureThreshold() {
@@ -774,11 +778,14 @@ runForm?.addEventListener("submit", async (event) => {
   }
 
   const packageManager = document.getElementById("package_manager");
+  const alertOnlyCheckbox = document.getElementById("alert_only");
+  const alertOnly = alertOnlyCheckbox instanceof HTMLInputElement && alertOnlyCheckbox.checked;
   const aptExtraStepCheckboxes = document.querySelectorAll("#apt_extra_steps_group input[type='checkbox']:checked");
   const payload = {
     server_ids: checkedServers,
     package_manager: packageManager ? packageManager.value : "auto",
-    apt_extra_steps: [...aptExtraStepCheckboxes].map((x) => x.value),
+    apt_extra_steps: alertOnly ? [] : [...aptExtraStepCheckboxes].map((x) => x.value),
+    alert_only: alertOnly,
   };
 
   const response = await fetch("/api/updates/run", {
@@ -795,6 +802,24 @@ runForm?.addEventListener("submit", async (event) => {
 
   notify("Manual update started. Jobs are now running.", "success");
   loadJobs();
+});
+
+// Toggle apt extra steps visibility and button label when alert-only mode changes
+document.getElementById("alert_only")?.addEventListener("change", function () {
+  const isAlertOnly = this.checked;
+  const aptGroup = document.getElementById("apt_extra_steps_group");
+  const submitLabel = document.getElementById("run-submit-label");
+  const submitIcon = document.getElementById("run-submit-icon");
+  if (aptGroup) {
+    aptGroup.style.opacity = isAlertOnly ? "0.4" : "";
+    aptGroup.style.pointerEvents = isAlertOnly ? "none" : "";
+  }
+  if (submitLabel) {
+    submitLabel.textContent = isAlertOnly ? "Check for Updates" : "Start Update";
+  }
+  if (submitIcon) {
+    submitIcon.className = isAlertOnly ? "fas fa-bell" : "fas fa-play";
+  }
 });
 
 function renderStatus(status) {
@@ -1133,6 +1158,9 @@ scheduleForm?.addEventListener("submit", async (event) => {
     apt_extra_steps: [...document.querySelectorAll("#sched_apt_step_full_upgrade, #sched_apt_step_fix_dpkg, #sched_apt_step_fix_broken, #sched_apt_step_autoremove, #sched_apt_step_clean")]
       .filter((el) => el instanceof HTMLInputElement && el.checked)
       .map((el) => el.value),
+    alert_only: document.getElementById("sched_alert_only") instanceof HTMLInputElement
+      ? (document.getElementById("sched_alert_only")).checked
+      : false,
   };
 
   if (payload.auto_disable_on_failures && (!payload.failure_threshold || payload.failure_threshold < 1)) {
@@ -1255,6 +1283,7 @@ document.querySelectorAll("[data-edit-schedule]").forEach((button) => {
     const scheduleFailureThreshold = button.getAttribute("data-schedule-failure-threshold") || "3";
     const scheduleAptExtraStepsRaw = button.getAttribute("data-schedule-apt-extra-steps") || "";
     const scheduleAptExtraSteps = scheduleAptExtraStepsRaw.split(",").map((s) => s.trim()).filter((s) => s.length > 0);
+    const scheduleAlertOnly = button.getAttribute("data-schedule-alert-only") === "true";
     const scheduleServerIds = scheduleServerIdsRaw
       .split(",")
       .map((value) => value.trim())
@@ -1287,6 +1316,11 @@ document.querySelectorAll("[data-edit-schedule]").forEach((button) => {
         el.checked = scheduleAptExtraSteps.includes(step);
       }
     });
+
+    const schedAlertOnlyEl = document.getElementById("sched_alert_only");
+    if (schedAlertOnlyEl instanceof HTMLInputElement) {
+      schedAlertOnlyEl.checked = scheduleAlertOnly;
+    }
 
     document.querySelectorAll("#schedule-server-checks input[type='checkbox']").forEach((checkbox) => {
       if (checkbox instanceof HTMLInputElement) {

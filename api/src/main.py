@@ -37,7 +37,7 @@ from .schemas import (
     UpdateScheduleRead,
 )
 from .security import hash_password, verify_password
-from .ssh_updater import run_update_job
+from .ssh_updater import run_check_job, run_update_job
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -178,6 +178,8 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS disabled_server_ids TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS apt_extra_steps TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS apt_extra_steps TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS alert_only BOOLEAN NOT NULL DEFAULT FALSE",
+        "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS alert_only BOOLEAN NOT NULL DEFAULT FALSE",
         (
             "CREATE TABLE IF NOT EXISTS audit_logs ("
             "id SERIAL PRIMARY KEY, "
@@ -656,8 +658,8 @@ def purge_old_history(db: Session) -> None:
     db.commit()
 
 
-def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str, apt_extra_steps: list[str] | None = None, job_type: str = "manual") -> list[int]:
-    return enqueue_update_jobs_for_schedule(db, servers, package_manager, None, job_type, apt_extra_steps)
+def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str, apt_extra_steps: list[str] | None = None, job_type: str = "manual", alert_only: bool = False) -> list[int]:
+    return enqueue_update_jobs_for_schedule(db, servers, package_manager, None, job_type, apt_extra_steps, alert_only=alert_only)
 
 
 def enqueue_update_jobs_for_schedule(
@@ -667,6 +669,7 @@ def enqueue_update_jobs_for_schedule(
     schedule_id: int | None,
     job_type: str = "manual",
     apt_extra_steps: list[str] | None = None,
+    alert_only: bool = False,
 ) -> list[int]:
     safe_job_type = "scheduled" if job_type == "scheduled" else "manual"
     created_jobs: list[int] = []
@@ -680,6 +683,7 @@ def enqueue_update_jobs_for_schedule(
             command="Pending package manager detection...",
         )
         job.apt_extra_steps = [s for s in (apt_extra_steps or []) if s]
+        job.alert_only = alert_only
         db.add(job)
         db.commit()
         db.refresh(job)
@@ -707,7 +711,7 @@ def run_schedule_loop() -> None:
                 active_server_ids = [server_id for server_id in schedule.server_ids if server_id not in schedule.disabled_server_ids]
                 servers = db.query(Server).filter(Server.id.in_(active_server_ids)).all()
                 if servers:
-                    enqueue_update_jobs_for_schedule(db, servers, schedule.package_manager, schedule.id, job_type="scheduled", apt_extra_steps=schedule.apt_extra_steps)
+                    enqueue_update_jobs_for_schedule(db, servers, schedule.package_manager, schedule.id, job_type="scheduled", apt_extra_steps=schedule.apt_extra_steps, alert_only=schedule.alert_only)
 
                 schedule.last_run_at = now
                 schedule.next_run_at = get_next_schedule_run(schedule, now)
@@ -729,13 +733,24 @@ def run_schedule_loop() -> None:
 def process_job_async(job_id: int) -> None:
     db = SessionLocal()
     try:
-        run_update_job(db, job_id)
+        job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
+        is_check = job.alert_only if job else False
+
+        if is_check:
+            run_check_job(db, job_id, create_alert)
+        else:
+            run_update_job(db, job_id)
 
         job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
         if job:
             apply_schedule_failure_guard(db, job)
 
         if not job or job.status != "failed":
+            return
+
+        # For alert-only check jobs, alerts are created by run_check_job itself;
+        # don't double-alert on a check that succeeded (status may be "success" even with updates found).
+        if job.alert_only:
             return
 
         existing = (
@@ -1335,9 +1350,12 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse(url="/login", status_code=303)
 
     total_servers = db.query(func.count(Server.id)).scalar() or 0
+    servers_online = db.query(func.count(Server.id)).filter(Server.last_health_status == "online").scalar() or 0
     running_jobs = db.query(func.count(UpdateJob.id)).filter(UpdateJob.status == "running").scalar() or 0
     failed_jobs = db.query(func.count(UpdateJob.id)).filter(UpdateJob.status == "failed").scalar() or 0
+    unacknowledged_alerts = db.query(func.count(Alert.id)).filter(Alert.acknowledged_at.is_(None)).scalar() or 0
     latest_jobs = db.query(UpdateJob).order_by(UpdateJob.created_at.desc()).limit(10).all()
+    servers = db.query(Server).order_by(Server.name.asc()).all()
 
     return render_app_template(
         request,
@@ -1346,9 +1364,12 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         current_user,
         db,
         total_servers=total_servers,
+        servers_online=servers_online,
         running_jobs=running_jobs,
         failed_jobs=failed_jobs,
+        unacknowledged_alerts=unacknowledged_alerts,
         latest_jobs=latest_jobs,
+        servers=servers,
     )
 
 
@@ -3396,11 +3417,11 @@ def run_updates(payload: UpdateRequest, request: Request, db: Session = Depends(
     if not servers:
         raise HTTPException(status_code=404, detail="No matching servers found")
 
-    created_jobs = enqueue_update_jobs(db, servers, payload.package_manager, apt_extra_steps=payload.apt_extra_steps, job_type="manual")
+    created_jobs = enqueue_update_jobs(db, servers, payload.package_manager, apt_extra_steps=payload.apt_extra_steps, job_type="manual", alert_only=payload.alert_only)
     actor = get_session_user(request, db)
     server_names = ", ".join(s.name for s in servers)
     log_audit(db, "update.run", request=request, actor=actor,
-              detail=f"Servers: {server_names}; package_manager: {payload.package_manager}; apt_extra_steps: {','.join(payload.apt_extra_steps) or 'none'}")
+              detail=f"Servers: {server_names}; package_manager: {payload.package_manager}; apt_extra_steps: {','.join(payload.apt_extra_steps) or 'none'}; alert_only: {payload.alert_only}")
     return {"job_ids": created_jobs}
 
 
@@ -3436,6 +3457,7 @@ def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session
     schedule.server_ids = sorted(set(payload.server_ids))
     schedule.disabled_server_ids = []
     schedule.apt_extra_steps = [s for s in payload.apt_extra_steps if s]
+    schedule.alert_only = payload.alert_only
     schedule.next_run_at = get_next_schedule_run(schedule, datetime.utcnow())
 
     db.add(schedule)
@@ -3447,6 +3469,7 @@ def create_schedule(payload: UpdateScheduleCreate, request: Request, db: Session
               detail=(
                   f"Servers: {server_names}; cron: {schedule.cron_expression}; package_manager: {schedule.package_manager}; "
                   f"apt_extra_steps: {','.join(payload.apt_extra_steps) or 'none'}; "
+                  f"alert_only: {schedule.alert_only}; "
                   f"auto_disable_on_failures={schedule.auto_disable_on_failures}; failure_threshold={schedule.failure_threshold or 'off'}"
               ))
     return schedule
@@ -3488,6 +3511,7 @@ def update_schedule(schedule_id: int, payload: UpdateScheduleUpdate, request: Re
     schedule.failure_threshold = payload.failure_threshold if payload.auto_disable_on_failures else None
     schedule.disabled_server_ids = []
     schedule.apt_extra_steps = [s for s in payload.apt_extra_steps if s]
+    schedule.alert_only = payload.alert_only
     if payload.enabled is not None:
         schedule.enabled = payload.enabled
 
@@ -3502,6 +3526,7 @@ def update_schedule(schedule_id: int, payload: UpdateScheduleUpdate, request: Re
               detail=(
                   f"Servers: {server_names}; cron: {schedule.cron_expression}; package_manager: {schedule.package_manager}; "
                   f"apt_extra_steps: {','.join(schedule.apt_extra_steps) or 'none'}; "
+                  f"alert_only: {schedule.alert_only}; "
                   f"enabled: {schedule.enabled}; auto_disable_on_failures={schedule.auto_disable_on_failures}; "
                   f"failure_threshold={schedule.failure_threshold or 'off'}; disabled servers reset"
               ))

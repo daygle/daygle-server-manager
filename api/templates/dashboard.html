@@ -10,6 +10,11 @@
     <div class="stat-label">Servers</div>
     <div class="stat-value">{{ total_servers }}</div>
   </a>
+  <a href="/servers/status" class="card stat-card" style="text-decoration: none; background: linear-gradient(135deg, #15803d, #16a34a);">
+    <i class="fas fa-circle-check stat-icon" aria-hidden="true"></i>
+    <div class="stat-label">Servers Online</div>
+    <div class="stat-value">{{ servers_online }}</div>
+  </a>
   <a href="/updates/jobs/running" class="card stat-card stat-card-running" style="text-decoration: none;">
     <i class="fas fa-gear stat-icon" aria-hidden="true"></i>
     <div class="stat-label">Running Jobs</div>
@@ -20,48 +25,129 @@
     <div class="stat-label">Failed Jobs</div>
     <div class="stat-value">{{ failed_jobs }}</div>
   </a>
+  <a href="/alerts" class="card stat-card" style="text-decoration: none; background: linear-gradient(135deg, #b45309, #d97706);">
+    <i class="fas fa-bell stat-icon" aria-hidden="true"></i>
+    <div class="stat-label">Unacknowledged Alerts</div>
+    <div class="stat-value">{{ unacknowledged_alerts }}</div>
+  </a>
 </div>
 
-<section class="card">
-  <div class="card-header">
-    <h3 class="card-title">
-      <i class="fas fa-clock-rotate-left"></i>
-      <span>Recent Update Jobs</span>
-    </h3>
+<section class="card mb-4">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-heart-pulse"></i>
+      <span>Server Status</span>
+    </div>
+    <a href="/servers/status" class="btn btn-primary btn-sm">
+      <i class="fas fa-arrow-right"></i>
+      <span>Full Status Page</span>
+    </a>
   </div>
   <div class="card-body p-0">
-  <div class="table-container">
-    <table class="table">
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Server Name</th>
-          <th>Job Type</th>
-          <th>Status</th>
-          <th>Package Manager</th>
-          <th>Created</th>
-          <th>Result</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for job in latest_jobs %}
-        <tr>
-          <td>{{ job.id }}</td>
-          <td>{{ job.server_name or ('Server #' ~ job.server_id) }}</td>
-          <td>{{ 'Scheduled' if job.job_type == 'scheduled' else 'Manual' }}</td>
-          <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
-          <td>{{ 'Automatically Detect' if job.package_manager == 'auto' else job.package_manager }}</td>
-          <td>{{ format_dt(job.created_at) }}</td>
-          <td>{{ job.summary or ('-' if job.status == 'pending' or job.status == 'running' else 'Update completed') }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="7">No jobs yet.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Server</th>
+            <th>Status</th>
+            <th class="hide-mobile">CPU</th>
+            <th class="hide-mobile">RAM</th>
+            <th class="hide-mobile">Storage</th>
+            <th class="hide-mobile">Load Avg</th>
+            <th class="hide-mobile">Last Check</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for server in servers %}
+          <tr>
+            <td>
+              <strong>{{ server.name }}</strong>
+              <small class="d-block text-secondary">{{ server.host }}:{{ server.port }}</small>
+            </td>
+            <td>
+              {% if server.last_health_status == 'online' %}
+              <span class="status status-success">online</span>
+              {% elif server.last_health_status == 'offline' %}
+              <span class="status status-failed">offline</span>
+              {% else %}
+              <span class="status status-pending">unknown</span>
+              {% endif %}
+              {% if server.last_health_status == 'offline' and server.last_health_message %}
+              <small class="d-block text-secondary">{{ server.last_health_message }}</small>
+              {% endif %}
+            </td>
+            <td class="hide-mobile">{{ ('%.1f%%'|format(server.last_cpu_usage)) if server.last_cpu_usage is not none else '-' }}</td>
+            <td class="hide-mobile">{{ ('%.1f%%'|format(server.last_ram_usage)) if server.last_ram_usage is not none else '-' }}</td>
+            <td class="hide-mobile">{{ ('%.1f%%'|format(server.last_storage_usage)) if server.last_storage_usage is not none else '-' }}</td>
+            <td class="hide-mobile">{{ ('%.2f'|format(server.last_load_avg)) if server.last_load_avg is not none else '-' }}</td>
+            <td class="hide-mobile">{{ format_dt(server.last_health_check_at) if server.last_health_check_at else 'Not checked yet' }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="text-center empty-state">
+              <div>
+                <i class="fas fa-server empty-icon"></i>
+                <p>No servers configured yet.</p>
+                {% if current_user.is_admin %}
+                <a href="/servers" class="btn btn-primary mt-3">
+                  <i class="fas fa-plus"></i>
+                  <span>Add a Server</span>
+                </a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
+</section>
+
+<section class="card">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-clock-rotate-left"></i>
+      <span>Recent Update Jobs</span>
+    </div>
+    <a href="/updates/jobs" class="btn btn-primary btn-sm">
+      <i class="fas fa-arrow-right"></i>
+      <span>All Jobs</span>
+    </a>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-container">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Server</th>
+            <th>Type</th>
+            <th>Mode</th>
+            <th>Status</th>
+            <th class="hide-mobile">Created</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in latest_jobs %}
+          <tr>
+            <td>{{ job.id }}</td>
+            <td>{{ job.server_name or ('Server #' ~ job.server_id) }}</td>
+            <td>{{ 'Scheduled' if job.job_type == 'scheduled' else 'Manual' }}</td>
+            <td>{% if job.alert_only %}<span class="status status-pending">alert only</span>{% else %}-{% endif %}</td>
+            <td><span class="status status-{{ job.status }}">{{ job.status }}</span></td>
+            <td class="hide-mobile">{{ format_dt(job.created_at) }}</td>
+            <td>{{ job.summary or ('-' if job.status == 'pending' or job.status == 'running' else 'Completed') }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7">No jobs yet.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </section>
 {% endblock %}
