@@ -208,23 +208,50 @@ def summarize_update_result(package_manager: str, output: str, exit_code: int, t
         "no packages needed for security",
         "no packages needed for update",
     ]
-    if any(marker in lower_output for marker in no_update_markers):
-        return "No updates available"
+    no_updates = any(marker in lower_output for marker in no_update_markers)
 
     if package_manager == "apt":
+        upgraded = 0
+        newly_installed = 0
+
         # Example: "5 upgraded, 0 newly installed, 0 to remove and 0 not upgraded."
         match = re.search(r"(\d+)\s+upgraded,\s+(\d+)\s+newly installed", output, flags=re.IGNORECASE)
         if match:
             upgraded = int(match.group(1))
             newly_installed = int(match.group(2))
-            if upgraded == 0 and newly_installed == 0:
-                return "No updates available"
-            if upgraded > 0 and newly_installed == 0:
-                return f"{upgraded} update{'s' if upgraded != 1 else ''} applied"
-            return f"{upgraded} updated, {newly_installed} newly installed"
+
+        # Packages removed by autoremove
+        removed = 0
+        removed_match = re.search(r"(\d+)\s+(?:packages?\s+)?(?:were\s+)?removed", lower_output)
+        if removed_match:
+            removed = int(removed_match.group(1))
+
+        # apt clean doesn't print a count — detect it ran from the command string presence
+        cleaned_cache = "apt-get clean" in output or "apt clean" in output
+
+        if no_updates and removed == 0 and not cleaned_cache:
+            return "No updates available"
+
+        parts = []
+        if upgraded > 0 or newly_installed > 0:
+            if newly_installed == 0:
+                parts.append(f"{upgraded} update{'s' if upgraded != 1 else ''} applied")
+            else:
+                parts.append(f"{upgraded} updated, {newly_installed} newly installed")
+        elif no_updates:
+            parts.append("No updates available")
+
+        if removed > 0:
+            parts.append(f"{removed} unused package{'s' if removed != 1 else ''} removed")
+        if cleaned_cache:
+            parts.append("package cache cleared")
+
+        return "; ".join(parts) if parts else "Update completed"
 
     # dnf/yum often don't print a simple numeric summary reliably.
     if package_manager in {"dnf", "yum"}:
+        if no_updates:
+            return "No updates available"
         if "upgraded:" in lower_output or "updated:" in lower_output:
             return "Updates applied"
 
