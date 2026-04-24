@@ -88,6 +88,7 @@ Tips:
 
     let socket = null;
     let isConnected = false;
+    let terminalHasFocus = false;
 
     function setStatus(text, isOnline) {
       statusEl.textContent = text;
@@ -124,6 +125,10 @@ Tips:
         return;
       }
       socket.send(JSON.stringify(payload));
+    }
+
+    function canHandlePaste() {
+      return isConnected && (terminalHasFocus || document.activeElement === outputEl);
     }
 
     function sendResize() {
@@ -235,8 +240,8 @@ Tips:
       }
     });
 
-    outputEl.addEventListener("paste", function (event) {
-      if (!isConnected) {
+    document.addEventListener("paste", function (event) {
+      if (!canHandlePaste()) {
         return;
       }
       const pastedText = event.clipboardData ? event.clipboardData.getData("text") : "";
@@ -264,6 +269,12 @@ Tips:
     window.addEventListener("resize", sendResize);
     outputEl.addEventListener("click", function () {
       outputEl.focus();
+    });
+    outputEl.addEventListener("focus", function () {
+      terminalHasFocus = true;
+    });
+    outputEl.addEventListener("blur", function () {
+      terminalHasFocus = false;
     });
   })();
 </script>
