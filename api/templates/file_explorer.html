@@ -344,7 +344,7 @@
           <div class="flex gap-1">
             ${!e.is_dir ? `<button class="btn btn-primary btn-xs fe-dl-btn" data-path="${escHtml(joinPath(path, e.name))}" title="Download"><i class="fas fa-download"></i></button>` : ""}
             <button class="btn btn-warning btn-xs fe-chmod-row-btn" data-path="${escHtml(joinPath(path, e.name))}" data-mode="${escHtml(e.mode_octal || "0644")}" title="Permissions"><i class="fas fa-lock"></i></button>
-            <button class="btn btn-secondary btn-xs fe-rename-row-btn" data-path="${escHtml(joinPath(path, e.name))}" title="Rename"><i class="fas fa-i-cursor"></i></button>
+            <button class="btn btn-warning btn-xs fe-rename-row-btn" data-path="${escHtml(joinPath(path, e.name))}" title="Rename"><i class="fas fa-i-cursor"></i></button>
             <button class="btn btn-danger btn-xs fe-delete-row-btn" data-path="${escHtml(joinPath(path, e.name))}" data-name="${escHtml(e.name)}" title="Delete"><i class="fas fa-trash"></i></button>
           </div>
         </td>
