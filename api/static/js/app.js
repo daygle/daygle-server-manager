@@ -689,7 +689,7 @@ document.querySelectorAll("[data-test-server]").forEach((button) => {
 });
 
 async function refreshAllServerStatus({ silent = false } = {}) {
-  if (!refreshAllServerStatusBtn) {
+  if (!serverStatusBody) {
     return;
   }
 
@@ -751,6 +751,12 @@ function startServerStatusAutoCheck() {
 
   const intervalSeconds = Number(serverStatusAutoCheckInterval.value || 60);
   const intervalMs = Number.isFinite(intervalSeconds) && intervalSeconds > 0 ? intervalSeconds * 1000 : 60000;
+
+  // Run once immediately when enabled so users do not wait for the first interval.
+  serverStatusAutoCheckInFlight = true;
+  refreshAllServerStatus({ silent: true }).finally(() => {
+    serverStatusAutoCheckInFlight = false;
+  });
 
   serverStatusAutoCheckTimerId = setInterval(async () => {
     if (serverStatusAutoCheckInFlight) {
