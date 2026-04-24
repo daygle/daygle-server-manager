@@ -4,123 +4,241 @@
 {% block title %}Help{% endblock %}
 
 {% block content %}
-<div class="docs-layout">
-<section class="card prose">
-  <div class="card-header">
-    <h3 class="card-title">How to Use Daygle Server Manager</h3>
-  </div>
-  <div class="card-body">
+<div class="help-docs-layout">
+  <!-- Table of Contents -->
+  <aside class="help-toc-card">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">
+          <i class="fas fa-book"></i>
+          <span>Contents</span>
+        </h4>
+      </div>
+      <div class="card-body p-0">
+        <nav class="help-toc-nav">
+          <a href="#dashboard" class="help-toc-link"><i class="fas fa-chart-line"></i> Dashboard</a>
+          <a href="#servers" class="help-toc-link"><i class="fas fa-server"></i> Servers</a>
+          <a href="#updates-run" class="help-toc-link"><i class="fas fa-play-circle"></i> System Updates (Run Now)</a>
+          <a href="#schedules" class="help-toc-link"><i class="fas fa-calendar"></i> Update Schedules</a>
+          <a href="#alerts" class="help-toc-link"><i class="fas fa-bell"></i> Alerts</a>
+          <a href="#audit" class="help-toc-link"><i class="fas fa-clipboard-list"></i> Audit Log</a>
+          <a href="#users" class="help-toc-link"><i class="fas fa-users"></i> User Management</a>
+          <a href="#ssh-keys" class="help-toc-link"><i class="fas fa-key"></i> SSH Keys</a>
+          <a href="#settings" class="help-toc-link"><i class="fas fa-cog"></i> Global Settings</a>
+          <a href="#user-settings" class="help-toc-link"><i class="fas fa-user-cog"></i> User Settings</a>
+          <a href="#email-alerts" class="help-toc-link"><i class="fas fa-envelope"></i> Email Alerts</a>
+          <a href="#troubleshooting" class="help-toc-link"><i class="fas fa-wrench"></i> Troubleshooting</a>
+          <a href="#app-updates" class="help-toc-link"><i class="fas fa-sync"></i> Update Application</a>
+        </nav>
+      </div>
+    </div>
+  </aside>
 
-  <h3>1. Dashboard</h3>
-  <p>The dashboard shows a quick operational snapshot:</p>
-  <ul>
-    <li>Total configured servers</li>
-    <li>Running and failed update jobs</li>
-    <li>Latest update activity</li>
-  </ul>
+  <!-- Main Content -->
+  <main class="help-content">
+    <section class="card prose">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="fas fa-question-circle"></i>
+          <span>How to Use Daygle Server Manager</span>
+        </h2>
+      </div>
+      <div class="card-body help-body">
 
-  <h3>2. Servers</h3>
-  <p>Go to <strong>Servers</strong> to add or manage remote hosts.</p>
-  <ul>
-    <li><strong>Name</strong>: unique display name</li>
-    <li><strong>Host</strong>: IP or DNS name</li>
-    <li><strong>Port</strong>: usually 22</li>
-    <li><strong>Username</strong>: SSH account</li>
-    <li><strong>Auth Method</strong>: SSH key or password</li>
-    <li><strong>Sudo Password</strong>: optional; use only when sudo prompts for a different password</li>
-  </ul>
-  <p>Use <strong>Edit</strong> and <strong>Delete</strong> in the table for existing entries.</p>
+        <!-- 1. Dashboard -->
+        <section id="dashboard" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-chart-line help-icon"></i>
+            <span>Dashboard</span>
+          </h3>
+          <p class="help-intro">The dashboard shows a quick operational snapshot:</p>
+          <ul>
+            <li>Total configured servers</li>
+            <li>Running and failed update jobs</li>
+            <li>Latest update activity</li>
+          </ul>
+        </section>
 
-  <h3>3. System Updates (Run Now)</h3>
-  <p>In <strong>System Updates</strong> you can run immediate package updates:</p>
-  <ul>
-    <li>Select one or more target servers</li>
-    <li>Choose package manager (<strong>Auto detect</strong>, apt, dnf, yum)</li>
-    <li>Click <strong>Start Update</strong></li>
-  </ul>
-  <p>The <strong>Update Jobs</strong> table auto-refreshes. Click any job row to open full output inline.</p>
+        <!-- 2. Servers -->
+        <section id="servers" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-server help-icon"></i>
+            <span>Servers</span>
+          </h3>
+          <p class="help-intro">Go to <strong>Servers</strong> to add or manage remote hosts.</p>
+          <ul>
+            <li><strong>Name</strong>: unique display name</li>
+            <li><strong>Host</strong>: IP or DNS name</li>
+            <li><strong>Port</strong>: usually 22</li>
+            <li><strong>Username</strong>: SSH account</li>
+            <li><strong>Auth Method</strong>: SSH key or password</li>
+            <li><strong>Sudo Password</strong>: optional; use only when sudo prompts for a different password</li>
+          </ul>
+          <p>Use <strong>Edit</strong> and <strong>Delete</strong> in the table for existing entries.</p>
+        </section>
 
-  <h3>4. Update Schedules</h3>
-  <p>Under <strong>System Updates → Schedules</strong>:</p>
-  <ul>
-    <li>Create a schedule name</li>
-    <li>Enter a cron expression</li>
-    <li>Select target servers and package manager</li>
-    <li>Click <strong>Create Schedule</strong></li>
-  </ul>
-  <p>Schedules run in the timezone assigned at creation (based on your active timezone setting at that time).</p>
-  <p>Examples:</p>
-  <pre><code>0 2 * * *      # daily at 02:00
+        <!-- 3. System Updates -->
+        <section id="updates-run" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-play-circle help-icon"></i>
+            <span>System Updates (Run Now)</span>
+          </h3>
+          <p class="help-intro">In <strong>System Updates</strong> you can run immediate package updates:</p>
+          <ul>
+            <li>Select one or more target servers</li>
+            <li>Choose package manager (<strong>Auto detect</strong>, apt, dnf, yum)</li>
+            <li>Click <strong>Start Update</strong></li>
+          </ul>
+          <p>The <strong>Update Jobs</strong> table auto-refreshes. Click any job row to open full output inline.</p>
+        </section>
+
+        <!-- 4. Update Schedules -->
+        <section id="schedules" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-calendar help-icon"></i>
+            <span>Update Schedules</span>
+          </h3>
+          <p class="help-intro">Under <strong>System Updates → Schedules</strong>:</p>
+          <ul>
+            <li>Create a schedule name</li>
+            <li>Enter a cron expression</li>
+            <li>Select target servers and package manager</li>
+            <li>Click <strong>Create Schedule</strong></li>
+          </ul>
+          <p>Schedules run in the timezone assigned at creation (based on your active timezone setting at that time).</p>
+          <p class="help-label">Cron Expression Examples:</p>
+          <div class="help-code-block">
+            <pre><code>0 2 * * *      # daily at 02:00
 0 */6 * * *    # every 6 hours
 30 3 * * 0     # every Sunday at 03:30</code></pre>
-  <p>Use <strong>Enable/Disable</strong> or <strong>Delete</strong> to manage schedules.</p>
+          </div>
+          <p>Use <strong>Enable/Disable</strong> or <strong>Delete</strong> to manage schedules.</p>
+        </section>
 
-  <h3>5. Alerts</h3>
-  <p>When update jobs fail, the system creates alerts.</p>
-  <ul>
-    <li>View alerts in <strong>Alerts</strong></li>
-    <li>Filter by level and state (open/acknowledged/all)</li>
-    <li>Use <strong>Acknowledge</strong> to mark an alert as handled</li>
-    <li>Use <strong>Dismiss</strong> to remove an alert</li>
-  </ul>
-  <p>Admin users also see an open-alert count badge in the sidebar/top bar.</p>
+        <!-- 5. Alerts -->
+        <section id="alerts" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-bell help-icon"></i>
+            <span>Alerts</span>
+          </h3>
+          <p class="help-intro">When update jobs fail, the system creates alerts.</p>
+          <ul>
+            <li>View alerts in <strong>Alerts</strong></li>
+            <li>Filter by level and state (open/acknowledged/all)</li>
+            <li>Use <strong>Acknowledge</strong> to mark an alert as handled</li>
+            <li>Use <strong>Dismiss</strong> to remove an alert</li>
+          </ul>
+          <p>Admin users also see an open-alert count badge in the sidebar/top bar.</p>
+        </section>
 
-  <h3>6. Audit Log</h3>
-  <p><strong>Audit Log</strong> records key user/system actions and configuration changes.</p>
-  <ul>
-    <li>Search by text</li>
-    <li>Filter by action and user</li>
-    <li>Filter by date range</li>
-    <li>Use pagination controls to browse older entries</li>
-  </ul>
+        <!-- 6. Audit Log -->
+        <section id="audit" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-clipboard-list help-icon"></i>
+            <span>Audit Log</span>
+          </h3>
+          <p class="help-intro"><strong>Audit Log</strong> records key user/system actions and configuration changes.</p>
+          <ul>
+            <li>Search by text</li>
+            <li>Filter by action and user</li>
+            <li>Filter by date range</li>
+            <li>Use pagination controls to browse older entries</li>
+          </ul>
+        </section>
 
-  <h3>7. User Management (Admin)</h3>
-  <p>In <strong>User Management</strong> admins can:</p>
-  <ul>
-    <li>Create users</li>
-    <li>Edit profile/admin/enabled status</li>
-    <li>Delete users</li>
-  </ul>
-  <p>Safety rules prevent removing the last enabled admin or disabling/deleting your own active admin account in unsafe ways.</p>
+        <!-- 7. User Management -->
+        <section id="users" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-users help-icon"></i>
+            <span>User Management <span class="help-badge">Admin</span></span>
+          </h3>
+          <p class="help-intro">In <strong>User Management</strong> admins can:</p>
+          <ul>
+            <li>Create users</li>
+            <li>Edit profile/admin/enabled status</li>
+            <li>Delete users</li>
+          </ul>
+          <p>Safety rules prevent removing the last enabled admin or disabling/deleting your own active admin account in unsafe ways.</p>
+        </section>
 
-  <h3>8. SSH Keys (Admin)</h3>
-  <p>In <strong>SSH Keys</strong> admins can store private keys or generate new keys for server authentication.</p>
-  <p>Keys in use by servers cannot be deleted until unassigned.</p>
+        <!-- 8. SSH Keys -->
+        <section id="ssh-keys" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-key help-icon"></i>
+            <span>SSH Keys <span class="help-badge">Admin</span></span>
+          </h3>
+          <p class="help-intro">In <strong>SSH Keys</strong> admins can store private keys or generate new keys for server authentication.</p>
+          <p>Keys in use by servers cannot be deleted until unassigned.</p>
+        </section>
 
-  <h3>9. Global Settings (Admin)</h3>
-  <p><strong>Global Settings</strong> control system-wide behavior:</p>
-  <ul>
-    <li>Date/time display format</li>
-    <li>Default timezone</li>
-    <li>History retention (jobs, audit logs, alerts)</li>
-    <li>Login timeout (minutes of inactivity)</li>
-    <li>Email alert enable/disable</li>
-    <li>SMTP server credentials and sender settings</li>
-    <li>SMTP connection test</li>
-  </ul>
+        <!-- 9. Global Settings -->
+        <section id="settings" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-cog help-icon"></i>
+            <span>Global Settings <span class="help-badge">Admin</span></span>
+          </h3>
+          <p class="help-intro"><strong>Global Settings</strong> control system-wide behavior:</p>
+          <ul>
+            <li>Date/time display format</li>
+            <li>Default timezone</li>
+            <li>History retention (jobs, audit logs, alerts)</li>
+            <li>Login timeout (minutes of inactivity)</li>
+            <li>Email alert enable/disable</li>
+            <li>SMTP server credentials and sender settings</li>
+            <li>SMTP connection test</li>
+          </ul>
+        </section>
 
-  <h3>10. User Settings</h3>
-  <p>Each user can set personal date/time format and timezone, or choose to inherit global defaults.</p>
+        <!-- 10. User Settings -->
+        <section id="user-settings" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-user-cog help-icon"></i>
+            <span>User Settings</span>
+          </h3>
+          <p>Each user can set personal date/time format and timezone, or choose to inherit global defaults.</p>
+        </section>
 
-  <h3>11. Email Alert Delivery</h3>
-  <p>When email alerts are enabled, alert messages are sent to enabled admin users that have an email address configured in User Management.</p>
+        <!-- 11. Email Alert Delivery -->
+        <section id="email-alerts" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-envelope help-icon"></i>
+            <span>Email Alert Delivery</span>
+          </h3>
+          <p>When email alerts are enabled, alert messages are sent to enabled admin users that have an email address configured in User Management.</p>
+        </section>
 
-  <h3>12. Common Failure Checks</h3>
-  <ul>
-    <li><strong>Authentication failed</strong>: verify username/key/password on the server</li>
-    <li><strong>Sudo failed</strong>: verify sudo password or sudo permissions</li>
-    <li><strong>Package manager unknown</strong>: host may not be apt/dnf/yum based</li>
-    <li><strong>Timeout/unreachable</strong>: verify network, DNS, firewall, and host status</li>
-    <li><strong>SMTP test failed</strong>: verify SMTP host, port, TLS, credentials, and firewall access</li>
-  </ul>
+        <!-- 12. Troubleshooting -->
+        <section id="troubleshooting" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-wrench help-icon"></i>
+            <span>Common Failure Checks</span>
+          </h3>
+          <ul>
+            <li><strong>Authentication failed</strong>: verify username/key/password on the server</li>
+            <li><strong>Sudo failed</strong>: verify sudo password or sudo permissions</li>
+            <li><strong>Package manager unknown</strong>: host may not be apt/dnf/yum based</li>
+            <li><strong>Timeout/unreachable</strong>: verify network, DNS, firewall, and host status</li>
+            <li><strong>SMTP test failed</strong>: verify SMTP host, port, TLS, credentials, and firewall access</li>
+          </ul>
+        </section>
 
-  <h3>13. Update This Application</h3>
-  <pre><code>bash update.sh --check
+        <!-- 13. Update Application -->
+        <section id="app-updates" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-sync help-icon"></i>
+            <span>Update This Application</span>
+          </h3>
+          <div class="help-code-block">
+            <pre><code>bash update.sh --check
 bash update.sh
 bash update.sh --force
 bash update.sh --skip-start
 bash update.sh --help</code></pre>
-    </div>
-</section>
+          </div>
+        </section>
+
+      </div>
+    </section>
+  </main>
 </div>
 {% endblock %}
