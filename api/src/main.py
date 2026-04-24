@@ -244,9 +244,10 @@ def log_audit(
     target_id: str | int | None = None,
     target_label: str | None = None,
     detail: str | None = None,
+    ip_address: str | None = None,
 ) -> None:
-    ip = None
-    if request:
+    ip = ip_address
+    if ip is None and request:
         forwarded = request.headers.get("x-forwarded-for")
         ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else None)
     entry = AuditLog(
@@ -1769,6 +1770,9 @@ async def ssh_terminal_socket(websocket: WebSocket):
         await asyncio.to_thread(client.connect, **connect_kwargs)
         channel = await asyncio.to_thread(client.invoke_shell, term="xterm", width=120, height=32)
 
+        forwarded_for = websocket.headers.get("x-forwarded-for")
+        websocket_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (websocket.client.host if websocket.client else None)
+
         log_audit(
             db,
             "terminal.connect",
@@ -1777,6 +1781,7 @@ async def ssh_terminal_socket(websocket: WebSocket):
             target_id=server.id,
             target_label=server.name,
             detail=f"Opened SSH terminal to {server.host}:{server.port}",
+            ip_address=websocket_ip,
         )
         await send_ssh_terminal_meta(websocket, "status", f"Connected to {server.name} ({server.host}:{server.port}).")
 

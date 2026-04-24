@@ -3030,6 +3030,24 @@ a:hover {
     text-align: center;
     color: var(--text-muted);
 }
+
+#fe-upload-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fe-toolbar .btn.btn-icon-only i,
+.fe-listing-table .btn.btn-xs i {
+    margin-right: 0;
+}
+
+.fe-listing-table .btn.btn-xs {
+    min-height: 30px;
+    width: 30px;
+    padding: 0;
+}
+
 /* Extra small button variant */
 .btn-xs {
     padding: 0.2rem 0.45rem;
