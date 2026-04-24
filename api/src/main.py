@@ -179,6 +179,8 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_ram_threshold INTEGER NOT NULL DEFAULT 90",
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_storage_threshold INTEGER NOT NULL DEFAULT 90",
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_load_avg_threshold DOUBLE PRECISION NOT NULL DEFAULT 0",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_load_avg_5_threshold DOUBLE PRECISION NOT NULL DEFAULT 0",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_load_avg_15_threshold DOUBLE PRECISION NOT NULL DEFAULT 0",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS cron_expression VARCHAR(120)",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
@@ -1212,6 +1214,8 @@ def serialize_server_health(server: Server) -> dict:
         "alert_ram_threshold": server.alert_ram_threshold,
         "alert_storage_threshold": server.alert_storage_threshold,
         "alert_load_avg_threshold": server.alert_load_avg_threshold,
+        "alert_load_avg_5_threshold": server.alert_load_avg_5_threshold,
+        "alert_load_avg_15_threshold": server.alert_load_avg_15_threshold,
     }
 
 
@@ -1269,7 +1273,9 @@ def run_saved_server_health_check(db: Session, server: Server) -> dict:
         cpu_threshold = server.alert_cpu_threshold
         ram_threshold = server.alert_ram_threshold
         storage_threshold = server.alert_storage_threshold
-        load_threshold = server.alert_load_avg_threshold
+        load_threshold_1 = server.alert_load_avg_threshold
+        load_threshold_5 = server.alert_load_avg_5_threshold
+        load_threshold_15 = server.alert_load_avg_15_threshold
 
         if cpu_threshold > 0 and cpu_usage is not None and cpu_usage >= cpu_threshold:
             create_alert(
@@ -1298,12 +1304,30 @@ def run_saved_server_health_check(db: Session, server: Server) -> dict:
                 source_type="server",
                 source_id=server.id,
             )
-        if load_threshold > 0 and load_avg_1 is not None and load_avg_1 >= load_threshold:
+        if load_threshold_1 > 0 and load_avg_1 is not None and load_avg_1 >= load_threshold_1:
             create_alert(
                 db,
                 level="warning",
                 title=f"High 1-minute load average on {server.name}",
-                message=f"1-minute load average is {load_avg_1:.2f} (threshold: {load_threshold}) on {server.name} ({server.host}).",
+                message=f"1-minute load average is {load_avg_1:.2f} (threshold: {load_threshold_1}) on {server.name} ({server.host}).",
+                source_type="server",
+                source_id=server.id,
+            )
+        if load_threshold_5 > 0 and load_avg_5 is not None and load_avg_5 >= load_threshold_5:
+            create_alert(
+                db,
+                level="warning",
+                title=f"High 5-minute load average on {server.name}",
+                message=f"5-minute load average is {load_avg_5:.2f} (threshold: {load_threshold_5}) on {server.name} ({server.host}).",
+                source_type="server",
+                source_id=server.id,
+            )
+        if load_threshold_15 > 0 and load_avg_15 is not None and load_avg_15 >= load_threshold_15:
+            create_alert(
+                db,
+                level="warning",
+                title=f"High 15-minute load average on {server.name}",
+                message=f"15-minute load average is {load_avg_15:.2f} (threshold: {load_threshold_15}) on {server.name} ({server.host}).",
                 source_type="server",
                 source_id=server.id,
             )
@@ -3702,6 +3726,10 @@ def update_server(server_id: int, payload: ServerUpdate, request: Request, db: S
         server.alert_storage_threshold = int(updates["alert_storage_threshold"])
     if "alert_load_avg_threshold" in updates and updates.get("alert_load_avg_threshold") is not None:
         server.alert_load_avg_threshold = float(updates["alert_load_avg_threshold"])
+    if "alert_load_avg_5_threshold" in updates and updates.get("alert_load_avg_5_threshold") is not None:
+        server.alert_load_avg_5_threshold = float(updates["alert_load_avg_5_threshold"])
+    if "alert_load_avg_15_threshold" in updates and updates.get("alert_load_avg_15_threshold") is not None:
+        server.alert_load_avg_15_threshold = float(updates["alert_load_avg_15_threshold"])
 
     changed_fields = sorted(updates.keys())
     db.commit()

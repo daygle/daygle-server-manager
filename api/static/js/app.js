@@ -239,6 +239,8 @@ serverForm?.addEventListener("submit", async (event) => {
     alert_ram_threshold: Number(formData.get("alert_ram_threshold")),
     alert_storage_threshold: Number(formData.get("alert_storage_threshold")),
     alert_load_avg_threshold: Number(formData.get("alert_load_avg_threshold")),
+    alert_load_avg_5_threshold: Number(formData.get("alert_load_avg_5_threshold")),
+    alert_load_avg_15_threshold: Number(formData.get("alert_load_avg_15_threshold")),
   };
 
   if (!payload.password) {
@@ -307,6 +309,8 @@ function resetServerFormToCreateMode() {
   const ramThresholdField = serverForm.querySelector('[name="alert_ram_threshold"]');
   const storageThresholdField = serverForm.querySelector('[name="alert_storage_threshold"]');
   const loadThresholdField = serverForm.querySelector('[name="alert_load_avg_threshold"]');
+  const load5ThresholdField = serverForm.querySelector('[name="alert_load_avg_5_threshold"]');
+  const load15ThresholdField = serverForm.querySelector('[name="alert_load_avg_15_threshold"]');
   if (cpuThresholdField) {
     cpuThresholdField.value = "90";
   }
@@ -318,6 +322,12 @@ function resetServerFormToCreateMode() {
   }
   if (loadThresholdField) {
     loadThresholdField.value = "0";
+  }
+  if (load5ThresholdField) {
+    load5ThresholdField.value = "0";
+  }
+  if (load15ThresholdField) {
+    load15ThresholdField.value = "0";
   }
   toggleAuthFields();
 }
@@ -364,6 +374,8 @@ document.querySelectorAll("[data-edit-server]").forEach((button) => {
     setField("alert_ram_threshold", row.dataset.serverAlertRamThreshold || "90");
     setField("alert_storage_threshold", row.dataset.serverAlertStorageThreshold || "90");
     setField("alert_load_avg_threshold", row.dataset.serverAlertLoadAvgThreshold || "0");
+    setField("alert_load_avg_5_threshold", row.dataset.serverAlertLoadAvg5Threshold || "0");
+    setField("alert_load_avg_15_threshold", row.dataset.serverAlertLoadAvg15Threshold || "0");
 
     toggleAuthFields();
 

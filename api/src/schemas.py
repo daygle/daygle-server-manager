@@ -32,6 +32,8 @@ class ServerCreate(BaseModel):
     alert_ram_threshold: int = Field(default=90, ge=0, le=100)
     alert_storage_threshold: int = Field(default=90, ge=0, le=100)
     alert_load_avg_threshold: float = Field(default=0, ge=0)
+    alert_load_avg_5_threshold: float = Field(default=0, ge=0)
+    alert_load_avg_15_threshold: float = Field(default=0, ge=0)
 
 
 class ServerConnectionTestRequest(BaseModel):
@@ -57,6 +59,8 @@ class ServerUpdate(BaseModel):
     alert_ram_threshold: int | None = Field(default=None, ge=0, le=100)
     alert_storage_threshold: int | None = Field(default=None, ge=0, le=100)
     alert_load_avg_threshold: float | None = Field(default=None, ge=0)
+    alert_load_avg_5_threshold: float | None = Field(default=None, ge=0)
+    alert_load_avg_15_threshold: float | None = Field(default=None, ge=0)
 
 
 class ServerRead(BaseModel):
@@ -71,6 +75,8 @@ class ServerRead(BaseModel):
     alert_ram_threshold: int
     alert_storage_threshold: int
     alert_load_avg_threshold: float
+    alert_load_avg_5_threshold: float
+    alert_load_avg_15_threshold: float
     created_at: datetime
 
     class Config:

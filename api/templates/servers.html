@@ -99,6 +99,19 @@
         </div>
       </div>
 
+      <div class="two-col-grid mt-3">
+        <div class="form-group">
+          <label for="server_alert_load_avg_5_threshold" class="form-label">5-Minute Load Alert Threshold</label>
+          <input id="server_alert_load_avg_5_threshold" class="form-control" type="number" name="alert_load_avg_5_threshold" min="0" step="0.1" value="0" required />
+          <small class="form-text">Set to 0 to disable 5-minute load threshold alerts for this server.</small>
+        </div>
+        <div class="form-group">
+          <label for="server_alert_load_avg_15_threshold" class="form-label">15-Minute Load Alert Threshold</label>
+          <input id="server_alert_load_avg_15_threshold" class="form-control" type="number" name="alert_load_avg_15_threshold" min="0" step="0.1" value="0" required />
+          <small class="form-text">Set to 0 to disable 15-minute load threshold alerts for this server.</small>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button type="button" id="cancel_edit_btn" class="btn btn-secondary hidden">
           <i class="fas fa-times"></i>
@@ -161,6 +174,8 @@
           data-server-alert-ram-threshold="{{ server.alert_ram_threshold }}"
           data-server-alert-storage-threshold="{{ server.alert_storage_threshold }}"
           data-server-alert-load-avg-threshold="{{ server.alert_load_avg_threshold }}"
+          data-server-alert-load-avg-5-threshold="{{ server.alert_load_avg_5_threshold }}"
+          data-server-alert-load-avg-15-threshold="{{ server.alert_load_avg_15_threshold }}"
         >
           <td>{{ server.id }}</td>
           <td><strong>{{ server.name }}</strong></td>
