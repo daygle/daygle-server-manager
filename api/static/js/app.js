@@ -92,15 +92,24 @@ function setLocalServerStatusPreferences(enabled, interval) {
   }
 }
 
-async function persistServerStatusPreferences(enabled, interval) {
+async function persistServerStatusPreferences(enabled, interval, { showFeedback = true } = {}) {
   setLocalServerStatusPreferences(enabled, interval);
   try {
-    await fetch(
+    const response = await fetch(
       `/api/server-status/preferences?enabled=${encodeURIComponent(String(Boolean(enabled)))}&interval_seconds=${encodeURIComponent(String(interval))}`,
       { method: "POST" }
     );
+    if (!response.ok) {
+      throw new Error("Server preference save failed");
+    }
+    if (showFeedback) {
+      notify("Auto-check preference saved.", "success");
+    }
   } catch (error) {
     // Keep local fallback if server persistence is temporarily unavailable.
+    if (showFeedback) {
+      notify("Saved locally. Server sync failed; retrying on next change.", "warning");
+    }
   }
 }
 
@@ -775,12 +784,12 @@ refreshAllServerStatusBtn?.addEventListener("click", async () => {
 
 if (serverStatusAutoCheckToggle && serverStatusAutoCheckInterval) {
   serverStatusAutoCheckToggle.addEventListener("change", () => {
-    void persistServerStatusPreferences(serverStatusAutoCheckToggle.checked, serverStatusAutoCheckInterval.value);
+    void persistServerStatusPreferences(serverStatusAutoCheckToggle.checked, serverStatusAutoCheckInterval.value, { showFeedback: true });
     applyServerStatusAutoCheckState();
   });
 
   serverStatusAutoCheckInterval.addEventListener("change", () => {
-    void persistServerStatusPreferences(serverStatusAutoCheckToggle.checked, serverStatusAutoCheckInterval.value);
+    void persistServerStatusPreferences(serverStatusAutoCheckToggle.checked, serverStatusAutoCheckInterval.value, { showFeedback: true });
     applyServerStatusAutoCheckState();
   });
 
