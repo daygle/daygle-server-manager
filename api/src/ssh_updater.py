@@ -109,14 +109,19 @@ def load_private_key_for_ssh(private_key_pem: str) -> paramiko.PKey:
 VALID_APT_EXTRA_STEPS = {"full_upgrade", "fix_dpkg", "fix_broken", "autoremove", "clean"}
 
 
-def build_update_command(package_manager: str, apt_extra_steps: list[str] | None = None, lock_timeout_seconds: int = 120) -> str:
+def build_update_command(
+    package_manager: str,
+    apt_extra_steps: list[str] | None = None,
+    lock_timeout_seconds: int = 120,
+    privilege_prefix: str = "sudo -S ",
+) -> str:
     if package_manager == "apt":
         extra_steps = [s for s in (apt_extra_steps or []) if s in VALID_APT_EXTRA_STEPS]
 
         # Acquire::Lock::Timeout covers the apt lists lock (/var/lib/apt/lists/lock);
         # DPkg::Lock::Timeout covers the dpkg frontend lock. Both wait up to lock_timeout_seconds.
         apt_common = (
-            "sudo -S env DEBIAN_FRONTEND=noninteractive "
+            f"{privilege_prefix}env DEBIAN_FRONTEND=noninteractive "
             f"apt-get -o Acquire::Lock::Timeout={lock_timeout_seconds} -o DPkg::Lock::Timeout={lock_timeout_seconds} "
             "-o Dpkg::Options::=--force-confdef "
             "-o Dpkg::Options::=--force-confold -y"
@@ -127,20 +132,36 @@ def build_update_command(package_manager: str, apt_extra_steps: list[str] | None
         parts = [f"{apt_common} update", upgrade_cmd]
 
         if "fix_dpkg" in extra_steps:
-            parts.append("sudo -S dpkg --configure -a")
+            parts.append(f"{privilege_prefix}dpkg --configure -a")
         if "fix_broken" in extra_steps:
             parts.append(f"{apt_common} --fix-broken install")
         if "autoremove" in extra_steps:
             parts.append(f"{apt_common} autoremove --purge")
         if "clean" in extra_steps:
-            parts.append("sudo -S apt-get clean")
+            parts.append(f"{privilege_prefix}apt-get clean")
 
         return " && ".join(parts)
     if package_manager == "dnf":
-        return "sudo -S dnf -y upgrade --refresh"
+        return f"{privilege_prefix}dnf -y upgrade --refresh"
     if package_manager == "yum":
-        return "sudo -S yum -y update"
+        return f"{privilege_prefix}yum -y update"
     raise ValueError("Unsupported package manager")
+
+
+def get_privilege_prefix(client: paramiko.SSHClient, username: str) -> str:
+    # root does not need sudo; some minimal Debian installs do not have sudo installed.
+    if (username or "").strip() == "root":
+        return ""
+
+    _, stdout, _ = client.exec_command("if command -v sudo >/dev/null 2>&1; then echo yes; else echo no; fi")
+    has_sudo = stdout.read().decode("utf-8", errors="replace").strip() == "yes"
+    if has_sudo:
+        return "sudo -S "
+
+    raise RuntimeError(
+        "Remote user is not root and sudo is not installed on the server. "
+        "Install sudo or configure this server connection to use root."
+    )
 
 
 def run_remote_command(
@@ -150,7 +171,7 @@ def run_remote_command(
     timeout_seconds: int = REMOTE_COMMAND_TIMEOUT_SECONDS,
 ) -> tuple[int, str, bool]:
     stdin, stdout, stderr = client.exec_command(command, get_pty=True)
-    if sudo_password:
+    if sudo_password and "sudo -S" in command:
         stdin.write(f"{sudo_password}\n")
         stdin.flush()
 
@@ -260,19 +281,19 @@ def summarize_update_result(package_manager: str, output: str, exit_code: int, t
     return "Update completed"
 
 
-def build_check_command(package_manager: str, lock_timeout_seconds: int = 120) -> str:
+def build_check_command(package_manager: str, lock_timeout_seconds: int = 120, privilege_prefix: str = "sudo -S ") -> str:
     """Return a command that lists available updates without installing anything."""
     if package_manager == "apt":
         # apt-get update refreshes the index; apt list --upgradable shows pending packages.
         # Acquire::Lock::Timeout waits up to lock_timeout_seconds for the lists lock before failing.
         return (
-            f"sudo -S apt-get -o Acquire::Lock::Timeout={lock_timeout_seconds} -o DPkg::Lock::Timeout={lock_timeout_seconds} -q update 2>&1 "
+            f"{privilege_prefix}apt-get -o Acquire::Lock::Timeout={lock_timeout_seconds} -o DPkg::Lock::Timeout={lock_timeout_seconds} -q update 2>&1 "
             "&& apt list --upgradable 2>/dev/null"
         )
     if package_manager == "dnf":
-        return "sudo -S dnf check-update; true"
+        return f"{privilege_prefix}dnf check-update; true"
     if package_manager == "yum":
-        return "sudo -S yum check-update; true"
+        return f"{privilege_prefix}yum check-update; true"
     raise ValueError("Unsupported package manager")
 
 
@@ -380,7 +401,13 @@ def run_check_job(
                 raise RuntimeError("Could not detect supported package manager (apt, dnf, yum)")
             step_logs.append(f"[{datetime.utcnow().isoformat()}] Detected package manager: {package_manager}")
 
-        command = build_check_command(package_manager, lock_timeout_seconds)
+        privilege_prefix = get_privilege_prefix(client, server.username)
+        if privilege_prefix:
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Privilege mode: sudo")
+        else:
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Privilege mode: root (no sudo)")
+
+        command = build_check_command(package_manager, lock_timeout_seconds, privilege_prefix)
         job.command = command
         db.commit()
 
@@ -506,7 +533,13 @@ def run_update_job(
                 raise RuntimeError("Could not detect supported package manager (apt, dnf, yum)")
             step_logs.append(f"[{datetime.utcnow().isoformat()}] Detected package manager: {package_manager}")
 
-        command = build_update_command(package_manager, job.apt_extra_steps, lock_timeout_seconds)
+        privilege_prefix = get_privilege_prefix(client, server.username)
+        if privilege_prefix:
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Privilege mode: sudo")
+        else:
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Privilege mode: root (no sudo)")
+
+        command = build_update_command(package_manager, job.apt_extra_steps, lock_timeout_seconds, privilege_prefix)
         job.command = command
         db.commit()
         if job.apt_extra_steps and package_manager == "apt":
