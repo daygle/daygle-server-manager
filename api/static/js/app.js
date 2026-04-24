@@ -748,7 +748,7 @@ serverStatusBody?.addEventListener("click", async (event) => {
   const row = button.closest("tr");
   const originalButtonHtml = button.innerHTML;
   button.disabled = true;
-  button.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Checking...</span>';
+  button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
   try {
     const response = await fetch(`/api/server-status/${serverId}/check`, { method: "POST" });
@@ -1011,9 +1011,8 @@ function renderServerStatusRow(server) {
       <td class="hide-mobile" data-server-status-cell="last-check">${escapeHtml(server.last_health_check_at ? formatDateTimeForUi(server.last_health_check_at) : "Not checked yet")}</td>
       <td class="hide-mobile" data-server-status-cell="message">${server.last_health_status === "online" ? "-" : escapeHtml(server.last_health_message || "No checks recorded yet.")}</td>
       <td>
-        <button type="button" class="btn btn-primary btn-sm" data-refresh-server-status="${escapeHtml(server.id)}">
+        <button type="button" class="btn btn-primary btn-sm btn-icon-only" title="Check now" data-refresh-server-status="${escapeHtml(server.id)}">
           <i class="fas fa-rotate-right"></i>
-          <span>Check Now</span>
         </button>
       </td>
     </tr>
