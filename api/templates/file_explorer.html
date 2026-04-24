@@ -39,6 +39,10 @@
         <i class="fas fa-rotate-right"></i>
         <span>Refresh</span>
       </button>
+      <button type="button" class="btn btn-danger" id="fe-disconnect-btn" title="Disconnect from selected server">
+        <i class="fas fa-plug-circle-xmark"></i>
+        <span>Disconnect</span>
+      </button>
     </div>
   </div>
   {% else %}
@@ -195,6 +199,7 @@
   const goBtn          = document.getElementById("fe-go-btn");
   const upBtn          = document.getElementById("fe-up-btn");
   const refreshBtn     = document.getElementById("fe-refresh-btn");
+  const disconnectBtn  = document.getElementById("fe-disconnect-btn");
   const listingWrapper = document.getElementById("fe-listing-wrapper");
   const editorEl       = document.getElementById("fe-editor");
   const editorPlaceholder = document.getElementById("fe-editor-placeholder");
@@ -658,6 +663,14 @@
   pathInput.addEventListener("keydown", (e) => { if (e.key === "Enter") goBtn.click(); });
   upBtn.addEventListener("click", () => { if (currentPath !== "/") loadDirectory(parentPath(currentPath)); });
   refreshBtn.addEventListener("click", () => loadDirectory(currentPath));
+  disconnectBtn.addEventListener("click", () => {
+    if (isDirty && !confirm("You have unsaved changes. Disconnect and discard them?")) {
+      return;
+    }
+    serverSelect.value = "";
+    serverSelect.dispatchEvent(new Event("change"));
+    notify("Disconnected from server.", "info");
+  });
   serverSelect.addEventListener("change", () => {
     currentFilePath = null;
     currentPath = "/";
