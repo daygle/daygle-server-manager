@@ -2913,13 +2913,12 @@ a:hover {
     flex: 1 1 260px;
 }
 .fe-layout {
-    display: grid;
-    grid-template-columns: 340px 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 1rem;
-    align-items: start;
 }
 .fe-sidebar {
-    min-width: 0;
+    width: 100%;
     overflow: hidden;
 }
 .fe-editor-panel {
@@ -3075,9 +3074,6 @@ a:hover {
 }
 /* Responsive */
 @media (max-width: 1000px) {
-    .fe-layout {
-        grid-template-columns: 1fr;
-    }
     .fe-editor-body,
     .fe-editor,
     .fe-editor-placeholder {
