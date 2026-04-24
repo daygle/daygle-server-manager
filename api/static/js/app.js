@@ -235,6 +235,10 @@ serverForm?.addEventListener("submit", async (event) => {
     password: formData.get("password") || null,
     ssh_key_id: formData.get("ssh_key_id") ? Number(formData.get("ssh_key_id")) : null,
     sudo_password: formData.get("sudo_password") || null,
+    alert_cpu_threshold: Number(formData.get("alert_cpu_threshold")),
+    alert_ram_threshold: Number(formData.get("alert_ram_threshold")),
+    alert_storage_threshold: Number(formData.get("alert_storage_threshold")),
+    alert_load_avg_threshold: Number(formData.get("alert_load_avg_threshold")),
   };
 
   if (!payload.password) {
@@ -299,6 +303,22 @@ function resetServerFormToCreateMode() {
   if (cancelEditBtn) {
     cancelEditBtn.classList.add("hidden");
   }
+  const cpuThresholdField = serverForm.querySelector('[name="alert_cpu_threshold"]');
+  const ramThresholdField = serverForm.querySelector('[name="alert_ram_threshold"]');
+  const storageThresholdField = serverForm.querySelector('[name="alert_storage_threshold"]');
+  const loadThresholdField = serverForm.querySelector('[name="alert_load_avg_threshold"]');
+  if (cpuThresholdField) {
+    cpuThresholdField.value = "90";
+  }
+  if (ramThresholdField) {
+    ramThresholdField.value = "90";
+  }
+  if (storageThresholdField) {
+    storageThresholdField.value = "90";
+  }
+  if (loadThresholdField) {
+    loadThresholdField.value = "0";
+  }
   toggleAuthFields();
 }
 
@@ -340,6 +360,10 @@ document.querySelectorAll("[data-edit-server]").forEach((button) => {
     setField("ssh_key_id", row.dataset.serverSshKeyId || "");
     setField("sudo_password", "");
     setField("password", "");
+    setField("alert_cpu_threshold", row.dataset.serverAlertCpuThreshold || "90");
+    setField("alert_ram_threshold", row.dataset.serverAlertRamThreshold || "90");
+    setField("alert_storage_threshold", row.dataset.serverAlertStorageThreshold || "90");
+    setField("alert_load_avg_threshold", row.dataset.serverAlertLoadAvgThreshold || "0");
 
     toggleAuthFields();
 

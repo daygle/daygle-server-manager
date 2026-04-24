@@ -70,19 +70,11 @@ SMTP_USE_TLS_SETTING_KEY = "smtp_use_tls"
 SMTP_FROM_SETTING_KEY = "smtp_from"
 DEFAULT_THEME_SETTING_KEY = "default_theme"
 PAGE_SIZE_SETTING_KEY = "page_size"
-ALERT_CPU_THRESHOLD_SETTING_KEY = "alert_cpu_threshold"
-ALERT_RAM_THRESHOLD_SETTING_KEY = "alert_ram_threshold"
-ALERT_STORAGE_THRESHOLD_SETTING_KEY = "alert_storage_threshold"
-ALERT_LOAD_AVG_THRESHOLD_SETTING_KEY = "alert_load_avg_threshold"
 APT_LOCK_TIMEOUT_SETTING_KEY = "apt_lock_timeout_seconds"
 SSH_CONNECT_TIMEOUT_SETTING_KEY = "ssh_connect_timeout_seconds"
 REMOTE_COMMAND_TIMEOUT_SETTING_KEY = "remote_command_timeout_seconds"
 SMTP_TIMEOUT_SETTING_KEY = "smtp_timeout_seconds"
 SCHEDULE_POLL_INTERVAL_SETTING_KEY = "schedule_poll_interval_seconds"
-DEFAULT_ALERT_CPU_THRESHOLD = 90
-DEFAULT_ALERT_RAM_THRESHOLD = 90
-DEFAULT_ALERT_STORAGE_THRESHOLD = 90
-DEFAULT_ALERT_LOAD_AVG_THRESHOLD = 0  # 0 = disabled
 DEFAULT_APT_LOCK_TIMEOUT_SECONDS = 120
 MAX_APT_LOCK_TIMEOUT_SECONDS = 3600
 DEFAULT_SSH_CONNECT_TIMEOUT_SECONDS = 30
@@ -183,6 +175,10 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_load_avg DOUBLE PRECISION",
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_load_avg_5 DOUBLE PRECISION",
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_load_avg_15 DOUBLE PRECISION",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_cpu_threshold INTEGER NOT NULL DEFAULT 90",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_ram_threshold INTEGER NOT NULL DEFAULT 90",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_storage_threshold INTEGER NOT NULL DEFAULT 90",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_load_avg_threshold DOUBLE PRECISION NOT NULL DEFAULT 0",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS cron_expression VARCHAR(120)",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
@@ -519,52 +515,6 @@ def get_effective_page_size(user: User | None, db: Session | None = None) -> int
     if db:
         return get_page_size_setting(db)
     return get_active_page_size()
-
-
-def normalize_threshold_percent(value: str | int | None) -> int | None:
-    """Return 0 (disabled) or 1–100. None means invalid."""
-    if value is None:
-        return None
-    try:
-        v = int(str(value).strip())
-    except (TypeError, ValueError):
-        return None
-    return v if 0 <= v <= 100 else None
-
-
-def normalize_load_avg_threshold(value: str | float | None) -> float | None:
-    """Return 0.0 (disabled) or any positive float. None means invalid."""
-    if value is None:
-        return None
-    try:
-        v = float(str(value).strip())
-    except (TypeError, ValueError):
-        return None
-    return v if v >= 0 else None
-
-
-def get_alert_cpu_threshold(db: Session) -> int:
-    raw = get_app_setting(db, ALERT_CPU_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_CPU_THRESHOLD))
-    normalized = normalize_threshold_percent(raw)
-    return normalized if normalized is not None else DEFAULT_ALERT_CPU_THRESHOLD
-
-
-def get_alert_ram_threshold(db: Session) -> int:
-    raw = get_app_setting(db, ALERT_RAM_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_RAM_THRESHOLD))
-    normalized = normalize_threshold_percent(raw)
-    return normalized if normalized is not None else DEFAULT_ALERT_RAM_THRESHOLD
-
-
-def get_alert_storage_threshold(db: Session) -> int:
-    raw = get_app_setting(db, ALERT_STORAGE_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_STORAGE_THRESHOLD))
-    normalized = normalize_threshold_percent(raw)
-    return normalized if normalized is not None else DEFAULT_ALERT_STORAGE_THRESHOLD
-
-
-def get_alert_load_avg_threshold(db: Session) -> float:
-    raw = get_app_setting(db, ALERT_LOAD_AVG_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_LOAD_AVG_THRESHOLD))
-    normalized = normalize_load_avg_threshold(raw)
-    return normalized if normalized is not None else float(DEFAULT_ALERT_LOAD_AVG_THRESHOLD)
 
 
 def normalize_apt_lock_timeout(value: str | int | None) -> int | None:
@@ -1258,6 +1208,10 @@ def serialize_server_health(server: Server) -> dict:
         "last_load_avg": server.last_load_avg,
         "last_load_avg_5": server.last_load_avg_5,
         "last_load_avg_15": server.last_load_avg_15,
+        "alert_cpu_threshold": server.alert_cpu_threshold,
+        "alert_ram_threshold": server.alert_ram_threshold,
+        "alert_storage_threshold": server.alert_storage_threshold,
+        "alert_load_avg_threshold": server.alert_load_avg_threshold,
     }
 
 
@@ -1312,10 +1266,10 @@ def run_saved_server_health_check(db: Session, server: Server) -> dict:
 
     # Fire threshold alerts when the server is online and a metric is breached.
     if is_online:
-        cpu_threshold = get_alert_cpu_threshold(db)
-        ram_threshold = get_alert_ram_threshold(db)
-        storage_threshold = get_alert_storage_threshold(db)
-        load_threshold = get_alert_load_avg_threshold(db)
+        cpu_threshold = server.alert_cpu_threshold
+        ram_threshold = server.alert_ram_threshold
+        storage_threshold = server.alert_storage_threshold
+        load_threshold = server.alert_load_avg_threshold
 
         if cpu_threshold > 0 and cpu_usage is not None and cpu_usage >= cpu_threshold:
             create_alert(
@@ -2228,10 +2182,6 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         selected_smtp_from=get_smtp_setting(db, SMTP_FROM_SETTING_KEY, "SMTP_FROM", "daygle-server-manager@localhost"),
         selected_smtp_timeout=get_smtp_timeout(db),
         smtp_password_set=bool(get_smtp_setting(db, SMTP_PASSWORD_SETTING_KEY, "SMTP_PASSWORD", "")),
-        selected_alert_cpu_threshold=get_alert_cpu_threshold(db),
-        selected_alert_ram_threshold=get_alert_ram_threshold(db),
-        selected_alert_storage_threshold=get_alert_storage_threshold(db),
-        selected_alert_load_avg_threshold=get_alert_load_avg_threshold(db),
         selected_apt_lock_timeout=get_apt_lock_timeout(db),
         selected_ssh_connect_timeout=get_ssh_connect_timeout(db),
         selected_remote_command_timeout=get_remote_command_timeout(db),
@@ -2258,10 +2208,6 @@ def save_all_settings(
     smtp_use_tls: str | None = Form(None),
     smtp_from: str = Form(...),
     smtp_timeout_seconds: int = Form(DEFAULT_SMTP_TIMEOUT_SECONDS),
-    alert_cpu_threshold: int = Form(DEFAULT_ALERT_CPU_THRESHOLD),
-    alert_ram_threshold: int = Form(DEFAULT_ALERT_RAM_THRESHOLD),
-    alert_storage_threshold: int = Form(DEFAULT_ALERT_STORAGE_THRESHOLD),
-    alert_load_avg_threshold: str = Form("0"),
     apt_lock_timeout_seconds: int = Form(DEFAULT_APT_LOCK_TIMEOUT_SECONDS),
     ssh_connect_timeout_seconds: int = Form(DEFAULT_SSH_CONNECT_TIMEOUT_SECONDS),
     remote_command_timeout_seconds: int = Form(DEFAULT_REMOTE_COMMAND_TIMEOUT_SECONDS),
@@ -2510,47 +2456,6 @@ def save_all_settings(
             ),
         )
         changed.append("SMTP settings")
-
-    # Alert thresholds
-    normalized_cpu_threshold = normalize_threshold_percent(alert_cpu_threshold)
-    if normalized_cpu_threshold is None:
-        set_flash(request, "Invalid CPU alert threshold (0–100).", "error")
-        return RedirectResponse(url="/settings", status_code=303)
-    normalized_ram_threshold = normalize_threshold_percent(alert_ram_threshold)
-    if normalized_ram_threshold is None:
-        set_flash(request, "Invalid RAM alert threshold (0–100).", "error")
-        return RedirectResponse(url="/settings", status_code=303)
-    normalized_storage_threshold = normalize_threshold_percent(alert_storage_threshold)
-    if normalized_storage_threshold is None:
-        set_flash(request, "Invalid disk space alert threshold (0–100).", "error")
-        return RedirectResponse(url="/settings", status_code=303)
-    normalized_load_threshold = normalize_load_avg_threshold(alert_load_avg_threshold)
-    if normalized_load_threshold is None:
-        set_flash(request, "Invalid 1-minute load average threshold (must be 0 or a positive number).", "error")
-        return RedirectResponse(url="/settings", status_code=303)
-
-    threshold_changes: list[str] = []
-    if str(normalized_cpu_threshold) != get_app_setting(db, ALERT_CPU_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_CPU_THRESHOLD)):
-        set_app_setting(db, ALERT_CPU_THRESHOLD_SETTING_KEY, str(normalized_cpu_threshold))
-        threshold_changes.append(f"cpu={normalized_cpu_threshold}%")
-    if str(normalized_ram_threshold) != get_app_setting(db, ALERT_RAM_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_RAM_THRESHOLD)):
-        set_app_setting(db, ALERT_RAM_THRESHOLD_SETTING_KEY, str(normalized_ram_threshold))
-        threshold_changes.append(f"ram={normalized_ram_threshold}%")
-    if str(normalized_storage_threshold) != get_app_setting(db, ALERT_STORAGE_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_STORAGE_THRESHOLD)):
-        set_app_setting(db, ALERT_STORAGE_THRESHOLD_SETTING_KEY, str(normalized_storage_threshold))
-        threshold_changes.append(f"storage={normalized_storage_threshold}%")
-    if f"{normalized_load_threshold:.2f}" != f"{get_alert_load_avg_threshold(db):.2f}":
-        set_app_setting(db, ALERT_LOAD_AVG_THRESHOLD_SETTING_KEY, str(normalized_load_threshold))
-        threshold_changes.append(f"load_avg={normalized_load_threshold}")
-    if threshold_changes:
-        log_audit(
-            db,
-            "settings.alert_thresholds",
-            request=request,
-            actor=current_user,
-            detail=f"Updated alert thresholds: {', '.join(threshold_changes)}",
-        )
-        changed.append("alert thresholds")
 
     normalized_lock_timeout = normalize_apt_lock_timeout(apt_lock_timeout_seconds)
     if normalized_lock_timeout is None:
@@ -3789,6 +3694,14 @@ def update_server(server_id: int, payload: ServerUpdate, request: Request, db: S
 
     if "sudo_password" in updates:
         server.sudo_password = updates.get("sudo_password") or None
+    if "alert_cpu_threshold" in updates and updates.get("alert_cpu_threshold") is not None:
+        server.alert_cpu_threshold = int(updates["alert_cpu_threshold"])
+    if "alert_ram_threshold" in updates and updates.get("alert_ram_threshold") is not None:
+        server.alert_ram_threshold = int(updates["alert_ram_threshold"])
+    if "alert_storage_threshold" in updates and updates.get("alert_storage_threshold") is not None:
+        server.alert_storage_threshold = int(updates["alert_storage_threshold"])
+    if "alert_load_avg_threshold" in updates and updates.get("alert_load_avg_threshold") is not None:
+        server.alert_load_avg_threshold = float(updates["alert_load_avg_threshold"])
 
     changed_fields = sorted(updates.keys())
     db.commit()

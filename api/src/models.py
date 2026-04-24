@@ -60,6 +60,10 @@ class Server(Base):
     last_load_avg: Mapped[float | None] = mapped_column(nullable=True)
     last_load_avg_5: Mapped[float | None] = mapped_column(nullable=True)
     last_load_avg_15: Mapped[float | None] = mapped_column(nullable=True)
+    alert_cpu_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=90)
+    alert_ram_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=90)
+    alert_storage_threshold: Mapped[int] = mapped_column(Integer, nullable=False, default=90)
+    alert_load_avg_threshold: Mapped[float] = mapped_column(nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
     ssh_key: Mapped["SSHKey | None"] = relationship("SSHKey", back_populates="servers")

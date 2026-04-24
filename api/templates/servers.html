@@ -73,6 +73,32 @@
         <small class="form-text">Only needed if sudo asks for a different password.</small>
       </div>
 
+      <div class="two-col-grid mt-3">
+        <div class="form-group">
+          <label for="server_alert_cpu_threshold" class="form-label">CPU Alert Threshold (%)</label>
+          <input id="server_alert_cpu_threshold" class="form-control" type="number" name="alert_cpu_threshold" min="0" max="100" step="1" value="90" required />
+          <small class="form-text">Set to 0 to disable CPU threshold alerts for this server.</small>
+        </div>
+        <div class="form-group">
+          <label for="server_alert_ram_threshold" class="form-label">RAM Alert Threshold (%)</label>
+          <input id="server_alert_ram_threshold" class="form-control" type="number" name="alert_ram_threshold" min="0" max="100" step="1" value="90" required />
+          <small class="form-text">Set to 0 to disable RAM threshold alerts for this server.</small>
+        </div>
+      </div>
+
+      <div class="two-col-grid mt-3">
+        <div class="form-group">
+          <label for="server_alert_storage_threshold" class="form-label">Disk Alert Threshold (%)</label>
+          <input id="server_alert_storage_threshold" class="form-control" type="number" name="alert_storage_threshold" min="0" max="100" step="1" value="90" required />
+          <small class="form-text">Set to 0 to disable disk threshold alerts for this server.</small>
+        </div>
+        <div class="form-group">
+          <label for="server_alert_load_avg_threshold" class="form-label">1-Minute Load Alert Threshold</label>
+          <input id="server_alert_load_avg_threshold" class="form-control" type="number" name="alert_load_avg_threshold" min="0" step="0.1" value="0" required />
+          <small class="form-text">Set to 0 to disable 1-minute load threshold alerts for this server.</small>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button type="button" id="cancel_edit_btn" class="btn btn-secondary hidden">
           <i class="fas fa-times"></i>
@@ -131,6 +157,10 @@
           data-server-username="{{ server.username }}"
           data-server-auth="{{ server.auth_method }}"
           data-server-ssh-key-id="{{ server.ssh_key_id or '' }}"
+          data-server-alert-cpu-threshold="{{ server.alert_cpu_threshold }}"
+          data-server-alert-ram-threshold="{{ server.alert_ram_threshold }}"
+          data-server-alert-storage-threshold="{{ server.alert_storage_threshold }}"
+          data-server-alert-load-avg-threshold="{{ server.alert_load_avg_threshold }}"
         >
           <td>{{ server.id }}</td>
           <td><strong>{{ server.name }}</strong></td>
