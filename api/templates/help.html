@@ -53,9 +53,9 @@
           </h3>
           <p class="help-intro">The dashboard shows a quick operational snapshot of your infrastructure:</p>
           <ul>
-            <li><strong>Total configured servers</strong> — count of all registered hosts</li>
-            <li><strong>Running and failed update jobs</strong> — current execution status and recent failures</li>
-            <li><strong>Latest update activity</strong> — most recent jobs with timestamps</li>
+            <li><strong>Total configured servers</strong> - count of all registered hosts</li>
+            <li><strong>Running and failed update jobs</strong> - current execution status and recent failures</li>
+            <li><strong>Latest update activity</strong> - most recent jobs with timestamps</li>
           </ul>
           <p>Status indicators use color coding: <strong>green</strong> = success, <strong>red</strong> = failed, <strong>amber/yellow</strong> = warning or in-progress, <strong>gray</strong> = pending or unknown.</p>
           <p>The dashboard updates in real-time. Click any section or widget to jump to the detailed view for deeper analysis. Use <strong>Server Status</strong> page for comprehensive health checks across all servers.</p>
@@ -207,7 +207,7 @@
           <p class="help-intro">SSH keys are more secure than passwords and recommended for production servers. Store and manage them here.</p>
           <p class="help-label">Key Management:</p>
           <ul>
-            <li><strong>Generate new key:</strong> choose key type (RSA 4096 or Ed25519 — both secure) to generate a keypair in-system</li>
+            <li><strong>Generate new key:</strong> choose key type (RSA 4096 or Ed25519 - both secure) to generate a keypair in-system</li>
             <li><strong>Upload existing key:</strong> paste or upload a private key you already have on your servers</li>
             <li><strong>View fingerprint:</strong> use the displayed fingerprint to verify the key matches what's on the server</li>
             <li><strong>Store securely:</strong> private keys are encrypted and stored safely in the database</li>
@@ -215,7 +215,7 @@
           <p class="help-label">Best Practices:</p>
           <ul>
             <li>Use different keys for different servers or environments (dev vs. prod)</li>
-            <li>Never share or download private keys from this system — generate them once and deploy to servers</li>
+            <li>Never share or download private keys from this system - generate them once and deploy to servers</li>
             <li>Rotate keys periodically: generate new key, test on a server, update server reference, delete old key</li>
             <li>Use Ed25519 keys for new setups (smaller, faster, equally secure)</li>
           </ul>
@@ -252,7 +252,7 @@
             <li><strong>Date format:</strong> choose how you prefer dates displayed (MM/DD/YYYY, DD/MM/YYYY, ISO, month names, etc.)</li>
             <li><strong>Timezone:</strong> your local timezone affects job output timestamps and schedule display in your view</li>
           </ul>
-          <p><strong>Use case:</strong> "Our team is distributed: I'm in PT but our servers and schedules use UTC — I set my timezone to PT to see times in my local offset."</p>
+          <p><strong>Use case:</strong> "Our team is distributed: I'm in PT but our servers and schedules use UTC - I set my timezone to PT to see times in my local offset."</p>
         </section>
 
         <!-- 11. Email Alert Delivery -->

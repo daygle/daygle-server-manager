@@ -17,7 +17,7 @@
       <div class="form-group mb-0">
         <label for="fe-server-select" class="form-label">Server</label>
         <select id="fe-server-select" class="form-select">
-          <option value="">— Select a server —</option>
+          <option value="">- Select a server -</option>
           {% for server in servers %}
           <option value="{{ server.id }}" {% if selected_server_id == server.id %}selected{% endif %}>{{ server.name }} ({{ server.host }})</option>
           {% endfor %}
@@ -123,7 +123,7 @@
       </div>
       <div id="fe-binary-notice" class="fe-editor-placeholder" style="display:none">
         <i class="fas fa-file-zipper fe-placeholder-icon"></i>
-        <p>Binary file — cannot be displayed.</p>
+        <p>Binary file - cannot be displayed.</p>
         <button type="button" class="btn btn-secondary mt-3" id="fe-binary-download-btn">
           <i class="fas fa-download"></i>
           <span>Download</span>
