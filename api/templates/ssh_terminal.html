@@ -98,8 +98,16 @@ Tips:
     }
 
     function appendOutput(text) {
-      outputEl.textContent += text;
+      outputEl.textContent += sanitizeTerminalOutput(text);
       outputEl.scrollTop = outputEl.scrollHeight;
+    }
+
+    function sanitizeTerminalOutput(text) {
+      return String(text)
+        .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)/g, "")
+        .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+        .replace(/\u001b[@-_]/g, "")
+        .replace(/\u0007/g, "");
     }
 
     function appendLine(text) {
