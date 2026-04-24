@@ -315,7 +315,14 @@ def parse_check_result(package_manager: str, output: str, exit_code: int, timed_
     return False, 0, "No updates available"
 
 
-def run_check_job(db: Session, job_id: int, create_alert_fn, lock_timeout_seconds: int = 120) -> None:
+def run_check_job(
+    db: Session,
+    job_id: int,
+    create_alert_fn,
+    lock_timeout_seconds: int = 120,
+    connect_timeout_seconds: int = SSH_CONNECT_TIMEOUT_SECONDS,
+    command_timeout_seconds: int = REMOTE_COMMAND_TIMEOUT_SECONDS,
+) -> None:
     """SSH into the server and check for available updates without installing.
 
     If updates are found, creates an alert via *create_alert_fn* so admins are notified.
@@ -350,9 +357,9 @@ def run_check_job(db: Session, job_id: int, create_alert_fn, lock_timeout_second
             "hostname": server.host,
             "port": server.port,
             "username": server.username,
-            "timeout": SSH_CONNECT_TIMEOUT_SECONDS,
-            "banner_timeout": SSH_CONNECT_TIMEOUT_SECONDS,
-            "auth_timeout": SSH_CONNECT_TIMEOUT_SECONDS,
+            "timeout": connect_timeout_seconds,
+            "banner_timeout": connect_timeout_seconds,
+            "auth_timeout": connect_timeout_seconds,
         }
 
         if server.auth_method == "password":
@@ -379,7 +386,12 @@ def run_check_job(db: Session, job_id: int, create_alert_fn, lock_timeout_second
 
         step_logs.append(f"[{datetime.utcnow().isoformat()}] Checking for available updates")
         sudo_password = server.sudo_password or server.password
-        exit_code, output, timed_out = run_remote_command(client, command, sudo_password)
+        exit_code, output, timed_out = run_remote_command(
+            client,
+            command,
+            sudo_password,
+            timeout_seconds=command_timeout_seconds,
+        )
         output = redact_secrets(output, [server_password, server_sudo_password])
 
         updates_available, count, summary = parse_check_result(package_manager, output, exit_code, timed_out)
@@ -435,7 +447,13 @@ def run_check_job(db: Session, job_id: int, create_alert_fn, lock_timeout_second
         client.close()
 
 
-def run_update_job(db: Session, job_id: int, lock_timeout_seconds: int = 120) -> None:
+def run_update_job(
+    db: Session,
+    job_id: int,
+    lock_timeout_seconds: int = 120,
+    connect_timeout_seconds: int = SSH_CONNECT_TIMEOUT_SECONDS,
+    command_timeout_seconds: int = REMOTE_COMMAND_TIMEOUT_SECONDS,
+) -> None:
     job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
     if not job:
         return
@@ -465,9 +483,9 @@ def run_update_job(db: Session, job_id: int, lock_timeout_seconds: int = 120) ->
             "hostname": server.host,
             "port": server.port,
             "username": server.username,
-            "timeout": SSH_CONNECT_TIMEOUT_SECONDS,
-            "banner_timeout": SSH_CONNECT_TIMEOUT_SECONDS,
-            "auth_timeout": SSH_CONNECT_TIMEOUT_SECONDS,
+            "timeout": connect_timeout_seconds,
+            "banner_timeout": connect_timeout_seconds,
+            "auth_timeout": connect_timeout_seconds,
         }
 
         if server.auth_method == "password":
@@ -496,7 +514,12 @@ def run_update_job(db: Session, job_id: int, lock_timeout_seconds: int = 120) ->
         step_logs.append(f"[{datetime.utcnow().isoformat()}] Running update command")
 
         sudo_password = server.sudo_password or server.password
-        exit_code, output, timed_out = run_remote_command(client, command, sudo_password)
+        exit_code, output, timed_out = run_remote_command(
+            client,
+            command,
+            sudo_password,
+            timeout_seconds=command_timeout_seconds,
+        )
         output = redact_secrets(output, [server_password, server_sudo_password])
         summary = summarize_update_result(package_manager, output, exit_code, timed_out)
         cleaned_output = clean_command_output(package_manager, output)

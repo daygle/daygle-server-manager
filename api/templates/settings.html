@@ -102,6 +102,35 @@
     </div>
   </div>
 
+  <!-- SSH and Scheduling Card -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <div class="card-title">
+        <i class="fas fa-gauge-high"></i>
+        <span>SSH and Scheduling</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="two-col-grid">
+        <div class="form-group">
+          <label for="ssh_connect_timeout_seconds" class="form-label">SSH connect timeout (seconds)</label>
+          <input id="ssh_connect_timeout_seconds" class="form-control" type="number" name="ssh_connect_timeout_seconds" min="5" max="300" step="5" required value="{{ selected_ssh_connect_timeout }}" />
+          <small class="form-text text-secondary">How long to wait when opening SSH connections for server checks, updates, tests, and the browser terminal.</small>
+        </div>
+        <div class="form-group">
+          <label for="remote_command_timeout_seconds" class="form-label">Remote command timeout (seconds)</label>
+          <input id="remote_command_timeout_seconds" class="form-control" type="number" name="remote_command_timeout_seconds" min="30" max="14400" step="30" required value="{{ selected_remote_command_timeout }}" />
+          <small class="form-text text-secondary">Maximum runtime for remote update and check commands before the job is marked as timed out.</small>
+        </div>
+      </div>
+      <div class="form-group mt-3">
+        <label for="schedule_poll_interval_seconds" class="form-label">Schedule polling interval (seconds)</label>
+        <input id="schedule_poll_interval_seconds" class="form-control" type="number" name="schedule_poll_interval_seconds" min="5" max="300" step="5" required value="{{ selected_schedule_poll_interval }}" />
+        <small class="form-text text-secondary">How often the background scheduler checks for due update schedules. Lower values run jobs closer to their scheduled time, higher values reduce database polling.</small>
+      </div>
+    </div>
+  </div>
+
   <!-- Alert Notifications Card -->
   <div class="card mb-4">
     <div class="card-header">
@@ -224,6 +253,12 @@
         <small class="form-text text-secondary">Email address to send alerts from</small>
       </div>
 
+      <div class="form-group mt-3">
+        <label for="smtp_timeout_seconds" class="form-label">SMTP timeout (seconds)</label>
+        <input id="smtp_timeout_seconds" class="form-control" type="number" name="smtp_timeout_seconds" min="5" max="120" step="1" required value="{{ selected_smtp_timeout }}" />
+        <small class="form-text text-secondary">How long to wait for SMTP connection, TLS negotiation, and login before the operation fails.</small>
+      </div>
+
       <div class="form-check mt-3">
         <input id="smtp_use_tls" type="checkbox" class="form-check-input" name="smtp_use_tls" {% if selected_smtp_use_tls %}checked{% endif %} />
         <label for="smtp_use_tls" class="form-check-label">
@@ -261,6 +296,7 @@
   <input type="hidden" id="test-smtp_username" name="smtp_username" />
   <input type="hidden" id="test-smtp_password" name="smtp_password" />
   <input type="hidden" id="test-smtp_use_tls" name="smtp_use_tls" />
+  <input type="hidden" id="test-smtp_timeout_seconds" name="smtp_timeout_seconds" />
   <button type="submit" class="btn btn-warning" id="test-smtp-btn">
     <i class="fas fa-vial"></i>
     <span>Test SMTP</span>
@@ -277,6 +313,7 @@ function handleTestSmtpClick(e) {
   const usernameField = document.getElementById('smtp_username');
   const passwordField = document.getElementById('smtp_password');
   const tlsField = document.getElementById('smtp_use_tls');
+  const timeoutField = document.getElementById('smtp_timeout_seconds');
   
   // Validate required fields
   if (!hostField.value.trim()) {
@@ -297,6 +334,7 @@ function handleTestSmtpClick(e) {
   document.getElementById('test-smtp_username').value = usernameField.value;
   document.getElementById('test-smtp_password').value = passwordField.value;
   document.getElementById('test-smtp_use_tls').value = tlsField.checked ? 'on' : '';
+  document.getElementById('test-smtp_timeout_seconds').value = timeoutField.value;
   
   // Submit the hidden form
   document.getElementById('test-smtp-form').submit();

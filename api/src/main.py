@@ -9,7 +9,7 @@ from pathlib import Path
 import secrets
 import smtplib
 from threading import Thread
-from time import sleep
+from time import monotonic, sleep
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo, available_timezones
 
@@ -75,12 +75,24 @@ ALERT_RAM_THRESHOLD_SETTING_KEY = "alert_ram_threshold"
 ALERT_STORAGE_THRESHOLD_SETTING_KEY = "alert_storage_threshold"
 ALERT_LOAD_AVG_THRESHOLD_SETTING_KEY = "alert_load_avg_threshold"
 APT_LOCK_TIMEOUT_SETTING_KEY = "apt_lock_timeout_seconds"
+SSH_CONNECT_TIMEOUT_SETTING_KEY = "ssh_connect_timeout_seconds"
+REMOTE_COMMAND_TIMEOUT_SETTING_KEY = "remote_command_timeout_seconds"
+SMTP_TIMEOUT_SETTING_KEY = "smtp_timeout_seconds"
+SCHEDULE_POLL_INTERVAL_SETTING_KEY = "schedule_poll_interval_seconds"
 DEFAULT_ALERT_CPU_THRESHOLD = 90
 DEFAULT_ALERT_RAM_THRESHOLD = 90
 DEFAULT_ALERT_STORAGE_THRESHOLD = 90
 DEFAULT_ALERT_LOAD_AVG_THRESHOLD = 0  # 0 = disabled
 DEFAULT_APT_LOCK_TIMEOUT_SECONDS = 120
 MAX_APT_LOCK_TIMEOUT_SECONDS = 3600
+DEFAULT_SSH_CONNECT_TIMEOUT_SECONDS = 30
+MAX_SSH_CONNECT_TIMEOUT_SECONDS = 300
+DEFAULT_REMOTE_COMMAND_TIMEOUT_SECONDS = 1800
+MAX_REMOTE_COMMAND_TIMEOUT_SECONDS = 14400
+DEFAULT_SMTP_TIMEOUT_SECONDS = 15
+MAX_SMTP_TIMEOUT_SECONDS = 120
+DEFAULT_SCHEDULE_POLL_INTERVAL_SECONDS = 30
+MAX_SCHEDULE_POLL_INTERVAL_SECONDS = 300
 SSH_TERMINAL_TOKEN_TTL_SECONDS = 300
 DEFAULT_DATE_FORMAT = "iso-24"
 DEFAULT_TIMEZONE = "UTC"
@@ -572,6 +584,70 @@ def get_apt_lock_timeout(db: Session) -> int:
     return normalized if normalized is not None else DEFAULT_APT_LOCK_TIMEOUT_SECONDS
 
 
+def normalize_ssh_connect_timeout(value: str | int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        v = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return v if 5 <= v <= MAX_SSH_CONNECT_TIMEOUT_SECONDS else None
+
+
+def get_ssh_connect_timeout(db: Session) -> int:
+    raw = get_app_setting(db, SSH_CONNECT_TIMEOUT_SETTING_KEY, str(DEFAULT_SSH_CONNECT_TIMEOUT_SECONDS))
+    normalized = normalize_ssh_connect_timeout(raw)
+    return normalized if normalized is not None else DEFAULT_SSH_CONNECT_TIMEOUT_SECONDS
+
+
+def normalize_remote_command_timeout(value: str | int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        v = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return v if 30 <= v <= MAX_REMOTE_COMMAND_TIMEOUT_SECONDS else None
+
+
+def get_remote_command_timeout(db: Session) -> int:
+    raw = get_app_setting(db, REMOTE_COMMAND_TIMEOUT_SETTING_KEY, str(DEFAULT_REMOTE_COMMAND_TIMEOUT_SECONDS))
+    normalized = normalize_remote_command_timeout(raw)
+    return normalized if normalized is not None else DEFAULT_REMOTE_COMMAND_TIMEOUT_SECONDS
+
+
+def normalize_smtp_timeout(value: str | int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        v = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return v if 5 <= v <= MAX_SMTP_TIMEOUT_SECONDS else None
+
+
+def get_smtp_timeout(db: Session) -> int:
+    raw = get_app_setting(db, SMTP_TIMEOUT_SETTING_KEY, str(DEFAULT_SMTP_TIMEOUT_SECONDS))
+    normalized = normalize_smtp_timeout(raw)
+    return normalized if normalized is not None else DEFAULT_SMTP_TIMEOUT_SECONDS
+
+
+def normalize_schedule_poll_interval(value: str | int | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        v = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return v if 5 <= v <= MAX_SCHEDULE_POLL_INTERVAL_SECONDS else None
+
+
+def get_schedule_poll_interval(db: Session) -> int:
+    raw = get_app_setting(db, SCHEDULE_POLL_INTERVAL_SETTING_KEY, str(DEFAULT_SCHEDULE_POLL_INTERVAL_SECONDS))
+    normalized = normalize_schedule_poll_interval(raw)
+    return normalized if normalized is not None else DEFAULT_SCHEDULE_POLL_INTERVAL_SECONDS
+
+
 def send_admin_alert_email(db: Session, alert: Alert) -> None:
     if not get_active_email_alerts_enabled():
         return
@@ -610,7 +686,7 @@ def send_admin_alert_email(db: Session, alert: Alert) -> None:
         f"Time (UTC): {alert.created_at.isoformat()}\n"
     )
 
-    with smtplib.SMTP(host=host, port=port, timeout=15) as smtp:
+    with smtplib.SMTP(host=host, port=port, timeout=get_smtp_timeout(db)) as smtp:
         smtp.ehlo()
         if use_tls:
             smtp.starttls()
@@ -620,8 +696,8 @@ def send_admin_alert_email(db: Session, alert: Alert) -> None:
         smtp.send_message(msg)
 
 
-def test_smtp_connection(host: str, port: int, username: str, password: str, use_tls: bool) -> None:
-    with smtplib.SMTP(host=host, port=port, timeout=15) as smtp:
+def test_smtp_connection(host: str, port: int, username: str, password: str, use_tls: bool, timeout_seconds: int) -> None:
+    with smtplib.SMTP(host=host, port=port, timeout=timeout_seconds) as smtp:
         smtp.ehlo()
         if use_tls:
             smtp.starttls()
@@ -723,10 +799,12 @@ def enqueue_update_jobs_for_schedule(
 
 
 def run_schedule_loop() -> None:
-    tick = 0
+    next_purge_at = monotonic() + 3600
     while True:
         db = SessionLocal()
+        poll_interval_seconds = DEFAULT_SCHEDULE_POLL_INTERVAL_SECONDS
         try:
+            poll_interval_seconds = get_schedule_poll_interval(db)
             now = datetime.utcnow()
             due_schedules = (
                 db.query(UpdateSchedule)
@@ -744,17 +822,15 @@ def run_schedule_loop() -> None:
                 schedule.next_run_at = get_next_schedule_run(schedule, now)
                 db.commit()
 
-            # Purge old history once per hour (every 120 × 30-second ticks)
-            tick += 1
-            if tick >= 120:
-                tick = 0
+            if monotonic() >= next_purge_at:
                 purge_old_history(db)
+                next_purge_at = monotonic() + 3600
         except Exception as exc:
             print(f"[schedule-worker] error: {type(exc).__name__}: {exc}")
         finally:
             db.close()
 
-        sleep(30)
+        sleep(poll_interval_seconds)
 
 
 def process_job_async(job_id: int) -> None:
@@ -763,11 +839,26 @@ def process_job_async(job_id: int) -> None:
         job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
         is_check = job.alert_only if job else False
         lock_timeout = get_apt_lock_timeout(db)
+        connect_timeout = get_ssh_connect_timeout(db)
+        command_timeout = get_remote_command_timeout(db)
 
         if is_check:
-            run_check_job(db, job_id, create_alert, lock_timeout_seconds=lock_timeout)
+            run_check_job(
+                db,
+                job_id,
+                create_alert,
+                lock_timeout_seconds=lock_timeout,
+                connect_timeout_seconds=connect_timeout,
+                command_timeout_seconds=command_timeout,
+            )
         else:
-            run_update_job(db, job_id, lock_timeout_seconds=lock_timeout)
+            run_update_job(
+                db,
+                job_id,
+                lock_timeout_seconds=lock_timeout,
+                connect_timeout_seconds=connect_timeout,
+                command_timeout_seconds=command_timeout,
+            )
 
         job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
         if job:
@@ -1042,9 +1133,9 @@ def build_server_connect_kwargs(
         "hostname": host,
         "port": port,
         "username": username,
-        "timeout": 15,
-        "banner_timeout": 15,
-        "auth_timeout": 15,
+        "timeout": get_ssh_connect_timeout(db),
+        "banner_timeout": get_ssh_connect_timeout(db),
+        "auth_timeout": get_ssh_connect_timeout(db),
         "allow_agent": False,
         "look_for_keys": False,
     }
@@ -2135,12 +2226,16 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         selected_smtp_username=get_smtp_setting(db, SMTP_USERNAME_SETTING_KEY, "SMTP_USERNAME", ""),
         selected_smtp_use_tls=parse_bool_setting(get_smtp_setting(db, SMTP_USE_TLS_SETTING_KEY, "SMTP_USE_TLS", "false"), False),
         selected_smtp_from=get_smtp_setting(db, SMTP_FROM_SETTING_KEY, "SMTP_FROM", "daygle-server-manager@localhost"),
+        selected_smtp_timeout=get_smtp_timeout(db),
         smtp_password_set=bool(get_smtp_setting(db, SMTP_PASSWORD_SETTING_KEY, "SMTP_PASSWORD", "")),
         selected_alert_cpu_threshold=get_alert_cpu_threshold(db),
         selected_alert_ram_threshold=get_alert_ram_threshold(db),
         selected_alert_storage_threshold=get_alert_storage_threshold(db),
         selected_alert_load_avg_threshold=get_alert_load_avg_threshold(db),
         selected_apt_lock_timeout=get_apt_lock_timeout(db),
+        selected_ssh_connect_timeout=get_ssh_connect_timeout(db),
+        selected_remote_command_timeout=get_remote_command_timeout(db),
+        selected_schedule_poll_interval=get_schedule_poll_interval(db),
     )
 
 
@@ -2162,11 +2257,15 @@ def save_all_settings(
     clear_smtp_password: str | None = Form(None),
     smtp_use_tls: str | None = Form(None),
     smtp_from: str = Form(...),
+    smtp_timeout_seconds: int = Form(DEFAULT_SMTP_TIMEOUT_SECONDS),
     alert_cpu_threshold: int = Form(DEFAULT_ALERT_CPU_THRESHOLD),
     alert_ram_threshold: int = Form(DEFAULT_ALERT_RAM_THRESHOLD),
     alert_storage_threshold: int = Form(DEFAULT_ALERT_STORAGE_THRESHOLD),
     alert_load_avg_threshold: str = Form("0"),
     apt_lock_timeout_seconds: int = Form(DEFAULT_APT_LOCK_TIMEOUT_SECONDS),
+    ssh_connect_timeout_seconds: int = Form(DEFAULT_SSH_CONNECT_TIMEOUT_SECONDS),
+    remote_command_timeout_seconds: int = Form(DEFAULT_REMOTE_COMMAND_TIMEOUT_SECONDS),
+    schedule_poll_interval_seconds: int = Form(DEFAULT_SCHEDULE_POLL_INTERVAL_SECONDS),
     db: Session = Depends(get_db),
 ):
     current_user = get_session_user(request, db)
@@ -2222,6 +2321,26 @@ def save_all_settings(
         return RedirectResponse(url="/settings", status_code=303)
     if not sender or "@" not in sender:
         set_flash(request, "SMTP from address must be a valid email.", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    normalized_smtp_timeout = normalize_smtp_timeout(smtp_timeout_seconds)
+    if normalized_smtp_timeout is None:
+        set_flash(request, f"Invalid SMTP timeout (5–{MAX_SMTP_TIMEOUT_SECONDS} seconds).", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    normalized_ssh_connect_timeout = normalize_ssh_connect_timeout(ssh_connect_timeout_seconds)
+    if normalized_ssh_connect_timeout is None:
+        set_flash(request, f"Invalid SSH connect timeout (5–{MAX_SSH_CONNECT_TIMEOUT_SECONDS} seconds).", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    normalized_remote_command_timeout = normalize_remote_command_timeout(remote_command_timeout_seconds)
+    if normalized_remote_command_timeout is None:
+        set_flash(request, f"Invalid remote command timeout (30–{MAX_REMOTE_COMMAND_TIMEOUT_SECONDS} seconds).", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    normalized_schedule_poll_interval = normalize_schedule_poll_interval(schedule_poll_interval_seconds)
+    if normalized_schedule_poll_interval is None:
+        set_flash(request, f"Invalid schedule polling interval (5–{MAX_SCHEDULE_POLL_INTERVAL_SECONDS} seconds).", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
     normalized_email_alerts = parse_bool_setting(email_alerts_enabled, False)
@@ -2346,6 +2465,7 @@ def save_all_settings(
     prev_smtp_use_tls = parse_bool_setting(get_smtp_setting(db, SMTP_USE_TLS_SETTING_KEY, "SMTP_USE_TLS", "false"), False)
     prev_smtp_from = get_smtp_setting(db, SMTP_FROM_SETTING_KEY, "SMTP_FROM", "daygle-server-manager@localhost")
     prev_smtp_password = get_smtp_setting(db, SMTP_PASSWORD_SETTING_KEY, "SMTP_PASSWORD", "")
+    prev_smtp_timeout = get_smtp_timeout(db)
 
     new_smtp_password = prev_smtp_password
     password_updated = False
@@ -2363,6 +2483,7 @@ def save_all_settings(
             smtp_username_clean != prev_smtp_username,
             normalized_smtp_tls != prev_smtp_use_tls,
             sender != prev_smtp_from,
+            normalized_smtp_timeout != prev_smtp_timeout,
             password_updated,
         ]
     )
@@ -2373,6 +2494,7 @@ def save_all_settings(
         set_app_setting(db, SMTP_USERNAME_SETTING_KEY, smtp_username_clean)
         set_app_setting(db, SMTP_USE_TLS_SETTING_KEY, "true" if normalized_smtp_tls else "false")
         set_app_setting(db, SMTP_FROM_SETTING_KEY, sender)
+        set_app_setting(db, SMTP_TIMEOUT_SETTING_KEY, str(normalized_smtp_timeout))
         if password_updated:
             set_app_setting(db, SMTP_PASSWORD_SETTING_KEY, new_smtp_password)
 
@@ -2383,7 +2505,7 @@ def save_all_settings(
             actor=current_user,
             detail=(
                 f"Updated SMTP host={host}, port={smtp_port}, user={'set' if smtp_username_clean else 'empty'}, "
-                f"tls={'enabled' if normalized_smtp_tls else 'disabled'}, from={sender}, "
+                f"tls={'enabled' if normalized_smtp_tls else 'disabled'}, from={sender}, timeout={normalized_smtp_timeout}s, "
                 f"password={'updated' if password_updated else 'unchanged'}"
             ),
         )
@@ -2445,6 +2567,42 @@ def save_all_settings(
             detail=f"Changed from {prev_lock_timeout}s to {normalized_lock_timeout}s",
         )
         changed.append("apt lock timeout")
+
+    prev_ssh_connect_timeout = get_ssh_connect_timeout(db)
+    if normalized_ssh_connect_timeout != prev_ssh_connect_timeout:
+        set_app_setting(db, SSH_CONNECT_TIMEOUT_SETTING_KEY, str(normalized_ssh_connect_timeout))
+        log_audit(
+            db,
+            "settings.ssh_connect_timeout",
+            request=request,
+            actor=current_user,
+            detail=f"Changed from {prev_ssh_connect_timeout}s to {normalized_ssh_connect_timeout}s",
+        )
+        changed.append("SSH connect timeout")
+
+    prev_remote_command_timeout = get_remote_command_timeout(db)
+    if normalized_remote_command_timeout != prev_remote_command_timeout:
+        set_app_setting(db, REMOTE_COMMAND_TIMEOUT_SETTING_KEY, str(normalized_remote_command_timeout))
+        log_audit(
+            db,
+            "settings.remote_command_timeout",
+            request=request,
+            actor=current_user,
+            detail=f"Changed from {prev_remote_command_timeout}s to {normalized_remote_command_timeout}s",
+        )
+        changed.append("remote command timeout")
+
+    prev_schedule_poll_interval = get_schedule_poll_interval(db)
+    if normalized_schedule_poll_interval != prev_schedule_poll_interval:
+        set_app_setting(db, SCHEDULE_POLL_INTERVAL_SETTING_KEY, str(normalized_schedule_poll_interval))
+        log_audit(
+            db,
+            "settings.schedule_poll_interval",
+            request=request,
+            actor=current_user,
+            detail=f"Changed from {prev_schedule_poll_interval}s to {normalized_schedule_poll_interval}s",
+        )
+        changed.append("schedule polling interval")
 
     if changed:
         set_flash(request, f"Saved settings: {', '.join(changed)}.", "success")
@@ -2632,6 +2790,7 @@ def update_smtp_settings(
     clear_smtp_password: str | None = Form(None),
     smtp_use_tls: str | None = Form(None),
     smtp_from: str = Form(...),
+    smtp_timeout_seconds: int = Form(DEFAULT_SMTP_TIMEOUT_SECONDS),
     db: Session = Depends(get_db),
 ):
     current_user = get_session_user(request, db)
@@ -2654,11 +2813,17 @@ def update_smtp_settings(
         set_flash(request, "SMTP from address must be a valid email.", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
+    normalized_smtp_timeout = normalize_smtp_timeout(smtp_timeout_seconds)
+    if normalized_smtp_timeout is None:
+        set_flash(request, f"Invalid SMTP timeout (5–{MAX_SMTP_TIMEOUT_SECONDS} seconds).", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
     set_app_setting(db, SMTP_HOST_SETTING_KEY, host)
     set_app_setting(db, SMTP_PORT_SETTING_KEY, str(smtp_port))
     set_app_setting(db, SMTP_USERNAME_SETTING_KEY, smtp_username.strip())
     set_app_setting(db, SMTP_USE_TLS_SETTING_KEY, "true" if parse_bool_setting(smtp_use_tls, False) else "false")
     set_app_setting(db, SMTP_FROM_SETTING_KEY, sender)
+    set_app_setting(db, SMTP_TIMEOUT_SETTING_KEY, str(normalized_smtp_timeout))
 
     password_updated = False
     if parse_bool_setting(clear_smtp_password, False):
@@ -2675,7 +2840,7 @@ def update_smtp_settings(
         actor=current_user,
         detail=(
             f"Updated SMTP host={host}, port={smtp_port}, user={'set' if smtp_username.strip() else 'empty'}, "
-            f"tls={'enabled' if parse_bool_setting(smtp_use_tls, False) else 'disabled'}, from={sender}, "
+            f"tls={'enabled' if parse_bool_setting(smtp_use_tls, False) else 'disabled'}, from={sender}, timeout={normalized_smtp_timeout}s, "
             f"password={'updated' if password_updated else 'unchanged'}"
         ),
     )
@@ -2691,6 +2856,7 @@ def test_smtp_settings(
     smtp_username: str = Form(""),
     smtp_password: str = Form(""),
     smtp_use_tls: str | None = Form(None),
+    smtp_timeout_seconds: int = Form(DEFAULT_SMTP_TIMEOUT_SECONDS),
     db: Session = Depends(get_db),
 ):
     current_user = get_session_user(request, db)
@@ -2709,12 +2875,17 @@ def test_smtp_settings(
         set_flash(request, "SMTP port must be between 1 and 65535.", "error")
         return RedirectResponse(url="/settings", status_code=303)
 
+    normalized_smtp_timeout = normalize_smtp_timeout(smtp_timeout_seconds)
+    if normalized_smtp_timeout is None:
+        set_flash(request, f"Invalid SMTP timeout (5–{MAX_SMTP_TIMEOUT_SECONDS} seconds).", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
     username = smtp_username.strip()
     use_tls = parse_bool_setting(smtp_use_tls, False)
     password_to_use = smtp_password or get_smtp_setting(db, SMTP_PASSWORD_SETTING_KEY, "SMTP_PASSWORD", "")
 
     try:
-        test_smtp_connection(host, smtp_port, username, password_to_use, use_tls)
+        test_smtp_connection(host, smtp_port, username, password_to_use, use_tls, normalized_smtp_timeout)
     except Exception as exc:
         log_audit(
             db,
