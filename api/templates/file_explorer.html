@@ -1,0 +1,711 @@
+{% extends "base.html" %}
+
+{% block page_title %}File Explorer - Daygle Server Manager{% endblock %}
+{% block title %}File Explorer{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-header flex-between">
+    <div class="card-title">
+      <i class="fas fa-folder-open"></i>
+      <span>File Explorer</span>
+    </div>
+  </div>
+  {% if servers %}
+  <div class="card-body">
+    <div class="fe-toolbar">
+      <div class="form-group mb-0">
+        <label for="fe-server-select" class="form-label">Server</label>
+        <select id="fe-server-select" class="form-select">
+          {% for server in servers %}
+          <option value="{{ server.id }}" {% if selected_server_id == server.id %}selected{% endif %}>{{ server.name }} ({{ server.host }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group mb-0 fe-path-group">
+        <label for="fe-path-input" class="form-label">Path</label>
+        <input id="fe-path-input" type="text" class="form-control" value="/" spellcheck="false" autocomplete="off" />
+      </div>
+      <button type="button" class="btn btn-primary" id="fe-go-btn">
+        <i class="fas fa-arrow-right"></i>
+        <span>Go</span>
+      </button>
+      <button type="button" class="btn btn-secondary" id="fe-up-btn" title="Go up one directory">
+        <i class="fas fa-arrow-up"></i>
+        <span>Up</span>
+      </button>
+      <button type="button" class="btn btn-secondary" id="fe-refresh-btn" title="Refresh current directory">
+        <i class="fas fa-rotate-right"></i>
+        <span>Refresh</span>
+      </button>
+    </div>
+  </div>
+  {% else %}
+  <div class="card-body">
+    <div class="empty-state">
+      <div>
+        <i class="fas fa-server empty-icon"></i>
+        <p>No servers configured yet.</p>
+        <a href="/servers" class="btn btn-primary mt-3">
+          <i class="fas fa-plus"></i>
+          <span>Add a Server</span>
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% if servers %}
+<div class="fe-layout">
+  <!-- Left: directory listing -->
+  <div class="card fe-sidebar">
+    <div class="card-header flex-between">
+      <div class="card-title">
+        <i class="fas fa-folder"></i>
+        <span>Contents</span>
+      </div>
+      <div class="flex gap-2">
+        <button type="button" class="btn btn-secondary btn-sm" id="fe-new-file-btn" title="New file">
+          <i class="fas fa-file-circle-plus"></i>
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" id="fe-new-dir-btn" title="New directory">
+          <i class="fas fa-folder-plus"></i>
+        </button>
+        <label class="btn btn-secondary btn-sm" id="fe-upload-label" title="Upload file">
+          <i class="fas fa-upload"></i>
+          <input type="file" id="fe-upload-input" style="display:none" />
+        </label>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <div id="fe-listing-wrapper">
+        <div class="fe-listing-empty"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: editor / viewer -->
+  <div class="card fe-editor-panel">
+    <div class="card-header flex-between" id="fe-editor-header">
+      <div class="card-title">
+        <i class="fas fa-file-pen"></i>
+        <span id="fe-editor-filename">No file open</span>
+      </div>
+      <div class="flex gap-2" id="fe-editor-actions" style="display:none!important">
+        <button type="button" class="btn btn-success btn-sm" id="fe-save-btn">
+          <i class="fas fa-floppy-disk"></i>
+          <span>Save</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" id="fe-download-btn">
+          <i class="fas fa-download"></i>
+          <span>Download</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" id="fe-chmod-btn">
+          <i class="fas fa-lock"></i>
+          <span>Permissions</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" id="fe-rename-btn">
+          <i class="fas fa-i-cursor"></i>
+          <span>Rename</span>
+        </button>
+        <button type="button" class="btn btn-danger btn-sm" id="fe-delete-file-btn">
+          <i class="fas fa-trash"></i>
+          <span>Delete</span>
+        </button>
+      </div>
+    </div>
+    <div class="card-body p-0 fe-editor-body">
+      <div id="fe-editor-placeholder" class="fe-editor-placeholder">
+        <i class="fas fa-file-code fe-placeholder-icon"></i>
+        <p>Select a file to view or edit</p>
+      </div>
+      <div id="fe-binary-notice" class="fe-editor-placeholder" style="display:none">
+        <i class="fas fa-file-zipper fe-placeholder-icon"></i>
+        <p>Binary file — cannot be displayed.</p>
+        <button type="button" class="btn btn-secondary mt-3" id="fe-binary-download-btn">
+          <i class="fas fa-download"></i>
+          <span>Download</span>
+        </button>
+      </div>
+      <textarea id="fe-editor" class="fe-editor" style="display:none" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+    </div>
+    <div class="fe-editor-statusbar" id="fe-editor-statusbar" style="display:none">
+      <span id="fe-editor-info"></span>
+    </div>
+  </div>
+</div>
+
+<!-- chmod modal -->
+<div id="fe-chmod-modal" class="modal-backdrop" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 class="modal-title"><i class="fas fa-lock"></i> Change Permissions</h3>
+      <button type="button" class="modal-close" id="fe-chmod-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="fe-chmod-path-label" class="text-secondary mb-3"></p>
+      <div class="fe-chmod-grid">
+        <div class="fe-chmod-section">
+          <strong>Owner</strong>
+          <label><input type="checkbox" id="fe-chmod-ur"> Read</label>
+          <label><input type="checkbox" id="fe-chmod-uw"> Write</label>
+          <label><input type="checkbox" id="fe-chmod-ux"> Execute</label>
+        </div>
+        <div class="fe-chmod-section">
+          <strong>Group</strong>
+          <label><input type="checkbox" id="fe-chmod-gr"> Read</label>
+          <label><input type="checkbox" id="fe-chmod-gw"> Write</label>
+          <label><input type="checkbox" id="fe-chmod-gx"> Execute</label>
+        </div>
+        <div class="fe-chmod-section">
+          <strong>Other</strong>
+          <label><input type="checkbox" id="fe-chmod-or"> Read</label>
+          <label><input type="checkbox" id="fe-chmod-ow"> Write</label>
+          <label><input type="checkbox" id="fe-chmod-ox"> Execute</label>
+        </div>
+      </div>
+      <div class="form-group mt-3">
+        <label class="form-label" for="fe-chmod-octal">Octal</label>
+        <input type="text" id="fe-chmod-octal" class="form-control" style="max-width:120px" maxlength="4" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" id="fe-chmod-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="fe-chmod-apply">Apply</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ── State ──────────────────────────────────────────────────────────────
+  let currentServerId = null;
+  let currentPath = "/";
+  let currentFilePath = null;
+  let currentFileMode = null;
+  let isDirty = false;
+
+  // ── Elements ───────────────────────────────────────────────────────────
+  const serverSelect   = document.getElementById("fe-server-select");
+  const pathInput      = document.getElementById("fe-path-input");
+  const goBtn          = document.getElementById("fe-go-btn");
+  const upBtn          = document.getElementById("fe-up-btn");
+  const refreshBtn     = document.getElementById("fe-refresh-btn");
+  const listingWrapper = document.getElementById("fe-listing-wrapper");
+  const editorEl       = document.getElementById("fe-editor");
+  const editorPlaceholder = document.getElementById("fe-editor-placeholder");
+  const binaryNotice   = document.getElementById("fe-binary-notice");
+  const editorFilename = document.getElementById("fe-editor-filename");
+  const editorActions  = document.getElementById("fe-editor-actions");
+  const editorStatusbar= document.getElementById("fe-editor-statusbar");
+  const editorInfo     = document.getElementById("fe-editor-info");
+  const saveBtn        = document.getElementById("fe-save-btn");
+  const downloadBtn    = document.getElementById("fe-download-btn");
+  const chmodBtn       = document.getElementById("fe-chmod-btn");
+  const renameBtn      = document.getElementById("fe-rename-btn");
+  const deleteFileBtn  = document.getElementById("fe-delete-file-btn");
+  const newFileBtn     = document.getElementById("fe-new-file-btn");
+  const newDirBtn      = document.getElementById("fe-new-dir-btn");
+  const uploadInput    = document.getElementById("fe-upload-input");
+  const binaryDownloadBtn = document.getElementById("fe-binary-download-btn");
+
+  // chmod modal
+  const chmodModal     = document.getElementById("fe-chmod-modal");
+  const chmodPathLabel = document.getElementById("fe-chmod-path-label");
+  const chmodClose     = document.getElementById("fe-chmod-close");
+  const chmodCancel    = document.getElementById("fe-chmod-cancel");
+  const chmodApply     = document.getElementById("fe-chmod-apply");
+  const chmodOctal     = document.getElementById("fe-chmod-octal");
+  const chmodCheckboxes = {
+    ur: document.getElementById("fe-chmod-ur"),
+    uw: document.getElementById("fe-chmod-uw"),
+    ux: document.getElementById("fe-chmod-ux"),
+    gr: document.getElementById("fe-chmod-gr"),
+    gw: document.getElementById("fe-chmod-gw"),
+    gx: document.getElementById("fe-chmod-gx"),
+    or: document.getElementById("fe-chmod-or"),
+    ow: document.getElementById("fe-chmod-ow"),
+    ox: document.getElementById("fe-chmod-ox"),
+  };
+
+  // ── Helpers ────────────────────────────────────────────────────────────
+  function escHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function notify(msg, type) {
+    if (typeof window.notify === "function") {
+      window.notify(msg, type);
+    } else {
+      alert(msg);
+    }
+  }
+
+  function serverId() {
+    return serverSelect ? parseInt(serverSelect.value, 10) : null;
+  }
+
+  function parentPath(p) {
+    const parts = p.replace(/\/+$/, "").split("/");
+    parts.pop();
+    return parts.join("/") || "/";
+  }
+
+  function joinPath(base, name) {
+    return (base.replace(/\/+$/, "") + "/" + name).replace(/\/+/g, "/");
+  }
+
+  function formatSize(bytes) {
+    if (bytes == null) return "-";
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / 1024 / 1024).toFixed(1) + " MB";
+  }
+
+  function markDirty(dirty) {
+    isDirty = dirty;
+    if (editorFilename) {
+      const base = (currentFilePath || "").split("/").pop();
+      editorFilename.textContent = dirty ? base + " *" : base;
+    }
+  }
+
+  function setEditorVisible(show) {
+    editorPlaceholder.style.display  = show ? "none" : "";
+    binaryNotice.style.display       = "none";
+    editorEl.style.display           = show ? "" : "none";
+    editorActions.style.removeProperty("display");
+    if (!show) editorActions.style.display = "none";
+    editorStatusbar.style.display    = show ? "" : "none";
+  }
+
+  function setBinaryVisible() {
+    editorPlaceholder.style.display  = "none";
+    binaryNotice.style.display       = "";
+    editorEl.style.display           = "none";
+    editorActions.style.removeProperty("display");
+    editorStatusbar.style.display    = "none";
+  }
+
+  // ── Directory listing ──────────────────────────────────────────────────
+  async function loadDirectory(path) {
+    const sid = serverId();
+    if (!sid) return;
+    currentServerId = sid;
+    currentPath = path;
+    pathInput.value = path;
+
+    listingWrapper.innerHTML = '<div class="fe-listing-empty"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+    try {
+      const resp = await fetch(`/api/file-explorer/${sid}/list?path=${encodeURIComponent(path)}`);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        listingWrapper.innerHTML = `<div class="fe-listing-empty text-danger"><i class="fas fa-triangle-exclamation"></i> ${escHtml(err.detail || "Error loading directory")}</div>`;
+        return;
+      }
+      const data = await resp.json();
+      renderListing(data.path, data.entries);
+    } catch (e) {
+      listingWrapper.innerHTML = `<div class="fe-listing-empty text-danger"><i class="fas fa-triangle-exclamation"></i> ${escHtml(e.message)}</div>`;
+    }
+  }
+
+  function renderListing(path, entries) {
+    if (!entries.length) {
+      listingWrapper.innerHTML = '<div class="fe-listing-empty text-secondary">Empty directory</div>';
+      return;
+    }
+
+    const rows = entries.map(e => {
+      const icon = e.is_dir
+        ? '<i class="fas fa-folder fe-icon fe-icon-dir"></i>'
+        : '<i class="fas fa-file fe-icon fe-icon-file"></i>';
+      const nameCell = e.is_dir
+        ? `<button class="fe-entry-name fe-dir-link" data-path="${escHtml(joinPath(path, e.name))}">${icon}${escHtml(e.name)}/</button>`
+        : `<button class="fe-entry-name fe-file-link" data-path="${escHtml(joinPath(path, e.name))}">${icon}${escHtml(e.name)}</button>`;
+
+      return `<tr>
+        <td class="fe-col-name">${nameCell}</td>
+        <td class="fe-col-perms hide-mobile"><code>${escHtml(e.mode || "")}</code></td>
+        <td class="fe-col-size hide-mobile">${escHtml(formatSize(e.size))}</td>
+        <td class="fe-col-actions">
+          <div class="flex gap-1">
+            ${!e.is_dir ? `<button class="btn btn-secondary btn-xs fe-dl-btn" data-path="${escHtml(joinPath(path, e.name))}" title="Download"><i class="fas fa-download"></i></button>` : ""}
+            <button class="btn btn-secondary btn-xs fe-chmod-row-btn" data-path="${escHtml(joinPath(path, e.name))}" data-mode="${escHtml(e.mode_octal || "0644")}" title="Permissions"><i class="fas fa-lock"></i></button>
+            <button class="btn btn-secondary btn-xs fe-rename-row-btn" data-path="${escHtml(joinPath(path, e.name))}" title="Rename"><i class="fas fa-i-cursor"></i></button>
+            <button class="btn btn-danger btn-xs fe-delete-row-btn" data-path="${escHtml(joinPath(path, e.name))}" data-name="${escHtml(e.name)}" title="Delete"><i class="fas fa-trash"></i></button>
+          </div>
+        </td>
+      </tr>`;
+    }).join("");
+
+    listingWrapper.innerHTML = `
+      <table class="table fe-listing-table">
+        <thead><tr>
+          <th>Name</th>
+          <th class="hide-mobile">Permissions</th>
+          <th class="hide-mobile">Size</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+
+    // Attach click listeners
+    listingWrapper.querySelectorAll(".fe-dir-link").forEach(btn => {
+      btn.addEventListener("click", () => loadDirectory(btn.dataset.path));
+    });
+    listingWrapper.querySelectorAll(".fe-file-link").forEach(btn => {
+      btn.addEventListener("click", () => openFile(btn.dataset.path));
+    });
+    listingWrapper.querySelectorAll(".fe-dl-btn").forEach(btn => {
+      btn.addEventListener("click", () => downloadFile(btn.dataset.path));
+    });
+    listingWrapper.querySelectorAll(".fe-chmod-row-btn").forEach(btn => {
+      btn.addEventListener("click", () => openChmodModal(btn.dataset.path, btn.dataset.mode));
+    });
+    listingWrapper.querySelectorAll(".fe-rename-row-btn").forEach(btn => {
+      btn.addEventListener("click", () => renameEntry(btn.dataset.path));
+    });
+    listingWrapper.querySelectorAll(".fe-delete-row-btn").forEach(btn => {
+      btn.addEventListener("click", () => deleteEntry(btn.dataset.path, btn.dataset.name));
+    });
+  }
+
+  // ── File editor ────────────────────────────────────────────────────────
+  async function openFile(filePath) {
+    if (isDirty && !confirm("You have unsaved changes. Discard them?")) return;
+
+    const sid = serverId();
+    editorFilename.textContent = filePath.split("/").pop();
+    setEditorVisible(false);
+    editorPlaceholder.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+    editorPlaceholder.style.display = "";
+
+    try {
+      const resp = await fetch(`/api/file-explorer/${sid}/read?path=${encodeURIComponent(filePath)}`);
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        notify(err.detail || "Failed to read file", "error");
+        editorPlaceholder.innerHTML = '<i class="fas fa-file-code fe-placeholder-icon"></i><p>Select a file to view or edit</p>';
+        return;
+      }
+      const data = await resp.json();
+      currentFilePath = filePath;
+      currentFileMode = null;
+
+      if (data.binary) {
+        editorFilename.textContent = filePath.split("/").pop();
+        setBinaryVisible();
+        editorStatusbar.style.display = "";
+        editorInfo.textContent = `Binary file · ${formatSize(data.size)}`;
+        return;
+      }
+
+      editorEl.value = data.content || "";
+      currentFileMode = null;
+      markDirty(false);
+      setEditorVisible(true);
+      editorInfo.textContent = `${formatSize(data.size)} · ${(data.content || "").split("\n").length} lines`;
+      editorEl.focus();
+    } catch (e) {
+      notify(`Error opening file: ${e.message}`, "error");
+      editorPlaceholder.innerHTML = '<i class="fas fa-file-code fe-placeholder-icon"></i><p>Select a file to view or edit</p>';
+    }
+  }
+
+  async function saveFile() {
+    if (!currentFilePath) return;
+    const sid = serverId();
+    const content = editorEl.value;
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Saving...</span>';
+    try {
+      const resp = await fetch(`/api/file-explorer/${sid}/write?path=${encodeURIComponent(currentFilePath)}`, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+        body: content,
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        notify(err.detail || "Save failed", "error");
+        return;
+      }
+      markDirty(false);
+      notify("File saved.", "success");
+    } catch (e) {
+      notify(`Save error: ${e.message}`, "error");
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '<i class="fas fa-floppy-disk"></i><span>Save</span>';
+    }
+  }
+
+  // ── Download ───────────────────────────────────────────────────────────
+  function downloadFile(filePath) {
+    const sid = serverId();
+    const url = `/api/file-explorer/${sid}/download?path=${encodeURIComponent(filePath)}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filePath.split("/").pop();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  // ── Delete ─────────────────────────────────────────────────────────────
+  async function deleteEntry(entryPath, name) {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    const sid = serverId();
+    try {
+      const resp = await fetch(`/api/file-explorer/${sid}/delete?path=${encodeURIComponent(entryPath)}`, { method: "DELETE" });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        notify(err.detail || "Delete failed", "error");
+        return;
+      }
+      notify(`Deleted: ${name}`, "success");
+      if (currentFilePath === entryPath) {
+        currentFilePath = null;
+        setEditorVisible(false);
+        editorFilename.textContent = "No file open";
+        editorPlaceholder.innerHTML = '<i class="fas fa-file-code fe-placeholder-icon"></i><p>Select a file to view or edit</p>';
+        editorPlaceholder.style.display = "";
+      }
+      loadDirectory(currentPath);
+    } catch (e) {
+      notify(`Delete error: ${e.message}`, "error");
+    }
+  }
+
+  // ── Rename ─────────────────────────────────────────────────────────────
+  async function renameEntry(entryPath) {
+    const oldName = entryPath.split("/").pop();
+    const newName = prompt("New name:", oldName);
+    if (!newName || newName === oldName) return;
+    const dir = parentPath(entryPath);
+    const newPath = joinPath(dir, newName);
+    const sid = serverId();
+    try {
+      const resp = await fetch(`/api/file-explorer/${sid}/rename?path=${encodeURIComponent(entryPath)}&new_path=${encodeURIComponent(newPath)}`, { method: "POST" });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        notify(err.detail || "Rename failed", "error");
+        return;
+      }
+      notify("Renamed successfully.", "success");
+      if (currentFilePath === entryPath) {
+        currentFilePath = newPath;
+        editorFilename.textContent = newName;
+      }
+      loadDirectory(currentPath);
+    } catch (e) {
+      notify(`Rename error: ${e.message}`, "error");
+    }
+  }
+
+  // ── chmod modal ────────────────────────────────────────────────────────
+  function octalFromCheckboxes() {
+    const bit = (id) => chmodCheckboxes[id].checked ? 1 : 0;
+    const u = bit("ur") * 4 + bit("uw") * 2 + bit("ux");
+    const g = bit("gr") * 4 + bit("gw") * 2 + bit("gx");
+    const o = bit("or") * 4 + bit("ow") * 2 + bit("ox");
+    return `${u}${g}${o}`;
+  }
+
+  function checkboxesFromOctal(octal) {
+    const s = octal.replace(/^0o|^0/, "").padStart(3, "0").slice(-3);
+    const u = parseInt(s[0], 10);
+    const g = parseInt(s[1], 10);
+    const o = parseInt(s[2], 10);
+    chmodCheckboxes.ur.checked = !!(u & 4);
+    chmodCheckboxes.uw.checked = !!(u & 2);
+    chmodCheckboxes.ux.checked = !!(u & 1);
+    chmodCheckboxes.gr.checked = !!(g & 4);
+    chmodCheckboxes.gw.checked = !!(g & 2);
+    chmodCheckboxes.gx.checked = !!(g & 1);
+    chmodCheckboxes.or.checked = !!(o & 4);
+    chmodCheckboxes.ow.checked = !!(o & 2);
+    chmodCheckboxes.ox.checked = !!(o & 1);
+    chmodOctal.value = `${u}${g}${o}`;
+  }
+
+  function openChmodModal(entryPath, modeOctal) {
+    chmodModal._targetPath = entryPath;
+    chmodPathLabel.textContent = entryPath;
+    checkboxesFromOctal(modeOctal || "644");
+    chmodModal.style.display = "";
+  }
+
+  function closeChmodModal() {
+    chmodModal.style.display = "none";
+    chmodModal._targetPath = null;
+  }
+
+  Object.values(chmodCheckboxes).forEach(cb => {
+    cb.addEventListener("change", () => { chmodOctal.value = octalFromCheckboxes(); });
+  });
+  chmodOctal.addEventListener("input", () => {
+    if (/^[0-7]{3,4}$/.test(chmodOctal.value)) checkboxesFromOctal(chmodOctal.value);
+  });
+  chmodClose.addEventListener("click", closeChmodModal);
+  chmodCancel.addEventListener("click", closeChmodModal);
+  chmodModal.addEventListener("click", (e) => { if (e.target === chmodModal) closeChmodModal(); });
+
+  chmodApply.addEventListener("click", async () => {
+    const entryPath = chmodModal._targetPath;
+    if (!entryPath) return;
+    const mode = chmodOctal.value;
+    if (!/^[0-7]{3,4}$/.test(mode)) { notify("Invalid octal mode", "error"); return; }
+    const sid = serverId();
+    chmodApply.disabled = true;
+    try {
+      const resp = await fetch(`/api/file-explorer/${sid}/chmod?path=${encodeURIComponent(entryPath)}&mode=${encodeURIComponent(mode)}`, { method: "POST" });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        notify(err.detail || "chmod failed", "error");
+        return;
+      }
+      notify(`Permissions updated: ${mode}`, "success");
+      closeChmodModal();
+      loadDirectory(currentPath);
+    } catch (e) {
+      notify(`chmod error: ${e.message}`, "error");
+    } finally {
+      chmodApply.disabled = false;
+    }
+  });
+
+  // ── New file / dir ─────────────────────────────────────────────────────
+  newFileBtn.addEventListener("click", async () => {
+    const name = prompt("New file name:");
+    if (!name) return;
+    const filePath = joinPath(currentPath, name);
+    const sid = serverId();
+    try {
+      const resp = await fetch(`/api/file-explorer/${sid}/write?path=${encodeURIComponent(filePath)}`, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+        body: "",
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        notify(err.detail || "Create failed", "error");
+        return;
+      }
+      notify("File created.", "success");
+      loadDirectory(currentPath);
+      openFile(filePath);
+    } catch (e) {
+      notify(`Create error: ${e.message}`, "error");
+    }
+  });
+
+  newDirBtn.addEventListener("click", async () => {
+    const name = prompt("New directory name:");
+    if (!name) return;
+    const dirPath = joinPath(currentPath, name);
+    const sid = serverId();
+    try {
+      const resp = await fetch(`/api/file-explorer/${sid}/mkdir?path=${encodeURIComponent(dirPath)}`, { method: "POST" });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        notify(err.detail || "Create failed", "error");
+        return;
+      }
+      notify("Directory created.", "success");
+      loadDirectory(currentPath);
+    } catch (e) {
+      notify(`Create error: ${e.message}`, "error");
+    }
+  });
+
+  // ── Upload ─────────────────────────────────────────────────────────────
+  uploadInput.addEventListener("change", async () => {
+    const file = uploadInput.files[0];
+    if (!file) return;
+    const dest = joinPath(currentPath, file.name);
+    const sid = serverId();
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const resp = await fetch(`/api/file-explorer/${sid}/upload?path=${encodeURIComponent(dest)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream" },
+        body: arrayBuffer,
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        notify(err.detail || "Upload failed", "error");
+        return;
+      }
+      notify(`Uploaded: ${file.name}`, "success");
+      loadDirectory(currentPath);
+    } catch (e) {
+      notify(`Upload error: ${e.message}`, "error");
+    } finally {
+      uploadInput.value = "";
+    }
+  });
+
+  // ── Toolbar buttons ────────────────────────────────────────────────────
+  goBtn.addEventListener("click", () => loadDirectory(pathInput.value.trim() || "/"));
+  pathInput.addEventListener("keydown", (e) => { if (e.key === "Enter") goBtn.click(); });
+  upBtn.addEventListener("click", () => { if (currentPath !== "/") loadDirectory(parentPath(currentPath)); });
+  refreshBtn.addEventListener("click", () => loadDirectory(currentPath));
+  serverSelect.addEventListener("change", () => {
+    currentFilePath = null;
+    setEditorVisible(false);
+    editorFilename.textContent = "No file open";
+    editorPlaceholder.innerHTML = '<i class="fas fa-file-code fe-placeholder-icon"></i><p>Select a file to view or edit</p>';
+    editorPlaceholder.style.display = "";
+    loadDirectory("/");
+  });
+
+  // ── Editor actions ─────────────────────────────────────────────────────
+  editorEl.addEventListener("input", () => markDirty(true));
+  editorEl.addEventListener("keydown", (e) => {
+    // Tab key → insert 4 spaces
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const start = editorEl.selectionStart;
+      const end = editorEl.selectionEnd;
+      editorEl.value = editorEl.value.slice(0, start) + "    " + editorEl.value.slice(end);
+      editorEl.selectionStart = editorEl.selectionEnd = start + 4;
+      markDirty(true);
+    }
+    // Ctrl+S / Cmd+S → save
+    if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+      e.preventDefault();
+      saveFile();
+    }
+  });
+
+  saveBtn.addEventListener("click", saveFile);
+  downloadBtn.addEventListener("click", () => { if (currentFilePath) downloadFile(currentFilePath); });
+  binaryDownloadBtn.addEventListener("click", () => { if (currentFilePath) downloadFile(currentFilePath); });
+  chmodBtn.addEventListener("click", () => {
+    if (!currentFilePath) return;
+    openChmodModal(currentFilePath, currentFileMode || "0644");
+  });
+  renameBtn.addEventListener("click", () => { if (currentFilePath) renameEntry(currentFilePath); });
+  deleteFileBtn.addEventListener("click", () => {
+    if (!currentFilePath) return;
+    deleteEntry(currentFilePath, currentFilePath.split("/").pop());
+  });
+
+  // ── Unsaved-changes guard ──────────────────────────────────────────────
+  window.addEventListener("beforeunload", (e) => {
+    if (isDirty) { e.preventDefault(); e.returnValue = ""; }
+  });
+
+  // ── Initial load ───────────────────────────────────────────────────────
+  loadDirectory("/");
+})();
+</script>
+{% endif %}
+{% endblock %}

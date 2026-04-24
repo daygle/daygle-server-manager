@@ -336,6 +336,46 @@ def parse_check_result(package_manager: str, output: str, exit_code: int, timed_
     return False, 0, "No updates available"
 
 
+def detect_reboot_required(
+    client: paramiko.SSHClient,
+    package_manager: str,
+    sudo_password: str | None,
+    privilege_prefix: str,
+    timeout_seconds: int = 30,
+) -> tuple[bool, str]:
+    """Return (reboot_required, detail)."""
+    if package_manager == "apt":
+        # Debian/Ubuntu set this marker file when a reboot is required.
+        command = "if [ -f /var/run/reboot-required ]; then echo __DAYGLE_REBOOT_REQUIRED__; else echo __DAYGLE_NO_REBOOT__; fi"
+    elif package_manager in {"dnf", "yum"}:
+        # needs-restarting -r exit code: 1=reboot required, 0=no reboot needed.
+        command = (
+            "if command -v needs-restarting >/dev/null 2>&1; then "
+            f"{privilege_prefix}needs-restarting -r >/dev/null 2>&1; rc=$?; "
+            "if [ $rc -eq 1 ]; then echo __DAYGLE_REBOOT_REQUIRED__; "
+            "elif [ $rc -eq 0 ]; then echo __DAYGLE_NO_REBOOT__; "
+            "else echo __DAYGLE_REBOOT_UNKNOWN__; fi; "
+            "else echo __DAYGLE_REBOOT_UNKNOWN__; fi"
+        )
+    else:
+        return False, "Reboot status check is not supported for this package manager."
+
+    _, output, timed_out = run_remote_command(
+        client,
+        command,
+        sudo_password,
+        timeout_seconds=timeout_seconds,
+    )
+    if timed_out:
+        return False, "Reboot status check timed out."
+
+    if "__DAYGLE_REBOOT_REQUIRED__" in output:
+        return True, "Reboot required after updates."
+    if "__DAYGLE_NO_REBOOT__" in output:
+        return False, "No reboot required."
+    return False, "Could not determine reboot status."
+
+
 def run_check_job(
     db: Session,
     job_id: int,
@@ -477,6 +517,7 @@ def run_check_job(
 def run_update_job(
     db: Session,
     job_id: int,
+    create_alert_fn=None,
     lock_timeout_seconds: int = 120,
     connect_timeout_seconds: int = SSH_CONNECT_TIMEOUT_SECONDS,
     command_timeout_seconds: int = REMOTE_COMMAND_TIMEOUT_SECONDS,
@@ -555,6 +596,35 @@ def run_update_job(
         )
         output = redact_secrets(output, [server_password, server_sudo_password])
         summary = summarize_update_result(package_manager, output, exit_code, timed_out)
+
+        if exit_code == 0 and not timed_out:
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Checking whether a reboot is required")
+            reboot_required, reboot_status_detail = detect_reboot_required(
+                client,
+                package_manager,
+                sudo_password,
+                privilege_prefix,
+            )
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] {reboot_status_detail}")
+            # Persist reboot state on the server so the UI can show an indicator.
+            server.needs_reboot = reboot_required
+            db.add(server)
+            db.commit()
+            if reboot_required:
+                summary = f"{summary}; reboot required"
+                if create_alert_fn:
+                    create_alert_fn(
+                        db,
+                        level="warning",
+                        title=f"Reboot required: {server.name}",
+                        message=(
+                            f"Updates completed on {server.name} ({server.host}) and the server reports that a reboot is required."
+                        ),
+                        source_type="update_job_reboot",
+                        source_id=job.id,
+                        send_email=True,
+                    )
+
         cleaned_output = clean_command_output(package_manager, output)
 
         # Common lock wording for apt/dpkg. Keep message concise and actionable.

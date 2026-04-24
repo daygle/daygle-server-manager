@@ -64,6 +64,7 @@
           <tr>
             <td>
               <strong>{{ server.name }}</strong>
+              {% if server.needs_reboot %}<i class="fas fa-power-off reboot-required-icon" title="Reboot required"></i>{% endif %}
               <small class="d-block text-secondary">{{ server.host }}:{{ server.port }}</small>
             </td>
             <td>

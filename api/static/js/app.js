@@ -804,7 +804,51 @@ document.querySelectorAll("[data-delete-server]").forEach((button) => {
   });
 });
 
-runForm?.addEventListener("submit", async (event) => {
+// Reboot server handler (server status page)
+serverStatusBody?.addEventListener("click", async (event) => {
+  const rebootButton = event.target.closest("[data-reboot-server]");
+  if (!(rebootButton instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const serverId = rebootButton.getAttribute("data-reboot-server");
+  const serverName = rebootButton.getAttribute("data-server-name") || "this server";
+  if (!serverId) {
+    return;
+  }
+
+  if (!window.confirm(`Reboot ${serverName}?\n\nThe server will be unavailable while rebooting. Unsaved work on the server will be lost.`)) {
+    return;
+  }
+
+  const originalButtonHtml = rebootButton.innerHTML;
+  rebootButton.disabled = true;
+  rebootButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Rebooting...</span>';
+
+  try {
+    const response = await fetch(`/api/server-status/${serverId}/reboot`, { method: "POST" });
+    const responseText = await response.text();
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      notify(`Server error (${response.status}): ${response.statusText}`, "error");
+      return;
+    }
+
+    if (!response.ok) {
+      notify(data.detail || "Failed to send reboot command.", "error");
+      return;
+    }
+
+    notify(data.message || `Reboot command sent to ${serverName}.`, "success");
+  } catch (error) {
+    notify(`Failed to send reboot command: ${error.message}`, "error");
+  } finally {
+    rebootButton.disabled = false;
+    rebootButton.innerHTML = originalButtonHtml;
+  }
+});
   event.preventDefault();
   const checkedServers = [...document.querySelectorAll("#server-checks input:checked")].map((x) => Number(x.value));
 
@@ -952,7 +996,7 @@ function formatPercent(value) {
 function renderServerStatusRow(server) {
   return `
     <tr data-server-status-row="${escapeHtml(server.id)}">
-      <td><strong>${escapeHtml(server.name)}</strong></td>
+      <td><strong>${escapeHtml(server.name)}</strong>${server.needs_reboot ? ' <i class="fas fa-power-off reboot-required-icon" title="Reboot required"></i>' : ''}</td>
       <td>${escapeHtml(server.host)}:${escapeHtml(server.port)}</td>
       <td>${escapeHtml(server.username)}</td>
       <td data-server-status-cell="status">${renderServerHealthStatus(server.last_health_status)}</td>

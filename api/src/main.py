@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo, available_timezones
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from croniter import croniter
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import paramiko
@@ -181,6 +181,7 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_load_avg_threshold DOUBLE PRECISION NOT NULL DEFAULT 0",
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_load_avg_5_threshold DOUBLE PRECISION NOT NULL DEFAULT 0",
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS alert_load_avg_15_threshold DOUBLE PRECISION NOT NULL DEFAULT 0",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS needs_reboot BOOLEAN NOT NULL DEFAULT FALSE",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS cron_expression VARCHAR(120)",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
@@ -814,6 +815,7 @@ def process_job_async(job_id: int) -> None:
             run_update_job(
                 db,
                 job_id,
+                create_alert,
                 lock_timeout_seconds=lock_timeout,
                 connect_timeout_seconds=connect_timeout,
                 command_timeout_seconds=command_timeout,
@@ -1223,6 +1225,7 @@ def serialize_server_health(server: Server) -> dict:
         "alert_load_avg_threshold": server.alert_load_avg_threshold,
         "alert_load_avg_5_threshold": server.alert_load_avg_5_threshold,
         "alert_load_avg_15_threshold": server.alert_load_avg_15_threshold,
+        "needs_reboot": server.needs_reboot,
     }
 
 
@@ -1608,7 +1611,39 @@ def ssh_terminal_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
-async def send_ssh_terminal_meta(websocket: WebSocket, message_type: str, message: str) -> None:
+@app.get("/file-explorer", response_class=HTMLResponse)
+def file_explorer_page(request: Request, db: Session = Depends(get_db)):
+    if not users_exist(db):
+        return RedirectResponse(url="/setup", status_code=303)
+
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    servers = db.query(Server).order_by(Server.name.asc()).all()
+    selected_server_id = None
+    selected_server_raw = (request.query_params.get("server_id") or "").strip()
+    if selected_server_raw:
+        try:
+            selected_server_id = int(selected_server_raw)
+        except ValueError:
+            selected_server_id = None
+    if selected_server_id is None and servers:
+        selected_server_id = servers[0].id
+
+    return render_app_template(
+        request,
+        "file_explorer.html",
+        "file-explorer",
+        current_user,
+        db,
+        servers=servers,
+        selected_server_id=selected_server_id,
+    )(websocket: WebSocket, message_type: str, message: str) -> None:
     await websocket.send_text(f"__ssh_meta__:{json.dumps({'type': message_type, 'message': message})}")
 
 
@@ -3657,6 +3692,418 @@ def check_all_server_statuses(request: Request, db: Session = Depends(get_db)):
         "items": [run_saved_server_health_check(db, server) for server in servers],
         "checked_at": datetime.utcnow().isoformat(),
     }
+
+
+@app.post("/api/server-status/{server_id}/reboot")
+def reboot_server(server_id: int, request: Request, db: Session = Depends(get_db)):
+    actor = require_api_user(request, db, admin=True)
+
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    connect_kwargs = build_server_connect_kwargs(
+        db,
+        host=server.host,
+        port=server.port,
+        username=server.username,
+        auth_method=server.auth_method,
+        password=server.password,
+        ssh_key_id=server.ssh_key_id,
+        existing_server=server,
+    )
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    try:
+        client.connect(**connect_kwargs)
+        # Use nohup so the command survives the SSH session being terminated by the reboot.
+        _, stdout, stderr = client.exec_command("nohup sh -c 'sleep 2 && reboot' >/dev/null 2>&1 &")
+        stdout.channel.recv_exit_status()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Reboot command failed: {exc}") from exc
+    finally:
+        client.close()
+
+    log_audit(
+        db,
+        "server.reboot",
+        request=request,
+        actor=actor,
+        target_type="server",
+        target_id=server.id,
+        target_label=server.name,
+        detail=f"Reboot initiated on {server.host}:{server.port} by {actor.username}",
+    )
+
+    create_alert(
+        db,
+        level="info",
+        title=f"Reboot initiated: {server.name}",
+        message=f"A reboot was initiated on {server.name} ({server.host}) by {actor.username}.",
+        source_type="server",
+        source_id=server.id,
+        send_email=False,
+    )
+
+    return {"ok": True, "message": f"Reboot command sent to {server.name}."}
+
+
+# ---------------------------------------------------------------------------
+# File Explorer API
+# ---------------------------------------------------------------------------
+
+FILE_EXPLORER_MAX_READ_BYTES = 2 * 1024 * 1024  # 2 MB read/edit limit
+FILE_EXPLORER_BINARY_SNIFF_BYTES = 8192
+
+
+def _resolve_sftp_path(raw_path: str) -> str:
+    """Normalise a raw path string.  Returns an absolute POSIX path."""
+    p = raw_path.strip()
+    if not p:
+        p = "/"
+    # Resolve any .. segments so we always end up with a clean absolute path.
+    from posixpath import normpath as posix_normpath
+    resolved = posix_normpath("/" + p.lstrip("/"))
+    return resolved
+
+
+def _sftp_for_server(server: Server, db: Session) -> tuple[paramiko.SSHClient, paramiko.SFTPClient]:
+    connect_kwargs = build_server_connect_kwargs(
+        db,
+        host=server.host,
+        port=server.port,
+        username=server.username,
+        auth_method=server.auth_method,
+        password=server.password,
+        ssh_key_id=server.ssh_key_id,
+        existing_server=server,
+    )
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(**connect_kwargs)
+    sftp = client.open_sftp()
+    return client, sftp
+
+
+def _sftp_entry_to_dict(attr: paramiko.SFTPAttributes, name: str) -> dict:
+    import stat as stat_mod
+    is_dir = stat_mod.S_ISDIR(attr.st_mode or 0)
+    is_link = stat_mod.S_ISLNK(attr.st_mode or 0)
+    mode_bits = stat_mod.filemode(attr.st_mode or 0)
+    return {
+        "name": name,
+        "is_dir": is_dir,
+        "is_link": is_link,
+        "size": attr.st_size if not is_dir else None,
+        "mode": mode_bits,
+        "mode_octal": oct(stat_mod.S_IMODE(attr.st_mode or 0)),
+        "mtime": attr.st_mtime,
+        "uid": attr.st_uid,
+        "gid": attr.st_gid,
+    }
+
+
+@app.get("/api/file-explorer/{server_id}/list")
+def file_explorer_list(server_id: int, path: str = Query(default="/"), request: Request = None, db: Session = Depends(get_db)):
+    require_api_user(request, db, admin=True)
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    resolved = _resolve_sftp_path(path)
+    client = None
+    try:
+        client, sftp = _sftp_for_server(server, db)
+        try:
+            attrs = sftp.listdir_attr(resolved)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="Path not found")
+        except PermissionError:
+            raise HTTPException(status_code=403, detail="Permission denied")
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+        entries = sorted(
+            [_sftp_entry_to_dict(a, a.filename) for a in attrs],
+            key=lambda e: (not e["is_dir"], e["name"].lower()),
+        )
+        # Also stat the current directory itself so the UI has its permissions.
+        try:
+            self_attr = sftp.stat(resolved)
+            self_info = _sftp_entry_to_dict(self_attr, resolved.split("/")[-1] or "/")
+        except Exception:
+            self_info = None
+        sftp.close()
+        return {"path": resolved, "entries": entries, "self": self_info}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"SFTP error: {exc}") from exc
+    finally:
+        if client:
+            client.close()
+
+
+@app.get("/api/file-explorer/{server_id}/read")
+def file_explorer_read(server_id: int, path: str = Query(...), request: Request = None, db: Session = Depends(get_db)):
+    require_api_user(request, db, admin=True)
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    resolved = _resolve_sftp_path(path)
+    client = None
+    try:
+        client, sftp = _sftp_for_server(server, db)
+        try:
+            attr = sftp.stat(resolved)
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        import stat as stat_mod
+        if stat_mod.S_ISDIR(attr.st_mode or 0):
+            raise HTTPException(status_code=400, detail="Path is a directory")
+
+        if (attr.st_size or 0) > FILE_EXPLORER_MAX_READ_BYTES:
+            raise HTTPException(status_code=413, detail=f"File too large to edit (max {FILE_EXPLORER_MAX_READ_BYTES // 1024 // 1024} MB)")
+
+        with sftp.open(resolved, "rb") as fh:
+            raw = fh.read(FILE_EXPLORER_BINARY_SNIFF_BYTES)
+            if b"\x00" in raw:  # binary sniff
+                sftp.close()
+                return {"path": resolved, "binary": True, "content": None, "size": attr.st_size}
+            rest = fh.read()  # read remainder
+        content = (raw + rest).decode("utf-8", errors="replace")
+        sftp.close()
+        return {"path": resolved, "binary": False, "content": content, "size": attr.st_size}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"SFTP read error: {exc}") from exc
+    finally:
+        if client:
+            client.close()
+
+
+@app.post("/api/file-explorer/{server_id}/write")
+async def file_explorer_write(server_id: int, request: Request, path: str = Query(...), db: Session = Depends(get_db)):
+    actor = require_api_user(request, db, admin=True)
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    resolved = _resolve_sftp_path(path)
+    body = await request.body()
+    if len(body) > FILE_EXPLORER_MAX_READ_BYTES:
+        raise HTTPException(status_code=413, detail="Content too large")
+
+    client = None
+    try:
+        client, sftp = _sftp_for_server(server, db)
+        with sftp.open(resolved, "wb") as fh:
+            fh.write(body)
+        sftp.close()
+        log_audit(db, "file.write", request=request, actor=actor,
+                  target_type="server", target_id=server.id, target_label=server.name,
+                  detail=f"Wrote file {resolved} on {server.host}")
+        return {"ok": True, "path": resolved}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"SFTP write error: {exc}") from exc
+    finally:
+        if client:
+            client.close()
+
+
+@app.post("/api/file-explorer/{server_id}/chmod")
+def file_explorer_chmod(server_id: int, path: str = Query(...), mode: str = Query(...), request: Request = None, db: Session = Depends(get_db)):
+    actor = require_api_user(request, db, admin=True)
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    resolved = _resolve_sftp_path(path)
+    try:
+        mode_int = int(mode, 8)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid mode; expected octal string e.g. 644")
+    if not (0o000 <= mode_int <= 0o7777):
+        raise HTTPException(status_code=400, detail="Mode out of range")
+
+    client = None
+    try:
+        client, sftp = _sftp_for_server(server, db)
+        sftp.chmod(resolved, mode_int)
+        sftp.close()
+        log_audit(db, "file.chmod", request=request, actor=actor,
+                  target_type="server", target_id=server.id, target_label=server.name,
+                  detail=f"chmod {mode} {resolved} on {server.host}")
+        return {"ok": True, "path": resolved, "mode": mode}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"SFTP chmod error: {exc}") from exc
+    finally:
+        if client:
+            client.close()
+
+
+@app.post("/api/file-explorer/{server_id}/mkdir")
+def file_explorer_mkdir(server_id: int, path: str = Query(...), request: Request = None, db: Session = Depends(get_db)):
+    actor = require_api_user(request, db, admin=True)
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    resolved = _resolve_sftp_path(path)
+    client = None
+    try:
+        client, sftp = _sftp_for_server(server, db)
+        sftp.mkdir(resolved)
+        sftp.close()
+        log_audit(db, "file.mkdir", request=request, actor=actor,
+                  target_type="server", target_id=server.id, target_label=server.name,
+                  detail=f"mkdir {resolved} on {server.host}")
+        return {"ok": True, "path": resolved}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"SFTP mkdir error: {exc}") from exc
+    finally:
+        if client:
+            client.close()
+
+
+@app.post("/api/file-explorer/{server_id}/rename")
+def file_explorer_rename(server_id: int, path: str = Query(...), new_path: str = Query(...), request: Request = None, db: Session = Depends(get_db)):
+    actor = require_api_user(request, db, admin=True)
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    resolved_src = _resolve_sftp_path(path)
+    resolved_dst = _resolve_sftp_path(new_path)
+    client = None
+    try:
+        client, sftp = _sftp_for_server(server, db)
+        sftp.rename(resolved_src, resolved_dst)
+        sftp.close()
+        log_audit(db, "file.rename", request=request, actor=actor,
+                  target_type="server", target_id=server.id, target_label=server.name,
+                  detail=f"rename {resolved_src} -> {resolved_dst} on {server.host}")
+        return {"ok": True, "from": resolved_src, "to": resolved_dst}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"SFTP rename error: {exc}") from exc
+    finally:
+        if client:
+            client.close()
+
+
+@app.delete("/api/file-explorer/{server_id}/delete")
+def file_explorer_delete(server_id: int, path: str = Query(...), request: Request = None, db: Session = Depends(get_db)):
+    actor = require_api_user(request, db, admin=True)
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    resolved = _resolve_sftp_path(path)
+    if resolved == "/":
+        raise HTTPException(status_code=400, detail="Cannot delete the root directory")
+
+    client = None
+    try:
+        client, sftp = _sftp_for_server(server, db)
+        import stat as stat_mod
+        attr = sftp.stat(resolved)
+        if stat_mod.S_ISDIR(attr.st_mode or 0):
+            sftp.rmdir(resolved)
+        else:
+            sftp.remove(resolved)
+        sftp.close()
+        log_audit(db, "file.delete", request=request, actor=actor,
+                  target_type="server", target_id=server.id, target_label=server.name,
+                  detail=f"delete {resolved} on {server.host}")
+        return {"ok": True, "path": resolved}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"SFTP delete error: {exc}") from exc
+    finally:
+        if client:
+            client.close()
+
+
+@app.get("/api/file-explorer/{server_id}/download")
+def file_explorer_download(server_id: int, path: str = Query(...), request: Request = None, db: Session = Depends(get_db)):
+    require_api_user(request, db, admin=True)
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    resolved = _resolve_sftp_path(path)
+    filename = resolved.split("/")[-1] or "download"
+
+    # We must keep the SSH client open while streaming; close it in a generator.
+    try:
+        client, sftp = _sftp_for_server(server, db)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"SFTP connection failed: {exc}") from exc
+
+    def _stream():
+        try:
+            with sftp.open(resolved, "rb") as fh:
+                while True:
+                    chunk = fh.read(65536)
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            sftp.close()
+            client.close()
+
+    import urllib.parse
+    safe_filename = urllib.parse.quote(filename)
+    return StreamingResponse(
+        _stream(),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_filename}"},
+    )
+
+
+@app.post("/api/file-explorer/{server_id}/upload")
+async def file_explorer_upload(server_id: int, request: Request, path: str = Query(...), db: Session = Depends(get_db)):
+    """Upload a single file. The raw request body is written to the given remote path."""
+    actor = require_api_user(request, db, admin=True)
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    resolved = _resolve_sftp_path(path)
+    body = await request.body()
+    if len(body) > FILE_EXPLORER_MAX_READ_BYTES:
+        raise HTTPException(status_code=413, detail="Upload too large (max 2 MB via browser)")
+
+    client = None
+    try:
+        client, sftp = _sftp_for_server(server, db)
+        with sftp.open(resolved, "wb") as fh:
+            fh.write(body)
+        sftp.close()
+        log_audit(db, "file.upload", request=request, actor=actor,
+                  target_type="server", target_id=server.id, target_label=server.name,
+                  detail=f"Uploaded file to {resolved} on {server.host}")
+        return {"ok": True, "path": resolved}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"SFTP upload error: {exc}") from exc
+    finally:
+        if client:
+            client.close()
 
 
 @app.post("/api/servers", response_model=ServerRead)

@@ -80,7 +80,7 @@
         <tbody id="server-status-body">
           {% for server in servers %}
           <tr data-server-status-row="{{ server.id }}">
-            <td><strong>{{ server.name }}</strong></td>
+            <td><strong>{{ server.name }}</strong>{% if server.needs_reboot %} <i class="fas fa-power-off reboot-required-icon" title="Reboot required"></i>{% endif %}</td>
             <td>{{ server.host }}:{{ server.port }}</td>
             <td>{{ server.username }}</td>
             <td data-server-status-cell="status">
@@ -105,6 +105,12 @@
                 <i class="fas fa-rotate-right"></i>
                 <span>Check Now</span>
               </button>
+              {% if current_user.is_admin %}
+              <button type="button" class="btn btn-danger btn-sm" data-reboot-server="{{ server.id }}" data-server-name="{{ server.name }}">
+                <i class="fas fa-power-off"></i>
+                <span>Reboot</span>
+              </button>
+              {% endif %}
             </td>
           </tr>
           {% else %}
