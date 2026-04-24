@@ -59,6 +59,10 @@
               <span>Server Status</span>
             </a>
             {% if current_user.is_admin %}
+            <a href="/ssh-terminal" class="nav-link {% if active_page == 'ssh-terminal' %}active{% endif %}">
+              <i class="fas fa-terminal"></i>
+              <span>SSH Terminal</span>
+            </a>
             <a href="/updates/manual" class="nav-link {% if active_page == 'updates-manual' %}active{% endif %}">
               <i class="fas fa-play-circle"></i>
               <span>Manual Updates</span>

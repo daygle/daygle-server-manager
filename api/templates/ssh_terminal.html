@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block page_title %}SSH Terminal - Daygle Server Manager{% endblock %}
+{% block title %}SSH Terminal{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-header">
+    <div class="card-title">
+      <i class="fas fa-terminal"></i>
+      <span>Browser SSH Terminal</span>
+    </div>
+  </div>
+  <div class="card-body">
+    {% if servers %}
+    <div class="ssh-terminal-toolbar">
+      <div class="form-group mb-0">
+        <label for="ssh-terminal-server" class="form-label">Server</label>
+        <select id="ssh-terminal-server" class="form-select">
+          {% for server in servers %}
+          <option value="{{ server.id }}" {% if selected_server_id == server.id %}selected{% endif %}>{{ server.name }} ({{ server.host }}:{{ server.port }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="button" class="btn btn-primary" id="ssh-terminal-connect-btn">
+        <i class="fas fa-plug"></i>
+        <span>Connect</span>
+      </button>
+      <button type="button" class="btn btn-secondary" id="ssh-terminal-disconnect-btn" disabled>
+        <i class="fas fa-ban"></i>
+        <span>Disconnect</span>
+      </button>
+      <button type="button" class="btn btn-secondary" id="ssh-terminal-clear-btn">
+        <i class="fas fa-eraser"></i>
+        <span>Clear</span>
+      </button>
+    </div>
+    <p class="text-secondary mt-3 mb-0">
+      This terminal connects with the credentials already stored for the selected server. It is intended for standard shell work; full-screen interactive apps are not supported in this browser view.
+    </p>
+    {% else %}
+    <div class="empty-state">
+      <div>
+        <i class="fas fa-server empty-icon"></i>
+        <p>No servers are configured yet.</p>
+        <a href="/servers" class="btn btn-primary mt-3">
+          <i class="fas fa-plus"></i>
+          <span>Add a Server</span>
+        </a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if servers %}
+<div class="card">
+  <div class="card-body p-0">
+    <div class="ssh-terminal-panel">
+      <div class="ssh-terminal-statusbar">
+        <span class="ssh-terminal-status" id="ssh-terminal-status">Disconnected</span>
+        <span class="ssh-terminal-hint">Click inside the terminal and type. Paste is supported.</span>
+      </div>
+      <pre id="ssh-terminal-output" class="ssh-terminal-output is-disconnected" tabindex="0">[ready] Select a server and click Connect.
+
+Tips:
+- Ctrl+C sends an interrupt.
+- Tab, arrows, backspace, delete, home and end are supported.
+- The access token for this page expires after {{ terminal_token_ttl_seconds }} seconds.</pre>
+      <div class="ssh-terminal-footer">
+        <span id="ssh-terminal-connection-label">No active SSH session</span>
+        <span>Output stays in this browser tab and is not stored as a job log.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const outputEl = document.getElementById("ssh-terminal-output");
+    const serverSelect = document.getElementById("ssh-terminal-server");
+    const connectBtn = document.getElementById("ssh-terminal-connect-btn");
+    const disconnectBtn = document.getElementById("ssh-terminal-disconnect-btn");
+    const clearBtn = document.getElementById("ssh-terminal-clear-btn");
+    const statusEl = document.getElementById("ssh-terminal-status");
+    const connectionLabelEl = document.getElementById("ssh-terminal-connection-label");
+    const terminalToken = {{ terminal_access_token|tojson }};
+
+    let socket = null;
+    let isConnected = false;
+
+    function setStatus(text, isOnline) {
+      statusEl.textContent = text;
+      outputEl.classList.toggle("is-disconnected", !isOnline);
+      connectBtn.disabled = isOnline;
+      disconnectBtn.disabled = !isOnline;
+      serverSelect.disabled = isOnline;
+    }
+
+    function appendOutput(text) {
+      outputEl.textContent += text;
+      outputEl.scrollTop = outputEl.scrollHeight;
+    }
+
+    function appendLine(text) {
+      appendOutput((outputEl.textContent ? "\n" : "") + text + "\n");
+    }
+
+    function resetOutput(text) {
+      outputEl.textContent = text;
+      outputEl.scrollTop = outputEl.scrollHeight;
+    }
+
+    function sendPayload(payload) {
+      if (!socket || socket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      socket.send(JSON.stringify(payload));
+    }
+
+    function sendResize() {
+      if (!isConnected) {
+        return;
+      }
+      const cols = Math.max(60, Math.floor(outputEl.clientWidth / 9));
+      const rows = Math.max(18, Math.floor(outputEl.clientHeight / 20));
+      sendPayload({ type: "resize", cols: cols, rows: rows });
+    }
+
+    function connect() {
+      if (!serverSelect.value) {
+        window.showToast("Select a server first.", "error");
+        return;
+      }
+
+      resetOutput(`[connecting] Opening SSH session to ${serverSelect.options[serverSelect.selectedIndex].text}...\n`);
+      setStatus("Connecting...", false);
+      connectionLabelEl.textContent = "Connecting...";
+
+      const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+      const socketUrl = `${protocol}://${window.location.host}/ws/ssh-terminal?server_id=${encodeURIComponent(serverSelect.value)}&token=${encodeURIComponent(terminalToken)}`;
+      socket = new WebSocket(socketUrl);
+
+      socket.addEventListener("open", function () {
+        outputEl.focus();
+      });
+
+      socket.addEventListener("message", function (event) {
+        if (typeof event.data === "string" && event.data.startsWith("__ssh_meta__:")) {
+          try {
+            const payload = JSON.parse(event.data.slice("__ssh_meta__:".length));
+            if (payload.type === "status") {
+              isConnected = true;
+              setStatus("Connected", true);
+              connectionLabelEl.textContent = payload.message;
+              appendLine(`[status] ${payload.message}`);
+              sendResize();
+            } else if (payload.type === "error") {
+              appendLine(`[error] ${payload.message}`);
+              window.showToast(payload.message, "error");
+            }
+          } catch (error) {
+            appendLine("[error] Failed to parse terminal control message.");
+          }
+          return;
+        }
+
+        appendOutput(String(event.data));
+      });
+
+      socket.addEventListener("close", function () {
+        if (isConnected) {
+          appendLine("\n[status] SSH session closed.");
+        }
+        isConnected = false;
+        setStatus("Disconnected", false);
+        connectionLabelEl.textContent = "No active SSH session";
+        socket = null;
+      });
+
+      socket.addEventListener("error", function () {
+        window.showToast("SSH terminal connection failed.", "error");
+      });
+    }
+
+    function disconnect() {
+      if (!socket) {
+        return;
+      }
+      sendPayload({ type: "disconnect" });
+      socket.close();
+    }
+
+    outputEl.addEventListener("keydown", function (event) {
+      if (!isConnected) {
+        return;
+      }
+
+      const specialKeys = {
+        Enter: "\r",
+        Backspace: "\u007f",
+        Tab: "\t",
+        ArrowUp: "\u001b[A",
+        ArrowDown: "\u001b[B",
+        ArrowRight: "\u001b[C",
+        ArrowLeft: "\u001b[D",
+        Delete: "\u001b[3~",
+        Home: "\u001b[H",
+        End: "\u001b[F",
+      };
+
+      if (event.ctrlKey && (event.key === "c" || event.key === "C")) {
+        event.preventDefault();
+        sendPayload({ type: "input", data: "\u0003" });
+        return;
+      }
+
+      if (specialKeys[event.key]) {
+        event.preventDefault();
+        sendPayload({ type: "input", data: specialKeys[event.key] });
+        return;
+      }
+
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && event.key.length === 1) {
+        event.preventDefault();
+        sendPayload({ type: "input", data: event.key });
+      }
+    });
+
+    outputEl.addEventListener("paste", function (event) {
+      if (!isConnected) {
+        return;
+      }
+      const pastedText = event.clipboardData ? event.clipboardData.getData("text") : "";
+      if (!pastedText) {
+        return;
+      }
+      event.preventDefault();
+      sendPayload({ type: "input", data: pastedText });
+    });
+
+    connectBtn.addEventListener("click", connect);
+    disconnectBtn.addEventListener("click", disconnect);
+    clearBtn.addEventListener("click", function () {
+      resetOutput("");
+      outputEl.focus();
+    });
+
+    serverSelect.addEventListener("change", function () {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set("server_id", serverSelect.value);
+      window.history.replaceState({}, "", nextUrl.toString());
+      connectionLabelEl.textContent = `Ready to connect to ${serverSelect.options[serverSelect.selectedIndex].text}`;
+    });
+
+    window.addEventListener("resize", sendResize);
+    outputEl.addEventListener("click", function () {
+      outputEl.focus();
+    });
+  })();
+</script>
+{% endif %}
+{% endblock %}

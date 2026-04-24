@@ -1,16 +1,19 @@
+import asyncio
 from __future__ import annotations
 
 import io
+import json
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
+import secrets
 import smtplib
 from threading import Thread
 from time import sleep
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo, available_timezones
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from croniter import croniter
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -78,6 +81,7 @@ DEFAULT_ALERT_STORAGE_THRESHOLD = 90
 DEFAULT_ALERT_LOAD_AVG_THRESHOLD = 0  # 0 = disabled
 DEFAULT_APT_LOCK_TIMEOUT_SECONDS = 120
 MAX_APT_LOCK_TIMEOUT_SECONDS = 3600
+SSH_TERMINAL_TOKEN_TTL_SECONDS = 300
 DEFAULT_DATE_FORMAT = "iso-24"
 DEFAULT_TIMEZONE = "UTC"
 DEFAULT_THEME = "system"
@@ -114,6 +118,7 @@ DATE_FORMAT_OPTIONS: list[tuple[str, str, str]] = [
     ("month-name", "DD Mon YYYY HH:MM:SS", "%d %b %Y %H:%M:%S"),
 ]
 DATE_FORMAT_MAP = {key: pattern for key, _, pattern in DATE_FORMAT_OPTIONS}
+ssh_terminal_tokens: dict[str, tuple[int, datetime]] = {}
 
 
 def is_country_city_timezone(timezone_name: str) -> bool:
@@ -969,6 +974,44 @@ def require_api_user(request: Request, db: Session, admin: bool = False) -> User
     return user
 
 
+def prune_ssh_terminal_tokens() -> None:
+    now = datetime.utcnow()
+    expired_tokens = [token for token, (_, expires_at) in ssh_terminal_tokens.items() if expires_at <= now]
+    for token in expired_tokens:
+        ssh_terminal_tokens.pop(token, None)
+
+
+def issue_ssh_terminal_token(user: User) -> str:
+    prune_ssh_terminal_tokens()
+    token = secrets.token_urlsafe(32)
+    ssh_terminal_tokens[token] = (
+        user.id,
+        datetime.utcnow() + timedelta(seconds=SSH_TERMINAL_TOKEN_TTL_SECONDS),
+    )
+    return token
+
+
+def resolve_ssh_terminal_user(db: Session, token: str) -> User | None:
+    prune_ssh_terminal_tokens()
+    if not token:
+        return None
+
+    token_record = ssh_terminal_tokens.get(token)
+    if not token_record:
+        return None
+
+    user_id, expires_at = token_record
+    if expires_at <= datetime.utcnow():
+        ssh_terminal_tokens.pop(token, None)
+        return None
+
+    user = db.query(User).filter(User.id == user_id, User.enabled.is_(True)).first()
+    if not user:
+        ssh_terminal_tokens.pop(token, None)
+        return None
+    return user
+
+
 def build_server_connect_kwargs(
     db: Session,
     *,
@@ -1449,6 +1492,169 @@ def server_status_page(request: Request, db: Session = Depends(get_db)):
         db,
         servers=servers,
     )
+
+
+@app.get("/ssh-terminal", response_class=HTMLResponse)
+def ssh_terminal_page(request: Request, db: Session = Depends(get_db)):
+    if not users_exist(db):
+        return RedirectResponse(url="/setup", status_code=303)
+
+    current_user = get_session_user(request, db)
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if not current_user.is_admin:
+        set_flash(request, "Admin access required.", "error")
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    servers = db.query(Server).order_by(Server.name.asc()).all()
+    selected_server_id = None
+    selected_server_raw = (request.query_params.get("server_id") or "").strip()
+    if selected_server_raw:
+        try:
+            selected_server_id = int(selected_server_raw)
+        except ValueError:
+            selected_server_id = None
+
+    if selected_server_id is None and servers:
+        selected_server_id = servers[0].id
+
+    return render_app_template(
+        request,
+        "ssh_terminal.html",
+        "ssh-terminal",
+        current_user,
+        db,
+        servers=servers,
+        selected_server_id=selected_server_id,
+        terminal_access_token=issue_ssh_terminal_token(current_user),
+        terminal_token_ttl_seconds=SSH_TERMINAL_TOKEN_TTL_SECONDS,
+    )
+
+
+async def send_ssh_terminal_meta(websocket: WebSocket, message_type: str, message: str) -> None:
+    await websocket.send_text(f"__ssh_meta__:{json.dumps({'type': message_type, 'message': message})}")
+
+
+@app.websocket("/ws/ssh-terminal")
+async def ssh_terminal_socket(websocket: WebSocket):
+    await websocket.accept()
+
+    db = SessionLocal()
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    channel = None
+    output_task: asyncio.Task | None = None
+    current_user: User | None = None
+    server: Server | None = None
+
+    try:
+        if not users_exist(db):
+            await send_ssh_terminal_meta(websocket, "error", "Initial setup required.")
+            await websocket.close(code=4403)
+            return
+
+        token = (websocket.query_params.get("token") or "").strip()
+        current_user = resolve_ssh_terminal_user(db, token)
+        if not current_user:
+            await send_ssh_terminal_meta(websocket, "error", "SSH terminal session expired. Refresh the page and try again.")
+            await websocket.close(code=4401)
+            return
+
+        if not current_user.is_admin:
+            await send_ssh_terminal_meta(websocket, "error", "Admin access required.")
+            await websocket.close(code=4403)
+            return
+
+        try:
+            server_id = int((websocket.query_params.get("server_id") or "").strip())
+        except ValueError:
+            await send_ssh_terminal_meta(websocket, "error", "Invalid server selection.")
+            await websocket.close(code=4400)
+            return
+
+        server = db.query(Server).filter(Server.id == server_id).first()
+        if not server:
+            await send_ssh_terminal_meta(websocket, "error", "Selected server was not found.")
+            await websocket.close(code=4404)
+            return
+
+        connect_kwargs = build_server_connect_kwargs(
+            db,
+            host=server.host,
+            port=server.port,
+            username=server.username,
+            auth_method=server.auth_method,
+            password=server.password,
+            ssh_key_id=server.ssh_key_id,
+            existing_server=server,
+        )
+
+        await asyncio.to_thread(client.connect, **connect_kwargs)
+        channel = await asyncio.to_thread(client.invoke_shell, term="xterm", width=120, height=32)
+
+        log_audit(
+            db,
+            "terminal.connect",
+            actor=current_user,
+            target_type="server",
+            target_id=server.id,
+            target_label=server.name,
+            detail=f"Opened SSH terminal to {server.host}:{server.port}",
+        )
+        await send_ssh_terminal_meta(websocket, "status", f"Connected to {server.name} ({server.host}:{server.port}).")
+
+        async def pump_output() -> None:
+            while channel is not None and not channel.closed:
+                if channel.recv_ready():
+                    chunk = await asyncio.to_thread(channel.recv, 4096)
+                    if not chunk:
+                        break
+                    await websocket.send_text(chunk.decode("utf-8", errors="replace"))
+                    continue
+                await asyncio.sleep(0.03)
+
+        output_task = asyncio.create_task(pump_output())
+
+        while True:
+            payload = await websocket.receive_json()
+            payload_type = (payload.get("type") or "").strip()
+
+            if payload_type == "input":
+                data = payload.get("data") or ""
+                if data and channel is not None and not channel.closed:
+                    await asyncio.to_thread(channel.send, str(data))
+            elif payload_type == "resize":
+                if channel is not None and not channel.closed:
+                    try:
+                        columns = max(40, min(int(payload.get("cols", 120)), 240))
+                        rows = max(12, min(int(payload.get("rows", 32)), 80))
+                    except (TypeError, ValueError):
+                        columns = 120
+                        rows = 32
+                    await asyncio.to_thread(channel.resize_pty, width=columns, height=rows)
+            elif payload_type == "disconnect":
+                break
+    except WebSocketDisconnect:
+        pass
+    except Exception as exc:
+        try:
+            await send_ssh_terminal_meta(websocket, "error", f"SSH terminal error: {str(exc)}")
+        except Exception:
+            pass
+    finally:
+        if output_task is not None:
+            output_task.cancel()
+        if channel is not None:
+            try:
+                channel.close()
+            except Exception:
+                pass
+        try:
+            client.close()
+        except Exception:
+            pass
+        db.close()
 
 
 @app.get("/updates", response_class=HTMLResponse)
