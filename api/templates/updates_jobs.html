@@ -204,10 +204,13 @@
     if (filterCard.style.display === 'none') {
       filterCard.style.display = 'block';
       toggleBtn.innerHTML = '<i class="fas fa-times"></i><span class="hide-mobile">Hide Filters</span>';
+      window.jobsFilterCardOpen = true;
     } else {
       filterCard.style.display = 'none';
       toggleBtn.innerHTML = '<i class="fas fa-filter"></i><span class="hide-mobile">Search &amp; Filter</span>';
+      window.jobsFilterCardOpen = false;
     }
+    window.syncJobsLiveRefreshState?.();
   }
   
   // Show filter card if any filters are active

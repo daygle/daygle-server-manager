@@ -1569,7 +1569,7 @@ if (jobsBody) {
 
     const updateLiveRefreshState = () => {
       const hasOpenOutput = selectedJobId !== null || Boolean(document.querySelector("#jobs-body tr.job-output-row"));
-      if (liveUpdatesToggle?.checked && !hasActiveFilters && !hasOpenOutput) {
+      if (liveUpdatesToggle?.checked && !hasActiveFilters && !hasOpenOutput && !window.jobsFilterCardOpen) {
         startLiveRefresh();
         liveUpdatesToggle.title = "Live updates are enabled.";
         return;
@@ -1582,6 +1582,7 @@ if (jobsBody) {
     };
 
     syncJobsLiveRefreshState = updateLiveRefreshState;
+    window.syncJobsLiveRefreshState = updateLiveRefreshState;
 
     if (liveUpdatesToggle) {
       if (hasActiveFilters) {
