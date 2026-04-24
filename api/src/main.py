@@ -1643,7 +1643,10 @@ def file_explorer_page(request: Request, db: Session = Depends(get_db)):
         db,
         servers=servers,
         selected_server_id=selected_server_id,
-    )(websocket: WebSocket, message_type: str, message: str) -> None:
+    )
+
+
+async def send_ssh_terminal_meta(websocket: WebSocket, message_type: str, message: str) -> None:
     await websocket.send_text(f"__ssh_meta__:{json.dumps({'type': message_type, 'message': message})}")
 
 
