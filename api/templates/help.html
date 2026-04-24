@@ -51,12 +51,14 @@
             <i class="fas fa-chart-line help-icon"></i>
             <span>Dashboard</span>
           </h3>
-          <p class="help-intro">The dashboard shows a quick operational snapshot:</p>
+          <p class="help-intro">The dashboard shows a quick operational snapshot of your infrastructure:</p>
           <ul>
-            <li>Total configured servers</li>
-            <li>Running and failed update jobs</li>
-            <li>Latest update activity</li>
+            <li><strong>Total configured servers</strong> — count of all registered hosts</li>
+            <li><strong>Running and failed update jobs</strong> — current execution status and recent failures</li>
+            <li><strong>Latest update activity</strong> — most recent jobs with timestamps</li>
           </ul>
+          <p>Status indicators use color coding: <strong>green</strong> = success, <strong>red</strong> = failed, <strong>amber/yellow</strong> = warning or in-progress, <strong>gray</strong> = pending or unknown.</p>
+          <p>The dashboard updates in real-time. Click any section or widget to jump to the detailed view for deeper analysis. Use <strong>Server Status</strong> page for comprehensive health checks across all servers.</p>
         </section>
 
         <!-- 2. Servers -->
@@ -65,16 +67,17 @@
             <i class="fas fa-server help-icon"></i>
             <span>Servers</span>
           </h3>
-          <p class="help-intro">Go to <strong>Servers</strong> to add or manage remote hosts.</p>
+          <p class="help-intro">Servers are your remote hosts that will receive package updates via SSH. Go to <strong>Servers</strong> to add or manage them.</p>
           <ul>
-            <li><strong>Name</strong>: unique display name</li>
-            <li><strong>Host</strong>: IP or DNS name</li>
-            <li><strong>Port</strong>: usually 22</li>
-            <li><strong>Username</strong>: SSH account</li>
-            <li><strong>Auth Method</strong>: SSH key or password</li>
-            <li><strong>Sudo Password</strong>: optional; use only when sudo prompts for a different password</li>
+            <li><strong>Name</strong>: a unique, human-readable display name (e.g., "prod-web-01", "staging-db")</li>
+            <li><strong>Host</strong>: IP address (192.168.1.50) or DNS hostname (prod-server.example.com)</li>
+            <li><strong>Port</strong>: SSH port (default 22; use a different port if your server uses a custom SSH port)</li>
+            <li><strong>Username</strong>: the SSH account that will run updates (must have sufficient permissions)</li>
+            <li><strong>Auth Method</strong>: choose <strong>SSH Key</strong> (recommended for security) or <strong>Password</strong></li>
+            <li><strong>Sudo Password</strong>: only needed if your SSH user requires a <em>different</em> password to run sudo commands</li>
           </ul>
-          <p>Use <strong>Edit</strong> and <strong>Delete</strong> in the table for existing entries.</p>
+          <p><strong>Best practice:</strong> Always use SSH keys instead of passwords for security. Test the connection before saving using the <strong>Test Connection</strong> button.</p>
+          <p>Use <strong>Edit</strong> and <strong>Delete</strong> buttons in the table to modify or remove servers. Reboot status indicator (amber icon) shows servers that require a reboot after updates.</p>
         </section>
 
         <!-- 3. System Updates -->
@@ -83,13 +86,15 @@
             <i class="fas fa-play-circle help-icon"></i>
             <span>System Updates (Run Now)</span>
           </h3>
-          <p class="help-intro">In <strong>System Updates</strong> you can run immediate package updates:</p>
+          <p class="help-intro">Run immediate package updates on one or more servers. Updates execute immediately after you submit the form.</p>
           <ul>
-            <li>Select one or more target servers</li>
-            <li>Choose package manager (<strong>Auto detect</strong>, apt, dnf, yum)</li>
-            <li>Click <strong>Start Update</strong></li>
+            <li><strong>Select servers:</strong> check one or multiple targets. Useful for staged rollouts (test non-critical servers first, then production)</li>
+            <li><strong>Choose mode:</strong> <strong>"Check for Updates"</strong> scans for available packages without installing (alert-only), or <strong>"Start Update"</strong> installs packages</li>
+            <li><strong>Package manager:</strong> select <strong>Auto detect</strong> to auto-identify (apt/dnf/yum), or manually choose if you know the system</li>
+            <li><strong>APT extra steps:</strong> (if available) optionally enable additional cleanup steps like autoremove and clean</li>
           </ul>
-          <p>The <strong>Update Jobs</strong> table auto-refreshes. Click any job row to open full output inline.</p>
+          <p><strong>Monitoring updates:</strong> the <strong>Update Jobs</strong> table auto-refreshes every few seconds. Click any job row to expand full output and follow progress in real-time. Updates typically take 5–30+ minutes depending on package count and server load.</p>
+          <p>For recurring updates, use <strong>Update Schedules</strong> instead.</p>
         </section>
 
         <!-- 4. Update Schedules -->
@@ -98,21 +103,25 @@
             <i class="fas fa-calendar help-icon"></i>
             <span>Update Schedules</span>
           </h3>
-          <p class="help-intro">Under <strong>System Updates → Schedules</strong>:</p>
+          <p class="help-intro">Automate recurring updates on a cron-based timetable. Go to <strong>System Updates → Schedules</strong> to create or manage them.</p>
           <ul>
-            <li>Create a schedule name</li>
-            <li>Enter a cron expression</li>
-            <li>Select target servers and package manager</li>
-            <li>Click <strong>Create Schedule</strong></li>
+            <li><strong>Schedule name:</strong> a descriptive name (e.g., "prod-nightly-2am", "test-weekly")</li>
+            <li><strong>Cron expression:</strong> a 5-field format controlling execution time</li>
+            <li><strong>Target servers:</strong> select which servers run this schedule</li>
+            <li><strong>Package manager:</strong> auto-detect or manually specify</li>
           </ul>
-          <p>Schedules run in the timezone assigned at creation (based on your active timezone setting at that time).</p>
-          <p class="help-label">Cron Expression Examples:</p>
+          <p class="help-label">Cron Field Reference:</p>
+          <p><code>minute hour day month day-of-week</code> where each field is 0–59, 0–23, 1–31, 1–12, 0–6 (0/7=Sunday)</p>
+          <p class="help-label">Examples:</p>
           <div class="help-code-block">
-            <pre><code>0 2 * * *      # daily at 02:00
-0 */6 * * *    # every 6 hours
-30 3 * * 0     # every Sunday at 03:30</code></pre>
+            <pre><code>0 2 * * *      # daily at 02:00 (2 AM)
+0 */6 * * *    # every 6 hours (at 00:00, 06:00, 12:00, 18:00)
+30 3 * * 0     # every Sunday at 03:30 (3:30 AM)
+0 0 1 * *      # first day of each month at midnight
+15 22 * * 1-5  # weekdays at 22:15 (10:15 PM)</code></pre>
           </div>
-          <p>Use <strong>Enable/Disable</strong> or <strong>Delete</strong> to manage schedules.</p>
+          <p><strong>Timezone:</strong> schedules run in the timezone you were in when creating the schedule (based on your Global Settings at that time). Override system-wide in Global Settings.</p>
+          <p><strong>Management:</strong> use <strong>Enable/Disable</strong> to pause without deleting, or <strong>Delete</strong> to remove. Each schedule runs independently.</p>
         </section>
 
         <!-- 5. Alerts -->
@@ -121,14 +130,16 @@
             <i class="fas fa-bell help-icon"></i>
             <span>Alerts</span>
           </h3>
-          <p class="help-intro">When update jobs fail, the system creates alerts.</p>
+          <p class="help-intro">Alerts are automatically created when update jobs fail or when reboot-required is detected. Manage them in the <strong>Alerts</strong> page.</p>
           <ul>
-            <li>View alerts in <strong>Alerts</strong></li>
-            <li>Filter by level and state (open/acknowledged/all)</li>
-            <li>Use <strong>Acknowledge</strong> to mark an alert as handled</li>
-            <li>Use <strong>Dismiss</strong> to remove an alert</li>
+            <li><strong>Severity levels:</strong> <strong>Info</strong> (informational), <strong>Warning</strong> (needs attention), <strong>Error</strong> (action required)</li>
+            <li><strong>States:</strong> <strong>Open</strong> (unhandled), <strong>Acknowledged</strong> (someone is working on it), <strong>Dismissed</strong> (resolved or false alarm)</li>
+            <li><strong>Filter:</strong> by severity, state, date range, or search by server name or message</li>
+            <li><strong>Acknowledge:</strong> mark an alert to let your team know you're handling it</li>
+            <li><strong>Dismiss:</strong> permanently remove an alert (use for resolved issues)</li>
           </ul>
-          <p>Admin users also see an open-alert count badge in the sidebar/top bar.</p>
+          <p><strong>Notifications:</strong> admin users see an unread alert count badge in the sidebar. If email alerts are enabled, admins receive email notifications for new alerts.</p>
+          <p><strong>Best practice:</strong> regularly acknowledge or dismiss alerts to keep the queue clean and prevent alert fatigue.</p>
         </section>
 
         <!-- 6. Audit Log -->
@@ -137,13 +148,26 @@
             <i class="fas fa-clipboard-list help-icon"></i>
             <span>Audit Log</span>
           </h3>
-          <p class="help-intro"><strong>Audit Log</strong> records key user/system actions and configuration changes.</p>
+          <p class="help-intro"><strong>Audit Log</strong> is a security and compliance record of all important system changes, user actions, and events.</p>
+          <p class="help-label">What's logged:</p>
           <ul>
-            <li>Search by text</li>
-            <li>Filter by action and user</li>
-            <li>Filter by date range</li>
-            <li>Use pagination controls to browse older entries</li>
+            <li>User logins and logouts</li>
+            <li>Server configuration changes (add, edit, delete)</li>
+            <li>Job execution and failures</li>
+            <li>Alert management (acknowledge, dismiss)</li>
+            <li>SSH key usage and changes</li>
+            <li>User and settings modifications</li>
+            <li>Reboot commands and system actions</li>
           </ul>
+          <p class="help-label">Search and Filter:</p>
+          <ul>
+            <li><strong>Search by text:</strong> find any server name, username, action, or detail across all entries</li>
+            <li><strong>Filter by action:</strong> see only specific types of events (e.g., job.run, server.add, user.login)</li>
+            <li><strong>Filter by actor:</strong> show actions by a specific user</li>
+            <li><strong>Filter by date range:</strong> narrow results to a specific timeframe</li>
+          </ul>
+          <p><strong>Retention:</strong> audit entries are kept according to your History Retention setting in Global Settings. Older entries are automatically deleted.</p>
+          <p><strong>Use cases:</strong> find who deleted a server, when an SSH key was last used, track failed login attempts, or generate compliance reports.</p>
         </section>
 
         <!-- 7. User Management -->
@@ -152,13 +176,26 @@
             <i class="fas fa-users help-icon"></i>
             <span>User Management <span class="help-badge">Admin</span></span>
           </h3>
-          <p class="help-intro">In <strong>User Management</strong> admins can:</p>
+          <p class="help-intro">Only admin users can access User Management. Create, edit, enable/disable, or delete users here.</p>
+          <p class="help-label">User Roles:</p>
           <ul>
-            <li>Create users</li>
-            <li>Edit profile/admin/enabled status</li>
-            <li>Delete users</li>
+            <li><strong>Admin:</strong> can access settings, create/delete users, manage SSH keys, and view all alerts</li>
+            <li><strong>Non-admin:</strong> can view servers and job history but cannot modify configuration</li>
           </ul>
-          <p>Safety rules prevent removing the last enabled admin or disabling/deleting your own active admin account in unsafe ways.</p>
+          <p class="help-label">Actions:</p>
+          <ul>
+            <li><strong>Create user:</strong> enter username, password, email address, and admin status</li>
+            <li><strong>Edit:</strong> change profile info, admin status, or enabled/disabled state</li>
+            <li><strong>Enabled toggle:</strong> quickly suspend a user without deleting them</li>
+            <li><strong>Email address:</strong> required for users who should receive alert emails</li>
+            <li><strong>Delete:</strong> permanently remove a user account</li>
+          </ul>
+          <p class="help-label">Safety Rules:</p>
+          <ul>
+            <li>Cannot delete the last enabled admin user</li>
+            <li>Cannot disable/delete your own admin account while logged in</li>
+            <li>Always keep at least one admin user enabled for system management</li>
+          </ul>
         </section>
 
         <!-- 8. SSH Keys -->
@@ -167,8 +204,22 @@
             <i class="fas fa-key help-icon"></i>
             <span>SSH Keys <span class="help-badge">Admin</span></span>
           </h3>
-          <p class="help-intro">In <strong>SSH Keys</strong> admins can store private keys or generate new keys for server authentication.</p>
-          <p>Keys in use by servers cannot be deleted until unassigned.</p>
+          <p class="help-intro">SSH keys are more secure than passwords and recommended for production servers. Store and manage them here.</p>
+          <p class="help-label">Key Management:</p>
+          <ul>
+            <li><strong>Generate new key:</strong> choose key type (RSA 4096 or Ed25519 — both secure) to generate a keypair in-system</li>
+            <li><strong>Upload existing key:</strong> paste or upload a private key you already have on your servers</li>
+            <li><strong>View fingerprint:</strong> use the displayed fingerprint to verify the key matches what's on the server</li>
+            <li><strong>Store securely:</strong> private keys are encrypted and stored safely in the database</li>
+          </ul>
+          <p class="help-label">Best Practices:</p>
+          <ul>
+            <li>Use different keys for different servers or environments (dev vs. prod)</li>
+            <li>Never share or download private keys from this system — generate them once and deploy to servers</li>
+            <li>Rotate keys periodically: generate new key, test on a server, update server reference, delete old key</li>
+            <li>Use Ed25519 keys for new setups (smaller, faster, equally secure)</li>
+          </ul>
+          <p><strong>Deletion:</strong> you cannot delete a key if it's assigned to any server. Unassign all servers using that key first.</p>
         </section>
 
         <!-- 9. Global Settings -->
@@ -177,15 +228,16 @@
             <i class="fas fa-cog help-icon"></i>
             <span>Global Settings <span class="help-badge">Admin</span></span>
           </h3>
-          <p class="help-intro"><strong>Global Settings</strong> control system-wide behavior:</p>
+          <p class="help-intro"><strong>Global Settings</strong> control system-wide defaults and behavior. Individual users can override most settings in their User Settings.</p>
           <ul>
-            <li>Date/time display format</li>
-            <li>Default timezone</li>
-            <li>History retention (jobs, audit logs, alerts)</li>
-            <li>Login timeout (minutes of inactivity)</li>
-            <li>Email alert enable/disable</li>
-            <li>SMTP server credentials and sender settings</li>
-            <li>SMTP connection test</li>
+            <li><strong>Date/time display format:</strong> affects how dates and times are shown throughout the system (ISO, US 12-hour, European, month-name, etc.)</li>
+            <li><strong>Default timezone:</strong> used for schedule execution, alert timestamps, and new user profiles. Users can override individually.</li>
+            <li><strong>History retention:</strong> how long to keep job records, audit logs, and alerts before automatic deletion. Balance storage with compliance needs.</li>
+            <li><strong>Login timeout:</strong> minutes of inactivity before users are automatically logged out (e.g., 30 minutes for security)</li>
+            <li><strong>Email alerts:</strong> enable/disable all alert email delivery system-wide</li>
+            <li><strong>SMTP configuration:</strong> mail server hostname, port (usually 587 or 465), TLS enabled/disabled, username, and password</li>
+            <li><strong>Sender address & name:</strong> appears in the From field of alert emails (e.g., "alerts@example.com" or "Daygle Alerts")</li>
+            <li><strong>SMTP test:</strong> verify connectivity to your mail server before saving (recommended before enabling alerts)</li>
           </ul>
         </section>
 
@@ -195,7 +247,12 @@
             <i class="fas fa-user-cog help-icon"></i>
             <span>User Settings</span>
           </h3>
-          <p>Each user can set personal date/time format and timezone, or choose to inherit global defaults.</p>
+          <p>Personalize your experience by setting your own date/time format and timezone. Leave blank to use Global Settings defaults.</p>
+          <ul>
+            <li><strong>Date format:</strong> choose how you prefer dates displayed (MM/DD/YYYY, DD/MM/YYYY, ISO, month names, etc.)</li>
+            <li><strong>Timezone:</strong> your local timezone affects job output timestamps and schedule display in your view</li>
+          </ul>
+          <p><strong>Use case:</strong> "Our team is distributed: I'm in PT but our servers and schedules use UTC — I set my timezone to PT to see times in my local offset."</p>
         </section>
 
         <!-- 11. Email Alert Delivery -->
@@ -204,7 +261,27 @@
             <i class="fas fa-envelope help-icon"></i>
             <span>Email Alert Delivery</span>
           </h3>
-          <p>When email alerts are enabled, alert messages are sent to enabled admin users that have an email address configured in User Management.</p>
+          <p>When email alerts are enabled in Global Settings, alert messages are sent to admin users who have an email address configured in User Management.</p>
+          <p class="help-label">Alert Triggers:</p>
+          <ul>
+            <li>Job failures (update failed, reboot command failed, etc.)</li>
+            <li>Reboot-required detection after successful updates</li>
+            <li>Critical system events or warnings</li>
+          </ul>
+          <p class="help-label">Email Content:</p>
+          <ul>
+            <li>Server name and issue description</li>
+            <li>Timestamp (in your personal timezone if set)</li>
+            <li>Direct link to the alert in the system for quick action</li>
+          </ul>
+          <p class="help-label">Configuration:</p>
+          <ul>
+            <li>Ensure SMTP settings are correct in Global Settings</li>
+            <li>Run the SMTP test before enabling alerts</li>
+            <li>Each admin user needs an email address in their User Management profile</li>
+            <li>Tip: use a distribution list (ops-team@example.com) for team notifications</li>
+          </ul>
+          <p><strong>Alert fatigue:</strong> regularly acknowledge or dismiss handled alerts to keep the system responsive and notifications meaningful.</p>
         </section>
 
         <!-- 12. Troubleshooting -->
@@ -213,12 +290,50 @@
             <i class="fas fa-wrench help-icon"></i>
             <span>Common Failure Checks</span>
           </h3>
+          <p class="help-label"><strong>Authentication failed</strong></p>
           <ul>
-            <li><strong>Authentication failed</strong>: verify username/key/password on the server</li>
-            <li><strong>Sudo failed</strong>: verify sudo password or sudo permissions</li>
-            <li><strong>Package manager unknown</strong>: host may not be apt/dnf/yum based</li>
-            <li><strong>Timeout/unreachable</strong>: verify network, DNS, firewall, and host status</li>
-            <li><strong>SMTP test failed</strong>: verify SMTP host, port, TLS, credentials, and firewall access</li>
+            <li>Verify SSH username is correct</li>
+            <li>Test manually: <code>ssh -i /path/to/key user@host</code> or <code>ssh user@host</code></li>
+            <li>If using password auth, ensure the password is correct</li>
+            <li>For key auth, ensure the private key matches the public key on the server</li>
+          </ul>
+          <p class="help-label"><strong>Sudo failed</strong></p>
+          <ul>
+            <li>Verify user has sudo privileges: <code>sudo -l</code> on the server</li>
+            <li>If sudo requires a password, fill in the Sudo Password field</li>
+            <li>Check if the user is in the sudo group: <code>groups user</code></li>
+            <li>Run <code>visudo</code> to verify sudoers configuration is correct</li>
+          </ul>
+          <p class="help-label"><strong>Package manager unknown</strong></p>
+          <ul>
+            <li>Server may not have apt/dnf/yum installed</li>
+            <li>Test manually: <code>which apt</code>, <code>which yum</code>, or <code>which dnf</code></li>
+            <li>Try with Auto Detect first on a single non-critical server to identify the system</li>
+            <li>If unsure, manually select the package manager after identifying the Linux distribution</li>
+          </ul>
+          <p class="help-label"><strong>Timeout / Unreachable</strong></p>
+          <ul>
+            <li>Check connectivity: <code>ping host</code> or test DNS: <code>nslookup hostname</code></li>
+            <li>Verify SSH port is open: <code>nc -zv host 22</code></li>
+            <li>Check firewall rules (allow SSH port inbound from your system)</li>
+            <li>Verify VPN connection if accessing remote networks</li>
+            <li>Ensure the server is powered on and not in a maintenance window</li>
+          </ul>
+          <p class="help-label"><strong>SMTP test failed / Email alerts not sending</strong></p>
+          <ul>
+            <li>Verify SMTP hostname and port (usually 587 for TLS, 465 for SSL)</li>
+            <li>Ensure TLS/SSL setting matches your mail server config</li>
+            <li>Test credentials manually if possible</li>
+            <li>Check firewall allows outbound email (port 587 or 465)</li>
+            <li>Verify sender address is valid and accepted by your mail server</li>
+            <li>Run SMTP test in Global Settings before enabling alerts</li>
+          </ul>
+          <p class="help-label"><strong>General debugging</strong></p>
+          <ul>
+            <li>Check browser console (F12 Developer Tools) for client-side errors</li>
+            <li>Review job output in Update Jobs table for detailed error messages</li>
+            <li>Check server-side logs if you have SSH access to the application server</li>
+            <li>Review Audit Log to see what actions triggered the failure</li>
           </ul>
         </section>
 
@@ -228,13 +343,30 @@
             <i class="fas fa-sync help-icon"></i>
             <span>Update This Application</span>
           </h3>
+          <p class="help-intro">Keep Daygle Server Manager up to date with the latest features and security fixes.</p>
+          <p class="help-label" style="color: #d32f2f; margin-bottom: 1rem;"><strong>⚠︎  Before updating:</strong> backup your database and configuration files.</p>
           <div class="help-code-block">
             <pre><code>bash update.sh --check
+# Check available updates without installing
+
 bash update.sh
+# Install available updates (recommended)
+
 bash update.sh --force
+# Reinstall even if already up to date (use if installation incomplete)
+
 bash update.sh --skip-start
-bash update.sh --help</code></pre>
+# Update without restarting services (useful for coordination)
+
+bash update.sh --help
+# Show all available options</code></pre>
           </div>
+          <p class="help-label">Update Process:</p>
+          <ul>
+            <li><strong>Duration:</strong> typically 1–5 minutes depending on what's being updated</li>
+            <li><strong>Downtime:</strong> minimal; services are restarted automatically unless --skip-start is used</li>
+            <li><strong>After update:</strong> verify server status on the dashboard, run a test update on a non-critical server first if possible</li>
+          </ul>
         </section>
 
       </div>
