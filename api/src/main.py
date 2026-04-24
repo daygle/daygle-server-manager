@@ -1632,9 +1632,6 @@ def file_explorer_page(request: Request, db: Session = Depends(get_db)):
             selected_server_id = int(selected_server_raw)
         except ValueError:
             selected_server_id = None
-    if selected_server_id is None and servers:
-        selected_server_id = servers[0].id
-
     return render_app_template(
         request,
         "file_explorer.html",

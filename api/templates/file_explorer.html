@@ -17,6 +17,7 @@
       <div class="form-group mb-0">
         <label for="fe-server-select" class="form-label">Server</label>
         <select id="fe-server-select" class="form-select">
+          <option value="">— Select a server —</option>
           {% for server in servers %}
           <option value="{{ server.id }}" {% if selected_server_id == server.id %}selected{% endif %}>{{ server.name }} ({{ server.host }})</option>
           {% endfor %}
@@ -659,11 +660,17 @@
   refreshBtn.addEventListener("click", () => loadDirectory(currentPath));
   serverSelect.addEventListener("change", () => {
     currentFilePath = null;
+    currentPath = "/";
+    pathInput.value = "/";
     setEditorVisible(false);
     editorFilename.textContent = "No file open";
     editorPlaceholder.innerHTML = '<i class="fas fa-file-code fe-placeholder-icon"></i><p>Select a file to view or edit</p>';
     editorPlaceholder.style.display = "";
-    loadDirectory("/");
+    if (serverId()) {
+      loadDirectory("/");
+    } else {
+      listingWrapper.innerHTML = '<div class="fe-listing-empty"><i class="fas fa-server"></i> Select a server above to browse its files.</div>';
+    }
   });
 
   // ── Editor actions ─────────────────────────────────────────────────────
@@ -704,7 +711,13 @@
   });
 
   // ── Initial load ───────────────────────────────────────────────────────
-  loadDirectory("/");
+  // Only load if a server was explicitly pre-selected (via ?server_id= query param)
+  const preselectedServerId = {{ selected_server_id | tojson }};
+  if (preselectedServerId && serverId()) {
+    loadDirectory("/");
+  } else {
+    listingWrapper.innerHTML = '<div class="fe-listing-empty"><i class="fas fa-server"></i> Select a server above to browse its files.</div>';
+  }
 })();
 </script>
 {% endif %}
