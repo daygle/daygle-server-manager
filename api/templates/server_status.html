@@ -69,6 +69,7 @@
             <th class="hide-mobile">CPU</th>
             <th class="hide-mobile">RAM</th>
             <th class="hide-mobile">Storage</th>
+            <th class="hide-mobile">Load Avg</th>
             <th class="hide-mobile">Last Check</th>
             <th class="hide-mobile">Details</th>
             <th>Actions</th>
@@ -92,6 +93,7 @@
             <td class="hide-mobile" data-server-status-cell="cpu">{{ ('%.1f%%'|format(server.last_cpu_usage)) if server.last_cpu_usage is not none else '-' }}</td>
             <td class="hide-mobile" data-server-status-cell="ram">{{ ('%.1f%%'|format(server.last_ram_usage)) if server.last_ram_usage is not none else '-' }}</td>
             <td class="hide-mobile" data-server-status-cell="storage">{{ ('%.1f%%'|format(server.last_storage_usage)) if server.last_storage_usage is not none else '-' }}</td>
+            <td class="hide-mobile" data-server-status-cell="load-avg">{{ ('%.2f'|format(server.last_load_avg)) if server.last_load_avg is not none else '-' }}</td>
             <td class="hide-mobile" data-server-status-cell="last-check">{{ format_dt(server.last_health_check_at) if server.last_health_check_at else 'Not checked yet' }}</td>
             <td class="hide-mobile" data-server-status-cell="message">{% if server.last_health_status != 'online' %}{{ server.last_health_message or 'No checks recorded yet.' }}{% else %}-{% endif %}</td>
             <td>
@@ -103,7 +105,7 @@
           </tr>
           {% else %}
           <tr>
-            <td colspan="10" class="text-center empty-state">
+              <td colspan="11" class="text-center empty-state">
               <div>
                 <i class="fas fa-server empty-icon"></i>
                 <p>No servers configured yet.</p>

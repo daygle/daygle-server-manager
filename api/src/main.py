@@ -67,6 +67,14 @@ SMTP_USE_TLS_SETTING_KEY = "smtp_use_tls"
 SMTP_FROM_SETTING_KEY = "smtp_from"
 DEFAULT_THEME_SETTING_KEY = "default_theme"
 PAGE_SIZE_SETTING_KEY = "page_size"
+ALERT_CPU_THRESHOLD_SETTING_KEY = "alert_cpu_threshold"
+ALERT_RAM_THRESHOLD_SETTING_KEY = "alert_ram_threshold"
+ALERT_STORAGE_THRESHOLD_SETTING_KEY = "alert_storage_threshold"
+ALERT_LOAD_AVG_THRESHOLD_SETTING_KEY = "alert_load_avg_threshold"
+DEFAULT_ALERT_CPU_THRESHOLD = 90
+DEFAULT_ALERT_RAM_THRESHOLD = 90
+DEFAULT_ALERT_STORAGE_THRESHOLD = 90
+DEFAULT_ALERT_LOAD_AVG_THRESHOLD = 0  # 0 = disabled
 DEFAULT_DATE_FORMAT = "iso-24"
 DEFAULT_TIMEZONE = "UTC"
 DEFAULT_THEME = "system"
@@ -152,6 +160,7 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_cpu_usage DOUBLE PRECISION",
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_ram_usage DOUBLE PRECISION",
         "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_storage_usage DOUBLE PRECISION",
+        "ALTER TABLE servers ADD COLUMN IF NOT EXISTS last_load_avg DOUBLE PRECISION",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS cron_expression VARCHAR(120)",
         "ALTER TABLE update_schedules ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
         "ALTER TABLE update_jobs ALTER COLUMN command TYPE TEXT",
@@ -486,6 +495,52 @@ def get_effective_page_size(user: User | None, db: Session | None = None) -> int
     if db:
         return get_page_size_setting(db)
     return get_active_page_size()
+
+
+def normalize_threshold_percent(value: str | int | None) -> int | None:
+    """Return 0 (disabled) or 1–100. None means invalid."""
+    if value is None:
+        return None
+    try:
+        v = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return v if 0 <= v <= 100 else None
+
+
+def normalize_load_avg_threshold(value: str | float | None) -> float | None:
+    """Return 0.0 (disabled) or any positive float. None means invalid."""
+    if value is None:
+        return None
+    try:
+        v = float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return v if v >= 0 else None
+
+
+def get_alert_cpu_threshold(db: Session) -> int:
+    raw = get_app_setting(db, ALERT_CPU_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_CPU_THRESHOLD))
+    normalized = normalize_threshold_percent(raw)
+    return normalized if normalized is not None else DEFAULT_ALERT_CPU_THRESHOLD
+
+
+def get_alert_ram_threshold(db: Session) -> int:
+    raw = get_app_setting(db, ALERT_RAM_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_RAM_THRESHOLD))
+    normalized = normalize_threshold_percent(raw)
+    return normalized if normalized is not None else DEFAULT_ALERT_RAM_THRESHOLD
+
+
+def get_alert_storage_threshold(db: Session) -> int:
+    raw = get_app_setting(db, ALERT_STORAGE_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_STORAGE_THRESHOLD))
+    normalized = normalize_threshold_percent(raw)
+    return normalized if normalized is not None else DEFAULT_ALERT_STORAGE_THRESHOLD
+
+
+def get_alert_load_avg_threshold(db: Session) -> float:
+    raw = get_app_setting(db, ALERT_LOAD_AVG_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_LOAD_AVG_THRESHOLD))
+    normalized = normalize_load_avg_threshold(raw)
+    return normalized if normalized is not None else float(DEFAULT_ALERT_LOAD_AVG_THRESHOLD)
 
 
 def send_admin_alert_email(db: Session, alert: Alert) -> None:
@@ -950,10 +1005,11 @@ def run_ssh_command(client: paramiko.SSHClient, command: str, timeout: int = 15)
     return output
 
 
-def collect_server_usage_metrics(client: paramiko.SSHClient) -> tuple[float | None, float | None, float | None]:
+def collect_server_usage_metrics(client: paramiko.SSHClient) -> tuple[float | None, float | None, float | None, float | None]:
     cpu_usage: float | None = None
     ram_usage: float | None = None
     storage_usage: float | None = None
+    load_avg: float | None = None
 
     try:
         cpu_output = run_ssh_command(
@@ -991,7 +1047,16 @@ def collect_server_usage_metrics(client: paramiko.SSHClient) -> tuple[float | No
     except Exception:
         storage_usage = None
 
-    return cpu_usage, ram_usage, storage_usage
+    try:
+        load_output = run_ssh_command(
+            client,
+            "awk '{printf \"%.2f\", $1}' /proc/loadavg",
+        )
+        load_avg = max(0.0, float(load_output))
+    except Exception:
+        load_avg = None
+
+    return cpu_usage, ram_usage, storage_usage, load_avg
 
 
 def serialize_server_health(server: Server) -> dict:
@@ -1008,6 +1073,7 @@ def serialize_server_health(server: Server) -> dict:
         "last_cpu_usage": server.last_cpu_usage,
         "last_ram_usage": server.last_ram_usage,
         "last_storage_usage": server.last_storage_usage,
+        "last_load_avg": server.last_load_avg,
     }
 
 
@@ -1031,21 +1097,21 @@ def run_saved_server_health_check(db: Session, server: Server) -> dict:
             client.connect(**connect_kwargs)
             is_online = True
             message = f"Connection successful to {server.host}:{server.port}"
-            cpu_usage, ram_usage, storage_usage = collect_server_usage_metrics(client)
+            cpu_usage, ram_usage, storage_usage, load_avg = collect_server_usage_metrics(client)
         except paramiko.AuthenticationException:
             is_online = False
             message = "Authentication failed. Check username and credentials."
-            cpu_usage, ram_usage, storage_usage = None, None, None
+            cpu_usage, ram_usage, storage_usage, load_avg = None, None, None, None
         except Exception as exc:
             is_online = False
             message = f"Connection failed: {str(exc)}"
-            cpu_usage, ram_usage, storage_usage = None, None, None
+            cpu_usage, ram_usage, storage_usage, load_avg = None, None, None, None
         finally:
             client.close()
     except HTTPException as exc:
         is_online = False
         message = str(exc.detail)
-        cpu_usage, ram_usage, storage_usage = None, None, None
+        cpu_usage, ram_usage, storage_usage, load_avg = None, None, None, None
 
     server.last_health_status = "online" if is_online else "offline"
     server.last_health_check_at = checked_at
@@ -1053,9 +1119,55 @@ def run_saved_server_health_check(db: Session, server: Server) -> dict:
     server.last_cpu_usage = cpu_usage
     server.last_ram_usage = ram_usage
     server.last_storage_usage = storage_usage
+    server.last_load_avg = load_avg
     db.add(server)
     db.commit()
     db.refresh(server)
+
+    # Fire threshold alerts when the server is online and a metric is breached.
+    if is_online:
+        cpu_threshold = get_alert_cpu_threshold(db)
+        ram_threshold = get_alert_ram_threshold(db)
+        storage_threshold = get_alert_storage_threshold(db)
+        load_threshold = get_alert_load_avg_threshold(db)
+
+        if cpu_threshold > 0 and cpu_usage is not None and cpu_usage >= cpu_threshold:
+            create_alert(
+                db,
+                level="warning",
+                title=f"High CPU usage on {server.name}",
+                message=f"CPU usage is {cpu_usage:.1f}% (threshold: {cpu_threshold}%) on {server.name} ({server.host}).",
+                source_type="server",
+                source_id=server.id,
+            )
+        if ram_threshold > 0 and ram_usage is not None and ram_usage >= ram_threshold:
+            create_alert(
+                db,
+                level="warning",
+                title=f"High RAM usage on {server.name}",
+                message=f"RAM usage is {ram_usage:.1f}% (threshold: {ram_threshold}%) on {server.name} ({server.host}).",
+                source_type="server",
+                source_id=server.id,
+            )
+        if storage_threshold > 0 and storage_usage is not None and storage_usage >= storage_threshold:
+            create_alert(
+                db,
+                level="error",
+                title=f"Low disk space on {server.name}",
+                message=f"Disk usage is {storage_usage:.1f}% (threshold: {storage_threshold}%) on {server.name} ({server.host}).",
+                source_type="server",
+                source_id=server.id,
+            )
+        if load_threshold > 0 and load_avg is not None and load_avg >= load_threshold:
+            create_alert(
+                db,
+                level="warning",
+                title=f"High load average on {server.name}",
+                message=f"1-minute load average is {load_avg:.2f} (threshold: {load_threshold}) on {server.name} ({server.host}).",
+                source_type="server",
+                source_id=server.id,
+            )
+
     return serialize_server_health(server)
 
 
@@ -1760,6 +1872,10 @@ def settings_page(request: Request, db: Session = Depends(get_db)):
         selected_smtp_use_tls=parse_bool_setting(get_smtp_setting(db, SMTP_USE_TLS_SETTING_KEY, "SMTP_USE_TLS", "false"), False),
         selected_smtp_from=get_smtp_setting(db, SMTP_FROM_SETTING_KEY, "SMTP_FROM", "daygle-server-manager@localhost"),
         smtp_password_set=bool(get_smtp_setting(db, SMTP_PASSWORD_SETTING_KEY, "SMTP_PASSWORD", "")),
+        selected_alert_cpu_threshold=get_alert_cpu_threshold(db),
+        selected_alert_ram_threshold=get_alert_ram_threshold(db),
+        selected_alert_storage_threshold=get_alert_storage_threshold(db),
+        selected_alert_load_avg_threshold=get_alert_load_avg_threshold(db),
     )
 
 
@@ -1781,6 +1897,10 @@ def save_all_settings(
     clear_smtp_password: str | None = Form(None),
     smtp_use_tls: str | None = Form(None),
     smtp_from: str = Form(...),
+    alert_cpu_threshold: int = Form(DEFAULT_ALERT_CPU_THRESHOLD),
+    alert_ram_threshold: int = Form(DEFAULT_ALERT_RAM_THRESHOLD),
+    alert_storage_threshold: int = Form(DEFAULT_ALERT_STORAGE_THRESHOLD),
+    alert_load_avg_threshold: str = Form("0"),
     db: Session = Depends(get_db),
 ):
     current_user = get_session_user(request, db)
@@ -2002,6 +2122,47 @@ def save_all_settings(
             ),
         )
         changed.append("SMTP settings")
+
+    # Alert thresholds
+    normalized_cpu_threshold = normalize_threshold_percent(alert_cpu_threshold)
+    if normalized_cpu_threshold is None:
+        set_flash(request, "Invalid CPU alert threshold (0–100).", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+    normalized_ram_threshold = normalize_threshold_percent(alert_ram_threshold)
+    if normalized_ram_threshold is None:
+        set_flash(request, "Invalid RAM alert threshold (0–100).", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+    normalized_storage_threshold = normalize_threshold_percent(alert_storage_threshold)
+    if normalized_storage_threshold is None:
+        set_flash(request, "Invalid disk space alert threshold (0–100).", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+    normalized_load_threshold = normalize_load_avg_threshold(alert_load_avg_threshold)
+    if normalized_load_threshold is None:
+        set_flash(request, "Invalid load average threshold (must be 0 or a positive number).", "error")
+        return RedirectResponse(url="/settings", status_code=303)
+
+    threshold_changes: list[str] = []
+    if str(normalized_cpu_threshold) != get_app_setting(db, ALERT_CPU_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_CPU_THRESHOLD)):
+        set_app_setting(db, ALERT_CPU_THRESHOLD_SETTING_KEY, str(normalized_cpu_threshold))
+        threshold_changes.append(f"cpu={normalized_cpu_threshold}%")
+    if str(normalized_ram_threshold) != get_app_setting(db, ALERT_RAM_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_RAM_THRESHOLD)):
+        set_app_setting(db, ALERT_RAM_THRESHOLD_SETTING_KEY, str(normalized_ram_threshold))
+        threshold_changes.append(f"ram={normalized_ram_threshold}%")
+    if str(normalized_storage_threshold) != get_app_setting(db, ALERT_STORAGE_THRESHOLD_SETTING_KEY, str(DEFAULT_ALERT_STORAGE_THRESHOLD)):
+        set_app_setting(db, ALERT_STORAGE_THRESHOLD_SETTING_KEY, str(normalized_storage_threshold))
+        threshold_changes.append(f"storage={normalized_storage_threshold}%")
+    if f"{normalized_load_threshold:.2f}" != f"{get_alert_load_avg_threshold(db):.2f}":
+        set_app_setting(db, ALERT_LOAD_AVG_THRESHOLD_SETTING_KEY, str(normalized_load_threshold))
+        threshold_changes.append(f"load_avg={normalized_load_threshold}")
+    if threshold_changes:
+        log_audit(
+            db,
+            "settings.alert_thresholds",
+            request=request,
+            actor=current_user,
+            detail=f"Updated alert thresholds: {', '.join(threshold_changes)}",
+        )
+        changed.append("alert thresholds")
 
     if changed:
         set_flash(request, f"Saved settings: {', '.join(changed)}.", "success")
