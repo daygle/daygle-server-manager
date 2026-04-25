@@ -2963,7 +2963,7 @@ a:hover {
     user-select: none;
     text-align: right;
     font-family: var(--font-mono, monospace);
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     line-height: 1.6;
     color: var(--text-muted);
     background: var(--bg-secondary, #161b22);
