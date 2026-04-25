@@ -4109,7 +4109,13 @@ def file_explorer_rename(server_id: int, path: str = Query(...), new_path: str =
 
 
 @app.delete("/api/file-explorer/{server_id}/delete")
-def file_explorer_delete(server_id: int, path: str = Query(...), request: Request = None, db: Session = Depends(get_db)):
+def file_explorer_delete(
+    server_id: int,
+    path: str = Query(...),
+    recursive: bool = Query(False),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
     actor = require_api_user(request, db, admin=True)
     server = db.query(Server).filter(Server.id == server_id).first()
     if not server:
@@ -4125,7 +4131,31 @@ def file_explorer_delete(server_id: int, path: str = Query(...), request: Reques
         import stat as stat_mod
         attr = sftp.stat(resolved)
         if stat_mod.S_ISDIR(attr.st_mode or 0):
-            sftp.rmdir(resolved)
+            if not recursive:
+                try:
+                    sftp.rmdir(resolved)
+                except Exception as exc:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "Directory is not empty. Use recursive delete from the File Explorer UI "
+                            "to remove a folder and all of its contents."
+                        ),
+                    ) from exc
+
+            def _delete_tree(dir_path: str) -> None:
+                for entry in sftp.listdir_attr(dir_path):
+                    name = entry.filename
+                    if name in (".", ".."):
+                        continue
+                    child_path = f"{dir_path.rstrip('/')}/{name}"
+                    if stat_mod.S_ISDIR(entry.st_mode or 0):
+                        _delete_tree(child_path)
+                    else:
+                        sftp.remove(child_path)
+                sftp.rmdir(dir_path)
+
+            _delete_tree(resolved)
         else:
             sftp.remove(resolved)
         sftp.close()
