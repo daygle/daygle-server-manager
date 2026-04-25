@@ -102,6 +102,10 @@
           <i class="fas fa-floppy-disk"></i>
           <span>Save</span>
         </button>
+        <button type="button" class="btn btn-secondary btn-sm" id="fe-find-btn" title="Find/Replace (Ctrl+F / Ctrl+H)">
+          <i class="fas fa-magnifying-glass"></i>
+          <span>Find/Replace</span>
+        </button>
         <button type="button" class="btn btn-primary btn-sm" id="fe-download-btn">
           <i class="fas fa-download"></i>
           <span>Download</span>
@@ -133,7 +137,22 @@
           <span>Download</span>
         </button>
       </div>
-      <textarea id="fe-editor" class="fe-editor" style="display:none" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+      <div id="fe-editor-shell" class="fe-editor-shell" style="display:none">
+        <div id="fe-find-panel" class="fe-find-panel" style="display:none">
+          <input type="text" id="fe-find-input" class="form-control" placeholder="Find" aria-label="Find text">
+          <input type="text" id="fe-replace-input" class="form-control" placeholder="Replace" aria-label="Replace text">
+          <button type="button" class="btn btn-secondary btn-sm" id="fe-find-next-btn">Find Next</button>
+          <button type="button" class="btn btn-warning btn-sm" id="fe-replace-btn">Replace</button>
+          <button type="button" class="btn btn-success btn-sm" id="fe-replace-all-btn">Replace All</button>
+          <button type="button" class="btn btn-danger btn-sm btn-icon-only" id="fe-find-close-btn" title="Close find/replace" aria-label="Close find/replace">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="fe-editor-wrap">
+          <div id="fe-line-numbers" class="fe-line-numbers" aria-hidden="true"></div>
+          <textarea id="fe-editor" class="fe-editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+        </div>
+      </div>
     </div>
     <div class="fe-editor-statusbar" id="fe-editor-statusbar" style="display:none">
       <span id="fe-editor-info"></span>
@@ -201,7 +220,9 @@
   const refreshBtn     = document.getElementById("fe-refresh-btn");
   const disconnectBtn  = document.getElementById("fe-disconnect-btn");
   const listingWrapper = document.getElementById("fe-listing-wrapper");
+  const editorShell    = document.getElementById("fe-editor-shell");
   const editorEl       = document.getElementById("fe-editor");
+  const lineNumbersEl  = document.getElementById("fe-line-numbers");
   const editorPlaceholder = document.getElementById("fe-editor-placeholder");
   const binaryNotice   = document.getElementById("fe-binary-notice");
   const editorFilename = document.getElementById("fe-editor-filename");
@@ -209,6 +230,7 @@
   const editorStatusbar= document.getElementById("fe-editor-statusbar");
   const editorInfo     = document.getElementById("fe-editor-info");
   const saveBtn        = document.getElementById("fe-save-btn");
+  const findBtn        = document.getElementById("fe-find-btn");
   const downloadBtn    = document.getElementById("fe-download-btn");
   const chmodBtn       = document.getElementById("fe-chmod-btn");
   const renameBtn      = document.getElementById("fe-rename-btn");
@@ -217,6 +239,13 @@
   const newDirBtn      = document.getElementById("fe-new-dir-btn");
   const uploadInput    = document.getElementById("fe-upload-input");
   const binaryDownloadBtn = document.getElementById("fe-binary-download-btn");
+  const findPanel      = document.getElementById("fe-find-panel");
+  const findInput      = document.getElementById("fe-find-input");
+  const replaceInput   = document.getElementById("fe-replace-input");
+  const findNextBtn    = document.getElementById("fe-find-next-btn");
+  const replaceBtn     = document.getElementById("fe-replace-btn");
+  const replaceAllBtn  = document.getElementById("fe-replace-all-btn");
+  const findCloseBtn   = document.getElementById("fe-find-close-btn");
 
   // chmod modal
   const chmodModal     = document.getElementById("fe-chmod-modal");
@@ -281,20 +310,111 @@
     }
   }
 
+  function updateLineNumbers() {
+    if (!lineNumbersEl) return;
+    const lineCount = Math.max(1, (editorEl.value.match(/\n/g) || []).length + 1);
+    const lines = [];
+    for (let i = 1; i <= lineCount; i += 1) {
+      lines.push(`<span>${i}</span>`);
+    }
+    lineNumbersEl.innerHTML = lines.join("");
+    lineNumbersEl.scrollTop = editorEl.scrollTop;
+  }
+
+  function closeFindPanel() {
+    if (!findPanel) return;
+    findPanel.style.display = "none";
+  }
+
+  function openFindPanel(focusReplace = false) {
+    if (!findPanel || editorShell.style.display === "none") return;
+    findPanel.style.display = "";
+    const target = focusReplace ? replaceInput : findInput;
+    target.focus();
+    target.select();
+  }
+
+  function findNext() {
+    const query = findInput.value;
+    if (!query) {
+      notify("Enter text to find.", "info");
+      findInput.focus();
+      return false;
+    }
+    const text = editorEl.value;
+    const start = Math.max(0, editorEl.selectionEnd);
+    let idx = text.indexOf(query, start);
+    if (idx === -1 && start > 0) {
+      idx = text.indexOf(query, 0);
+    }
+    if (idx === -1) {
+      notify("No matches found.", "info");
+      return false;
+    }
+    editorEl.focus();
+    editorEl.setSelectionRange(idx, idx + query.length);
+    return true;
+  }
+
+  function replaceCurrent() {
+    const query = findInput.value;
+    if (!query) {
+      notify("Enter text to find.", "info");
+      return;
+    }
+    const replacement = replaceInput.value || "";
+    const selected = editorEl.value.slice(editorEl.selectionStart, editorEl.selectionEnd);
+    if (selected !== query) {
+      if (!findNext()) return;
+    }
+    const start = editorEl.selectionStart;
+    const end = editorEl.selectionEnd;
+    if (editorEl.value.slice(start, end) !== query) return;
+    editorEl.value = editorEl.value.slice(0, start) + replacement + editorEl.value.slice(end);
+    editorEl.setSelectionRange(start, start + replacement.length);
+    markDirty(true);
+    updateLineNumbers();
+    findNext();
+  }
+
+  function replaceAll() {
+    const query = findInput.value;
+    if (!query) {
+      notify("Enter text to find.", "info");
+      return;
+    }
+    const text = editorEl.value;
+    const parts = text.split(query);
+    const count = parts.length - 1;
+    if (count < 1) {
+      notify("No matches found.", "info");
+      return;
+    }
+    const replacement = replaceInput.value || "";
+    editorEl.value = parts.join(replacement);
+    markDirty(true);
+    updateLineNumbers();
+    notify(`Replaced ${count} occurrence${count === 1 ? "" : "s"}.`, "success");
+  }
+
   function setEditorVisible(show) {
     editorPlaceholder.style.display  = show ? "none" : "";
     binaryNotice.style.display       = "none";
-    editorEl.style.display           = show ? "" : "none";
+    editorShell.style.display        = show ? "" : "none";
     editorActions.style.removeProperty("display");
-    if (!show) editorActions.style.display = "none";
+    if (!show) {
+      editorActions.style.display = "none";
+      closeFindPanel();
+    }
     editorStatusbar.style.display    = show ? "" : "none";
   }
 
   function setBinaryVisible() {
     editorPlaceholder.style.display  = "none";
     binaryNotice.style.display       = "";
-    editorEl.style.display           = "none";
+    editorShell.style.display        = "none";
     editorActions.style.removeProperty("display");
+    closeFindPanel();
     editorStatusbar.style.display    = "none";
   }
 
@@ -417,6 +537,7 @@
       currentFileMode = null;
       markDirty(false);
       setEditorVisible(true);
+      updateLineNumbers();
       editorInfo.textContent = `${formatSize(data.size)} · ${(data.content || "").split("\n").length} lines`;
       editorEl.focus();
     } catch (e) {
@@ -682,6 +803,9 @@
     editorFilename.textContent = "No file open";
     editorPlaceholder.innerHTML = '<i class="fas fa-file-code fe-placeholder-icon"></i><p>Select a file to view or edit</p>';
     editorPlaceholder.style.display = "";
+    editorEl.value = "";
+    updateLineNumbers();
+    closeFindPanel();
     if (serverId()) {
       loadDirectory("/");
     } else {
@@ -690,7 +814,13 @@
   });
 
   // ── Editor actions ─────────────────────────────────────────────────────
-  editorEl.addEventListener("input", () => markDirty(true));
+  editorEl.addEventListener("input", () => {
+    markDirty(true);
+    updateLineNumbers();
+  });
+  editorEl.addEventListener("scroll", () => {
+    lineNumbersEl.scrollTop = editorEl.scrollTop;
+  });
   editorEl.addEventListener("keydown", (e) => {
     // Tab key → insert 4 spaces
     if (e.key === "Tab") {
@@ -706,9 +836,46 @@
       e.preventDefault();
       saveFile();
     }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+      e.preventDefault();
+      openFindPanel(false);
+    }
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "h") {
+      e.preventDefault();
+      openFindPanel(true);
+    }
+
+    if (e.key === "F3") {
+      e.preventDefault();
+      findNext();
+    }
+
+    if (e.key === "Escape" && findPanel.style.display !== "none") {
+      closeFindPanel();
+      editorEl.focus();
+    }
   });
 
   saveBtn.addEventListener("click", saveFile);
+  findBtn.addEventListener("click", () => openFindPanel(false));
+  findNextBtn.addEventListener("click", findNext);
+  replaceBtn.addEventListener("click", replaceCurrent);
+  replaceAllBtn.addEventListener("click", replaceAll);
+  findCloseBtn.addEventListener("click", closeFindPanel);
+  findInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      findNext();
+    }
+  });
+  replaceInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      replaceCurrent();
+    }
+  });
   downloadBtn.addEventListener("click", () => { if (currentFilePath) downloadFile(currentFilePath); });
   binaryDownloadBtn.addEventListener("click", () => { if (currentFilePath) downloadFile(currentFilePath); });
   chmodBtn.addEventListener("click", () => {

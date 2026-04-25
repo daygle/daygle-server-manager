@@ -2932,6 +2932,46 @@ a:hover {
     flex-direction: column;
     min-height: 480px;
 }
+.fe-editor-shell {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 480px;
+}
+.fe-find-panel {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--card-bg);
+}
+.fe-find-panel .form-control {
+    flex: 1 1 180px;
+    min-width: 160px;
+}
+.fe-editor-wrap {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+.fe-line-numbers {
+    width: 56px;
+    padding: 0.875rem 0 0.875rem 0;
+    border-right: 1px solid var(--border-color);
+    overflow: hidden;
+    user-select: none;
+    text-align: right;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.75rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+    background: var(--bg-secondary, #161b22);
+}
+.fe-line-numbers span {
+    display: block;
+    padding: 0 0.6rem 0 0.3rem;
+}
 .fe-editor {
     flex: 1;
     width: 100%;
@@ -2951,6 +2991,9 @@ a:hover {
 [data-theme="light"] .fe-editor {
     background: #fafafa;
     color: #1e1e1e;
+}
+[data-theme="light"] .fe-line-numbers {
+    background: #f1f5f9;
 }
 .fe-editor-placeholder {
     display: flex;
