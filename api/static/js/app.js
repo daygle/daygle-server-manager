@@ -1350,6 +1350,9 @@ function renderJobRow(job) {
   const packageManagerLabel = job.package_manager === "auto" ? "Automatically Detect" : job.package_manager;
   const canStop = job.status === "pending" || job.status === "running";
   const canRerun = job.status === "skipped" || job.status === "failed";
+  const runBadge = Number(job.run_count || 1) > 1
+    ? ` <span class="badge badge-info">Run ${escapeHtml(job.run_count)}</span>`
+    : "";
   const extraAction = canStop
     ? `<button type="button" class="btn btn-warning btn-sm btn-icon-only" data-stop-job="${job.id}" title="Stop job"><i class="fas fa-stop"></i></button>`
     : (canRerun
@@ -1358,7 +1361,7 @@ function renderJobRow(job) {
   const actionsCell = `<div class="flex-gap-8"><button type="button" class="btn btn-primary btn-sm btn-icon-only" data-view-job="${job.id}" title="View output"><i class="fas fa-eye"></i></button>${extraAction}</div>`;
   return `
       <tr data-job-id="${job.id}" class="job-row" title="Click to view output">
-        <td>${job.id}</td>
+        <td><span>${job.id}</span>${runBadge}</td>
         <td>${escapeHtml(job.server_name || `Server #${job.server_id}`)}</td>
         <td>${escapeHtml(jobTypeLabel)}</td>
         <td>${renderStatus(job.status)}</td>
@@ -1374,6 +1377,7 @@ function renderJobRow(job) {
 
 const SECTION_LABELS = {
   summary: "Summary",
+  "run-history": "Run History",
   "apt-extra-steps": "Additional apt Steps",
   steps: "Steps",
   "command-output": "Command Output",

@@ -101,6 +101,7 @@ class UpdateJobRead(BaseModel):
     command: str
     output: str | None
     summary: str | None
+    run_count: int = 1
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime

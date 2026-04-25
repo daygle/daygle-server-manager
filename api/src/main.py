@@ -192,6 +192,7 @@ def ensure_schema_columns() -> None:
         "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS summary VARCHAR(255)",
         "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS job_type VARCHAR(20) DEFAULT 'manual'",
         "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS schedule_id INTEGER",
+        "ALTER TABLE update_jobs ADD COLUMN IF NOT EXISTS run_history TEXT NOT NULL DEFAULT ''",
         "UPDATE update_jobs SET job_type = 'manual' WHERE job_type IS NULL OR job_type = ''",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format VARCHAR(32)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64)",
@@ -785,6 +786,25 @@ def purge_old_history(db: Session) -> None:
         db.query(AuditLog).filter(AuditLog.timestamp < audit_cutoff).delete(synchronize_session=False)
 
     db.commit()
+
+
+def serialize_update_job(job: UpdateJob) -> UpdateJobRead:
+    return UpdateJobRead(
+        id=job.id,
+        server_id=job.server_id,
+        schedule_id=job.schedule_id,
+        server_name=job.server_name,
+        job_type=job.job_type,
+        package_manager=job.package_manager,
+        status=job.status,
+        command=job.command,
+        output=job.combined_output,
+        summary=job.summary,
+        run_count=job.run_count,
+        started_at=job.started_at,
+        finished_at=job.finished_at,
+        created_at=job.created_at,
+    )
 
 
 def enqueue_update_jobs(db: Session, servers: list[Server], package_manager: str, apt_extra_steps: list[str] | None = None, job_type: str = "manual", alert_only: bool = False) -> list[int]:
@@ -4555,7 +4575,7 @@ def list_update_jobs(request: Request, limit: int = 50, db: Session = Depends(ge
 
     safe_limit = max(1, min(limit, 200))
     jobs = db.query(UpdateJob).order_by(UpdateJob.created_at.desc()).limit(safe_limit).all()
-    return jobs
+    return [serialize_update_job(job) for job in jobs]
 
 
 @app.get("/api/updates/{job_id}", response_model=UpdateJobRead)
@@ -4575,7 +4595,7 @@ def get_update_job(job_id: int, request: Request, db: Session = Depends(get_db))
         target_label=f"Job #{job.id}",
         detail=f"Viewed job output status={job.status}; server_id={job.server_id}",
     )
-    return job
+    return serialize_update_job(job)
 
 
 @app.post("/api/updates/{job_id}/stop")
@@ -4639,6 +4659,7 @@ def rerun_update_job(job_id: int, request: Request, db: Session = Depends(get_db
     if not server:
         raise HTTPException(status_code=404, detail="Server not found for this job")
 
+    job.archive_current_run()
     job.status = "pending"
     job.output = None
     job.summary = None

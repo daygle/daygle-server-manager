@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
@@ -85,6 +86,7 @@ class UpdateJob(Base):
     command: Mapped[str] = mapped_column(Text, nullable=False)
     output: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    run_history_raw: Mapped[str] = mapped_column("run_history", Text, nullable=False, default="")
     apt_extra_steps_raw: Mapped[str] = mapped_column("apt_extra_steps", Text, nullable=False, default="")
     alert_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -104,6 +106,68 @@ class UpdateJob(Base):
     @apt_extra_steps.setter
     def apt_extra_steps(self, values: list[str]) -> None:
         self.apt_extra_steps_raw = ",".join(values)
+
+    @property
+    def run_history(self) -> list[dict]:
+        raw = (self.run_history_raw or "").strip()
+        if not raw:
+            return []
+        try:
+            data = json.loads(raw)
+        except Exception:
+            return []
+        return data if isinstance(data, list) else []
+
+    @run_history.setter
+    def run_history(self, values: list[dict]) -> None:
+        self.run_history_raw = json.dumps(values or [])
+
+    def archive_current_run(self) -> None:
+        if not any([self.output, self.summary, self.started_at, self.finished_at, self.status]):
+            return
+
+        history = self.run_history
+        history.append(
+            {
+                "status": self.status,
+                "summary": self.summary,
+                "started_at": self.started_at.isoformat() if self.started_at else None,
+                "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+                "output": self.output or "",
+            }
+        )
+        self.run_history = history
+
+    @property
+    def combined_output(self) -> str | None:
+        current_output = (self.output or "").strip()
+        history = self.run_history
+        if not history:
+            return current_output or None
+
+        history_blocks: list[str] = []
+        for index, entry in enumerate(history, start=1):
+            lines = [
+                f"Run {index}",
+                f"Status: {entry.get('status') or '-'}",
+                f"Summary: {entry.get('summary') or '-'}",
+                f"Started: {entry.get('started_at') or '-'}",
+                f"Finished: {entry.get('finished_at') or '-'}",
+            ]
+            output = (entry.get("output") or "").strip()
+            if output:
+                lines.append("")
+                lines.append(output)
+            history_blocks.append("\n".join(lines).strip())
+
+        history_section = "[run-history]\n" + "\n\n--------------------\n\n".join(history_blocks)
+        if current_output:
+            return f"{current_output}\n\n{history_section}".strip()
+        return history_section
+
+    @property
+    def run_count(self) -> int:
+        return max(1, len(self.run_history) + 1)
 
 
 class UpdateSchedule(Base):
