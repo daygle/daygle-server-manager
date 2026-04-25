@@ -1349,7 +1349,7 @@ function renderJobRow(job) {
   const jobTypeLabel = job.job_type === "scheduled" ? "Scheduled" : "Manual";
   const packageManagerLabel = job.package_manager === "auto" ? "Automatically Detect" : job.package_manager;
   const canStop = job.status === "pending" || job.status === "running";
-  const canRerun = job.status === "skipped";
+  const canRerun = job.status === "skipped" || job.status === "failed";
   const extraAction = canStop
     ? `<button type="button" class="btn btn-warning btn-sm btn-icon-only" data-stop-job="${job.id}" title="Stop job"><i class="fas fa-stop"></i></button>`
     : (canRerun

@@ -162,7 +162,7 @@
                 <button type="button" class="btn btn-warning btn-sm btn-icon-only" data-stop-job="{{ job.id }}" title="Stop job">
                   <i class="fas fa-stop"></i>
                 </button>
-                {% elif job.status == 'skipped' %}
+                {% elif job.status == 'skipped' or job.status == 'failed' %}
                 <button type="button" class="btn btn-success btn-sm btn-icon-only" data-rerun-job="{{ job.id }}" title="Re-run job">
                   <i class="fas fa-rotate-right"></i>
                 </button>

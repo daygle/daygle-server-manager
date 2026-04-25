@@ -4632,8 +4632,8 @@ def rerun_update_job(job_id: int, request: Request, db: Session = Depends(get_db
     if not job:
         raise HTTPException(status_code=404, detail="Update job not found")
 
-    if job.status != "skipped":
-        raise HTTPException(status_code=409, detail="Only skipped jobs can be re-run.")
+    if job.status not in {"skipped", "failed"}:
+        raise HTTPException(status_code=409, detail="Only skipped or failed jobs can be re-run.")
 
     server = db.query(Server).filter(Server.id == job.server_id).first()
     if not server:
