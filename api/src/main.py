@@ -1597,18 +1597,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     total_servers = db.query(func.count(Server.id)).scalar() or 0
     servers_online = db.query(func.count(Server.id)).filter(Server.last_health_status == "online").scalar() or 0
     running_jobs = db.query(func.count(UpdateJob.id)).filter(UpdateJob.status == "running").scalar() or 0
-    failed_jobs = (
-        db.query(func.count(func.distinct(UpdateJob.id)))
-        .outerjoin(
-            Alert,
-            (Alert.source_type == "update_job")
-            & (Alert.source_id == func.cast(UpdateJob.id, String)),
-        )
-        .filter(UpdateJob.status == "failed")
-        .filter(or_(Alert.id.is_(None), Alert.acknowledged_at.is_(None)))
-        .scalar()
-        or 0
-    )
+    failed_jobs = db.query(func.count(UpdateJob.id)).filter(UpdateJob.status == "failed").scalar() or 0
     unacknowledged_alerts = db.query(func.count(Alert.id)).filter(Alert.acknowledged_at.is_(None)).scalar() or 0
     latest_jobs = db.query(UpdateJob).order_by(UpdateJob.created_at.desc()).limit(10).all()
     servers = db.query(Server).order_by(Server.name.asc()).all()
