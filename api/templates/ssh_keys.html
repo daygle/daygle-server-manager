@@ -93,7 +93,7 @@
             <td><strong>{{ key.name }}</strong></td>
             <td><span class="badge badge-info">{{ key.key_type }}</span></td>
             <td>
-              <code class="key-preview">{{ key.public_key[:20] }}…{{ key.public_key[-6:] }}</code>
+              <code class="key-preview" title="{{ key.public_key }}">{{ key.public_key[:28] }}...</code>
             </td>
             <td class="hide-mobile"><small>{{ format_dt(key.created_at) }}</small></td>
             <td>
@@ -112,9 +112,9 @@
                   class="btn btn-success btn-sm btn-icon-only"
                   data-copy-auth-key="{{ key.id }}"
                   onclick='copyAuthorizedKeyEntry({{ key.id }}, {{ key.name|tojson }}, {{ key.public_key|tojson }})'
-                  title="Copy for authorized_keys"
+                  title="Copy authorized_keys entry"
                 >
-                  <i class="fas fa-user-check"></i>
+                  <i class="fas fa-file-lines"></i>
                 </button>
                 <button class="btn btn-danger btn-sm btn-icon-only" type="button" data-delete-key="{{ key.id }}" title="Delete key">
                   <i class="fas fa-trash"></i>
@@ -308,7 +308,7 @@ document.getElementById('import-form').addEventListener('submit', async (e) => {
 function addKeyRow(key) {
   document.getElementById('no-keys-row')?.remove();
   const tbody = document.getElementById('keys-table');
-  const preview = key.public_key.substring(0, 20) + '…' + key.public_key.slice(-6);
+  const preview = key.public_key.substring(0, 28) + '...';
   const tr = document.createElement('tr');
   tr.id = `key-row-${key.id}`;
   tr.innerHTML = `
@@ -321,8 +321,8 @@ function addKeyRow(key) {
         <button type="button" class="btn btn-primary btn-sm btn-icon-only" data-copy-key="${key.id}" title="Copy public key">
           <i class="fas fa-copy"></i>
         </button>
-        <button type="button" class="btn btn-success btn-sm btn-icon-only" data-copy-auth-key="${key.id}" title="Copy for authorized_keys">
-          <i class="fas fa-user-check"></i>
+        <button type="button" class="btn btn-success btn-sm btn-icon-only" data-copy-auth-key="${key.id}" title="Copy authorized_keys entry">
+          <i class="fas fa-file-lines"></i>
         </button>
         <button class="btn btn-danger btn-sm btn-icon-only" type="button" data-delete-key="${key.id}" title="Delete key">
           <i class="fas fa-trash"></i>
@@ -331,6 +331,10 @@ function addKeyRow(key) {
     </td>
   `;
   tbody.appendChild(tr);
+  const previewCode = tr.querySelector('.key-preview');
+  if (previewCode) {
+    previewCode.title = key.public_key;
+  }
   
   // Attach copy listener
   tr.querySelector('[data-copy-key]').addEventListener('click', async () => {
