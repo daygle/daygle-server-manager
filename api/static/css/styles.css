@@ -3113,7 +3113,15 @@ a:hover {
     align-items: center;
     gap: 0.4rem;
     font-size: 0.875rem;
+    line-height: 1.25;
     cursor: pointer;
+}
+.fe-chmod-section label input[type="checkbox"] {
+    margin: 0;
+    width: 1rem;
+    height: 1rem;
+    flex: 0 0 1rem;
+    accent-color: var(--accent-primary);
 }
 /* Responsive */
 @media (max-width: 1000px) {
