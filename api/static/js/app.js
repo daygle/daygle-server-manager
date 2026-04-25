@@ -69,24 +69,169 @@ let serverStatusAutoCheckTimerId = null;
 let serverStatusAutoCheckInFlight = false;
 const SERVER_STATUS_AUTO_CHECK_ENABLED_KEY = "serverStatusAutoCheckEnabled";
 const SERVER_STATUS_AUTO_CHECK_INTERVAL_KEY = "serverStatusAutoCheckInterval";
-const SERVER_STATUS_CRON_TO_INTERVAL_SECONDS = {
-  "*/1 * * * *": 60,
-  "*/5 * * * *": 300,
-  "*/10 * * * *": 600,
-};
 
 function intervalSecondsToServerStatusCron(intervalSeconds) {
   const parsed = Number(intervalSeconds);
   if (!Number.isFinite(parsed)) {
     return "*/1 * * * *";
   }
-  const normalized = Math.trunc(parsed);
-  const entry = Object.entries(SERVER_STATUS_CRON_TO_INTERVAL_SECONDS).find(([, seconds]) => seconds === normalized);
-  return entry ? entry[0] : "*/1 * * * *";
+  const normalized = Math.max(60, Math.trunc(parsed));
+  if (normalized % 604800 === 0) {
+    return "0 0 * * 0";
+  }
+  if (normalized % 86400 === 0) {
+    return "0 0 * * *";
+  }
+  if (normalized % 3600 === 0) {
+    const hourStep = Math.max(1, Math.trunc(normalized / 3600));
+    if (hourStep <= 23) {
+      return `0 */${hourStep} * * *`;
+    }
+  }
+  if (normalized % 60 === 0) {
+    const minuteStep = Math.max(1, Math.trunc(normalized / 60));
+    if (minuteStep <= 59) {
+      return `*/${minuteStep} * * * *`;
+    }
+  }
+  return "*/1 * * * *";
+}
+
+function normalizeCronWhitespace(rawValue) {
+  return String(rawValue || "").trim().replace(/\s+/g, " ");
+}
+
+function expandCronToken(token, min, max) {
+  const values = new Set();
+  const segment = String(token || "").trim();
+  if (!segment) {
+    return null;
+  }
+
+  const [rangePartRaw, stepPartRaw] = segment.split("/");
+  if (segment.split("/").length > 2) {
+    return null;
+  }
+
+  let step = 1;
+  if (stepPartRaw != null) {
+    step = Number(stepPartRaw);
+    if (!Number.isInteger(step) || step < 1) {
+      return null;
+    }
+  }
+
+  let start = min;
+  let end = max;
+  const rangePart = rangePartRaw == null ? segment : rangePartRaw;
+
+  if (rangePart !== "*") {
+    if (rangePart.includes("-")) {
+      const [startRaw, endRaw] = rangePart.split("-");
+      if (rangePart.split("-").length !== 2) {
+        return null;
+      }
+      start = Number(startRaw);
+      end = Number(endRaw);
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start > end) {
+        return null;
+      }
+    } else {
+      start = Number(rangePart);
+      end = start;
+      if (!Number.isInteger(start)) {
+        return null;
+      }
+    }
+  }
+
+  if (start < min || end > max) {
+    return null;
+  }
+
+  for (let value = start; value <= end; value += step) {
+    values.add(value);
+  }
+  return values;
+}
+
+function parseCronField(fieldValue, min, max) {
+  const tokens = String(fieldValue || "").split(",").map((t) => t.trim()).filter(Boolean);
+  if (!tokens.length) {
+    return null;
+  }
+  const result = new Set();
+  for (const token of tokens) {
+    const expanded = expandCronToken(token, min, max);
+    if (!expanded) {
+      return null;
+    }
+    for (const value of expanded) {
+      result.add(value);
+    }
+  }
+  return result;
+}
+
+function parseServerStatusCronExpression(cronExpression) {
+  const normalized = normalizeCronWhitespace(cronExpression);
+  const parts = normalized.split(" ");
+  if (parts.length !== 5) {
+    return null;
+  }
+
+  const parsed = {
+    minute: parseCronField(parts[0], 0, 59),
+    hour: parseCronField(parts[1], 0, 23),
+    dayOfMonth: parseCronField(parts[2], 1, 31),
+    month: parseCronField(parts[3], 1, 12),
+    dayOfWeek: parseCronField(parts[4], 0, 6),
+  };
+
+  if (!parsed.minute || !parsed.hour || !parsed.dayOfMonth || !parsed.month || !parsed.dayOfWeek) {
+    return null;
+  }
+
+  return { normalized, parsed };
+}
+
+function cronMatchesDate(parsedCron, date) {
+  return parsedCron.minute.has(date.getMinutes())
+    && parsedCron.hour.has(date.getHours())
+    && parsedCron.dayOfMonth.has(date.getDate())
+    && parsedCron.month.has(date.getMonth() + 1)
+    && parsedCron.dayOfWeek.has(date.getDay());
+}
+
+function nextServerStatusCronRun(parsedCron, fromDate = new Date()) {
+  const probe = new Date(fromDate.getTime());
+  probe.setSeconds(0, 0);
+  probe.setMinutes(probe.getMinutes() + 1);
+
+  // Search up to ~2 years of minute slots.
+  for (let i = 0; i < 1051200; i += 1) {
+    if (cronMatchesDate(parsedCron, probe)) {
+      return new Date(probe.getTime());
+    }
+    probe.setMinutes(probe.getMinutes() + 1);
+  }
+  return null;
 }
 
 function serverStatusCronToIntervalSeconds(cronExpression) {
-  return SERVER_STATUS_CRON_TO_INTERVAL_SECONDS[String(cronExpression || "")] || 60;
+  const parsed = parseServerStatusCronExpression(cronExpression);
+  if (!parsed) {
+    return null;
+  }
+  const firstRun = nextServerStatusCronRun(parsed.parsed, new Date());
+  if (!firstRun) {
+    return null;
+  }
+  const secondRun = nextServerStatusCronRun(parsed.parsed, new Date(firstRun.getTime()));
+  if (!secondRun) {
+    return null;
+  }
+  return Math.max(60, Math.round((secondRun.getTime() - firstRun.getTime()) / 1000));
 }
 
 function normalizeServerStatusAutoCheckIntervalValue(rawValue) {
@@ -97,14 +242,12 @@ function normalizeServerStatusAutoCheckIntervalValue(rawValue) {
   if (!raw) {
     return null;
   }
-  if (raw in SERVER_STATUS_CRON_TO_INTERVAL_SECONDS) {
-    return raw;
-  }
   const asNumber = Number(raw);
   if (Number.isFinite(asNumber)) {
     return intervalSecondsToServerStatusCron(asNumber);
   }
-  return null;
+  const parsed = parseServerStatusCronExpression(raw);
+  return parsed ? parsed.normalized : null;
 }
 
 function getLocalServerStatusPreferences() {
@@ -130,8 +273,17 @@ function setLocalServerStatusPreferences(enabled, interval) {
 }
 
 async function persistServerStatusPreferences(enabled, interval, { showFeedback = true } = {}) {
-  const normalizedInterval = normalizeServerStatusAutoCheckIntervalValue(interval) || "*/1 * * * *";
+  let normalizedInterval = normalizeServerStatusAutoCheckIntervalValue(interval) || "*/1 * * * *";
+  if (!enabled && !normalizeServerStatusAutoCheckIntervalValue(interval)) {
+    normalizedInterval = "*/1 * * * *";
+  }
   const intervalSeconds = serverStatusCronToIntervalSeconds(normalizedInterval);
+  if (!intervalSeconds) {
+    if (showFeedback) {
+      notify("Invalid cron expression. Use 5 fields like */5 * * * *.", "error");
+    }
+    return;
+  }
   setLocalServerStatusPreferences(enabled, normalizedInterval);
   try {
     const response = await fetch(
@@ -159,7 +311,7 @@ async function loadServerStatusPreferences() {
 
   const localPrefs = getLocalServerStatusPreferences();
   const normalizedLocalInterval = normalizeServerStatusAutoCheckIntervalValue(localPrefs.interval);
-  if (normalizedLocalInterval && [...serverStatusAutoCheckInterval.options].some((option) => option.value === normalizedLocalInterval)) {
+  if (normalizedLocalInterval) {
     serverStatusAutoCheckInterval.value = normalizedLocalInterval;
   }
   serverStatusAutoCheckToggle.checked = Boolean(localPrefs.enabled);
@@ -172,9 +324,7 @@ async function loadServerStatusPreferences() {
     }
     const data = await response.json();
     const intervalValue = intervalSecondsToServerStatusCron(data.interval_seconds);
-    if ([...serverStatusAutoCheckInterval.options].some((option) => option.value === intervalValue)) {
-      serverStatusAutoCheckInterval.value = intervalValue;
-    }
+    serverStatusAutoCheckInterval.value = intervalValue;
     serverStatusAutoCheckToggle.checked = data.enabled === true;
     setLocalServerStatusPreferences(serverStatusAutoCheckToggle.checked, serverStatusAutoCheckInterval.value);
   } catch (error) {
@@ -381,9 +531,6 @@ serverForm?.addEventListener("submit", async (event) => {
   if (serverIdInput) {
     serverIdInput.value = "";
   }
-  if (cancelEditBtn) {
-    cancelEditBtn.classList.add("hidden");
-  }
   if (saveServerBtn) {
     saveServerBtn.innerHTML = '<i class="fas fa-save"></i><span>Save Server</span>';
   }
@@ -415,9 +562,6 @@ function resetServerFormToCreateMode() {
   }
   if (saveServerBtn) {
     saveServerBtn.innerHTML = '<i class="fas fa-save"></i><span>Save Server</span>';
-  }
-  if (cancelEditBtn) {
-    cancelEditBtn.classList.add("hidden");
   }
   const cpuThresholdField = serverForm.querySelector('[name="alert_cpu_threshold"]');
   const ramThresholdField = serverForm.querySelector('[name="alert_ram_threshold"]');
@@ -498,9 +642,6 @@ document.querySelectorAll("[data-edit-server]").forEach((button) => {
     }
     if (serverFormTitle) {
       serverFormTitle.textContent = "Edit Server";
-    }
-    if (cancelEditBtn) {
-      cancelEditBtn.classList.remove("hidden");
     }
     setServerFormVisibility(true);
     serverForm.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -778,9 +919,42 @@ async function refreshAllServerStatus({ silent = false } = {}) {
 
 function stopServerStatusAutoCheck() {
   if (serverStatusAutoCheckTimerId !== null) {
-    clearInterval(serverStatusAutoCheckTimerId);
+    clearTimeout(serverStatusAutoCheckTimerId);
     serverStatusAutoCheckTimerId = null;
   }
+}
+
+function scheduleNextServerStatusAutoCheck() {
+  if (!serverStatusAutoCheckInterval || !serverStatusAutoCheckToggle?.checked) {
+    return;
+  }
+
+  const parsed = parseServerStatusCronExpression(serverStatusAutoCheckInterval.value);
+  if (!parsed) {
+    notify("Invalid cron expression. Use 5 fields like */5 * * * *.", "error");
+    return;
+  }
+
+  const nextRun = nextServerStatusCronRun(parsed.parsed, new Date());
+  if (!nextRun) {
+    notify("Could not calculate next run time for this cron expression.", "error");
+    return;
+  }
+
+  const delayMs = Math.min(2147483647, Math.max(1000, nextRun.getTime() - Date.now()));
+  serverStatusAutoCheckTimerId = setTimeout(async () => {
+    if (!serverStatusAutoCheckToggle?.checked || serverStatusAutoCheckInFlight) {
+      scheduleNextServerStatusAutoCheck();
+      return;
+    }
+    serverStatusAutoCheckInFlight = true;
+    try {
+      await refreshAllServerStatus({ silent: true });
+    } finally {
+      serverStatusAutoCheckInFlight = false;
+      scheduleNextServerStatusAutoCheck();
+    }
+  }, delayMs);
 }
 
 function startServerStatusAutoCheck() {
@@ -789,26 +963,19 @@ function startServerStatusAutoCheck() {
     return;
   }
 
-  const intervalSeconds = serverStatusCronToIntervalSeconds(serverStatusAutoCheckInterval.value);
-  const intervalMs = Number.isFinite(intervalSeconds) && intervalSeconds > 0 ? intervalSeconds * 1000 : 60000;
+  const normalized = normalizeServerStatusAutoCheckIntervalValue(serverStatusAutoCheckInterval.value);
+  if (!normalized) {
+    notify("Invalid cron expression. Use 5 fields like */5 * * * *.", "error");
+    return;
+  }
+  serverStatusAutoCheckInterval.value = normalized;
 
   // Run once immediately when enabled so users do not wait for the first interval.
   serverStatusAutoCheckInFlight = true;
   refreshAllServerStatus({ silent: true }).finally(() => {
     serverStatusAutoCheckInFlight = false;
+    scheduleNextServerStatusAutoCheck();
   });
-
-  serverStatusAutoCheckTimerId = setInterval(async () => {
-    if (serverStatusAutoCheckInFlight) {
-      return;
-    }
-    serverStatusAutoCheckInFlight = true;
-    try {
-      await refreshAllServerStatus({ silent: true });
-    } finally {
-      serverStatusAutoCheckInFlight = false;
-    }
-  }, intervalMs);
 }
 
 function applyServerStatusAutoCheckState() {
@@ -835,6 +1002,13 @@ if (serverStatusAutoCheckToggle && serverStatusAutoCheckInterval) {
   });
 
   serverStatusAutoCheckInterval.addEventListener("change", () => {
+    const normalized = normalizeServerStatusAutoCheckIntervalValue(serverStatusAutoCheckInterval.value);
+    if (!normalized) {
+      notify("Invalid cron expression. Use 5 fields like */5 * * * *.", "error");
+      serverStatusAutoCheckInterval.value = "*/1 * * * *";
+    } else {
+      serverStatusAutoCheckInterval.value = normalized;
+    }
     void persistServerStatusPreferences(serverStatusAutoCheckToggle.checked, serverStatusAutoCheckInterval.value, { showFeedback: true });
     applyServerStatusAutoCheckState();
   });

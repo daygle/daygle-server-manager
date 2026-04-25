@@ -27,12 +27,8 @@
       </div>
       <div class="form-group mb-0">
         <label for="server_status_auto_check_interval" class="form-label">Frequency (cron style)</label>
-        <select id="server_status_auto_check_interval" class="form-select">
-          <option value="*/1 * * * *" selected>*/1 * * * * (every 1 minute)</option>
-          <option value="*/5 * * * *">*/5 * * * * (every 5 minutes)</option>
-          <option value="*/10 * * * *">*/10 * * * * (every 10 minutes)</option>
-        </select>
-        <small class="form-text">Runs on a fixed minute cadence based on the cron-style expression.</small>
+        <input id="server_status_auto_check_interval" type="text" class="form-control" value="*/1 * * * *" placeholder="*/5 * * * *" spellcheck="false" autocomplete="off" />
+        <small class="form-text">Enter a 5-field cron expression (minute hour day-of-month month day-of-week), e.g. <code>*/5 * * * *</code> or <code>0 * * * *</code>.</small>
       </div>
     </div>
     <p class="text-secondary" id="server_status_last_updated">
