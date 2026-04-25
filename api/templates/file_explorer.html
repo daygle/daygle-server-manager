@@ -110,22 +110,6 @@
           <i class="fas fa-text-width"></i>
           <span>Word Wrap</span>
         </button>
-        <button type="button" class="btn btn-primary btn-sm" id="fe-download-btn">
-          <i class="fas fa-download"></i>
-          <span>Download</span>
-        </button>
-        <button type="button" class="btn btn-warning btn-sm" id="fe-chmod-btn">
-          <i class="fas fa-lock"></i>
-          <span>Permissions</span>
-        </button>
-        <button type="button" class="btn btn-success btn-sm" id="fe-rename-btn">
-          <i class="fas fa-i-cursor"></i>
-          <span>Rename</span>
-        </button>
-        <button type="button" class="btn btn-danger btn-sm" id="fe-delete-file-btn">
-          <i class="fas fa-trash"></i>
-          <span>Delete</span>
-        </button>
       </div>
     </div>
     <div class="card-body p-0 fe-editor-body">
@@ -236,10 +220,6 @@
   const saveBtn        = document.getElementById("fe-save-btn");
   const findBtn        = document.getElementById("fe-find-btn");
   const wrapBtn         = document.getElementById("fe-wrap-btn");
-  const downloadBtn    = document.getElementById("fe-download-btn");
-  const chmodBtn       = document.getElementById("fe-chmod-btn");
-  const renameBtn      = document.getElementById("fe-rename-btn");
-  const deleteFileBtn  = document.getElementById("fe-delete-file-btn");
   const newFileBtn     = document.getElementById("fe-new-file-btn");
   const newDirBtn      = document.getElementById("fe-new-dir-btn");
   const uploadInput    = document.getElementById("fe-upload-input");
@@ -904,17 +884,7 @@
       replaceCurrent();
     }
   });
-  downloadBtn.addEventListener("click", () => { if (currentFilePath) downloadFile(currentFilePath); });
   binaryDownloadBtn.addEventListener("click", () => { if (currentFilePath) downloadFile(currentFilePath); });
-  chmodBtn.addEventListener("click", () => {
-    if (!currentFilePath) return;
-    openChmodModal(currentFilePath, currentFileMode || "0644");
-  });
-  renameBtn.addEventListener("click", () => { if (currentFilePath) renameEntry(currentFilePath); });
-  deleteFileBtn.addEventListener("click", () => {
-    if (!currentFilePath) return;
-    deleteEntry(currentFilePath, currentFilePath.split("/").pop());
-  });
 
   // ── Unsaved-changes guard ──────────────────────────────────────────────
   window.addEventListener("beforeunload", (e) => {
