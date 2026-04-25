@@ -4569,21 +4569,11 @@ def list_update_jobs(request: Request, limit: int = 50, db: Session = Depends(ge
 
 @app.get("/api/updates/{job_id}", response_model=UpdateJobRead)
 def get_update_job(job_id: int, request: Request, db: Session = Depends(get_db)):
-    current_user = require_api_user(request, db)
+    require_api_user(request, db)
 
     job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Update job not found")
-    log_audit(
-        db,
-        "update.check.output",
-        request=request,
-        actor=current_user,
-        target_type="update_job",
-        target_id=job.id,
-        target_label=f"Job #{job.id}",
-        detail=f"Viewed job output status={job.status}; server_id={job.server_id}",
-    )
     return serialize_update_job(job)
 
 
