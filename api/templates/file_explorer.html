@@ -871,12 +871,14 @@
       editorEl.removeAttribute("wrap");
       wrapBtn.classList.add("active");
       wrapBtn.title = "Word wrap: on";
+      lineNumbersEl.style.display = "none";
     } else {
       editorEl.setAttribute("wrap", "off");
       wrapBtn.classList.remove("active");
       wrapBtn.title = "Word wrap: off";
+      lineNumbersEl.style.display = "";
+      updateLineNumbers();
     }
-    updateLineNumbers();
   }
   wrapBtn.addEventListener("click", () => {
     feWordWrap = !feWordWrap;
