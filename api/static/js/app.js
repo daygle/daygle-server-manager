@@ -69,6 +69,43 @@ let serverStatusAutoCheckTimerId = null;
 let serverStatusAutoCheckInFlight = false;
 const SERVER_STATUS_AUTO_CHECK_ENABLED_KEY = "serverStatusAutoCheckEnabled";
 const SERVER_STATUS_AUTO_CHECK_INTERVAL_KEY = "serverStatusAutoCheckInterval";
+const SERVER_STATUS_CRON_TO_INTERVAL_SECONDS = {
+  "*/1 * * * *": 60,
+  "*/5 * * * *": 300,
+  "*/10 * * * *": 600,
+};
+
+function intervalSecondsToServerStatusCron(intervalSeconds) {
+  const parsed = Number(intervalSeconds);
+  if (!Number.isFinite(parsed)) {
+    return "*/1 * * * *";
+  }
+  const normalized = Math.trunc(parsed);
+  const entry = Object.entries(SERVER_STATUS_CRON_TO_INTERVAL_SECONDS).find(([, seconds]) => seconds === normalized);
+  return entry ? entry[0] : "*/1 * * * *";
+}
+
+function serverStatusCronToIntervalSeconds(cronExpression) {
+  return SERVER_STATUS_CRON_TO_INTERVAL_SECONDS[String(cronExpression || "")] || 60;
+}
+
+function normalizeServerStatusAutoCheckIntervalValue(rawValue) {
+  if (rawValue == null) {
+    return null;
+  }
+  const raw = String(rawValue).trim();
+  if (!raw) {
+    return null;
+  }
+  if (raw in SERVER_STATUS_CRON_TO_INTERVAL_SECONDS) {
+    return raw;
+  }
+  const asNumber = Number(raw);
+  if (Number.isFinite(asNumber)) {
+    return intervalSecondsToServerStatusCron(asNumber);
+  }
+  return null;
+}
 
 function getLocalServerStatusPreferences() {
   try {
@@ -93,10 +130,12 @@ function setLocalServerStatusPreferences(enabled, interval) {
 }
 
 async function persistServerStatusPreferences(enabled, interval, { showFeedback = true } = {}) {
-  setLocalServerStatusPreferences(enabled, interval);
+  const normalizedInterval = normalizeServerStatusAutoCheckIntervalValue(interval) || "*/1 * * * *";
+  const intervalSeconds = serverStatusCronToIntervalSeconds(normalizedInterval);
+  setLocalServerStatusPreferences(enabled, normalizedInterval);
   try {
     const response = await fetch(
-      `/api/server-status/preferences?enabled=${encodeURIComponent(String(Boolean(enabled)))}&interval_seconds=${encodeURIComponent(String(interval))}`,
+      `/api/server-status/preferences?enabled=${encodeURIComponent(String(Boolean(enabled)))}&interval_seconds=${encodeURIComponent(String(intervalSeconds))}`,
       { method: "POST" }
     );
     if (!response.ok) {
@@ -119,8 +158,9 @@ async function loadServerStatusPreferences() {
   }
 
   const localPrefs = getLocalServerStatusPreferences();
-  if (localPrefs.interval && [...serverStatusAutoCheckInterval.options].some((option) => option.value === localPrefs.interval)) {
-    serverStatusAutoCheckInterval.value = localPrefs.interval;
+  const normalizedLocalInterval = normalizeServerStatusAutoCheckIntervalValue(localPrefs.interval);
+  if (normalizedLocalInterval && [...serverStatusAutoCheckInterval.options].some((option) => option.value === normalizedLocalInterval)) {
+    serverStatusAutoCheckInterval.value = normalizedLocalInterval;
   }
   serverStatusAutoCheckToggle.checked = Boolean(localPrefs.enabled);
 
@@ -131,7 +171,7 @@ async function loadServerStatusPreferences() {
       return;
     }
     const data = await response.json();
-    const intervalValue = String(data.interval_seconds ?? "");
+    const intervalValue = intervalSecondsToServerStatusCron(data.interval_seconds);
     if ([...serverStatusAutoCheckInterval.options].some((option) => option.value === intervalValue)) {
       serverStatusAutoCheckInterval.value = intervalValue;
     }
@@ -749,7 +789,7 @@ function startServerStatusAutoCheck() {
     return;
   }
 
-  const intervalSeconds = Number(serverStatusAutoCheckInterval.value || 60);
+  const intervalSeconds = serverStatusCronToIntervalSeconds(serverStatusAutoCheckInterval.value);
   const intervalMs = Number.isFinite(intervalSeconds) && intervalSeconds > 0 ? intervalSeconds * 1000 : 60000;
 
   // Run once immediately when enabled so users do not wait for the first interval.
