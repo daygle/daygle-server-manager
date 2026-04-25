@@ -151,40 +151,42 @@
 <!-- chmod modal -->
 <div id="fe-chmod-modal" class="modal-backdrop" style="display:none">
   <div class="modal">
-    <div class="modal-header">
-      <h3 class="modal-title"><i class="fas fa-lock"></i> Change Permissions</h3>
-      <button type="button" class="modal-close" id="fe-chmod-close">&times;</button>
-    </div>
-    <div class="modal-body">
-      <p id="fe-chmod-path-label" class="text-secondary mb-3"></p>
-      <div class="fe-chmod-grid">
-        <div class="fe-chmod-section">
-          <strong>Owner</strong>
-          <label><input type="checkbox" id="fe-chmod-ur"> Read</label>
-          <label><input type="checkbox" id="fe-chmod-uw"> Write</label>
-          <label><input type="checkbox" id="fe-chmod-ux"> Execute</label>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="fas fa-lock"></i> Change Permissions</h3>
+        <button type="button" class="modal-close" id="fe-chmod-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p id="fe-chmod-path-label" class="text-secondary mb-3"></p>
+        <div class="fe-chmod-grid">
+          <div class="fe-chmod-section">
+            <strong>Owner</strong>
+            <label><input type="checkbox" id="fe-chmod-ur"> Read</label>
+            <label><input type="checkbox" id="fe-chmod-uw"> Write</label>
+            <label><input type="checkbox" id="fe-chmod-ux"> Execute</label>
+          </div>
+          <div class="fe-chmod-section">
+            <strong>Group</strong>
+            <label><input type="checkbox" id="fe-chmod-gr"> Read</label>
+            <label><input type="checkbox" id="fe-chmod-gw"> Write</label>
+            <label><input type="checkbox" id="fe-chmod-gx"> Execute</label>
+          </div>
+          <div class="fe-chmod-section">
+            <strong>Other</strong>
+            <label><input type="checkbox" id="fe-chmod-or"> Read</label>
+            <label><input type="checkbox" id="fe-chmod-ow"> Write</label>
+            <label><input type="checkbox" id="fe-chmod-ox"> Execute</label>
+          </div>
         </div>
-        <div class="fe-chmod-section">
-          <strong>Group</strong>
-          <label><input type="checkbox" id="fe-chmod-gr"> Read</label>
-          <label><input type="checkbox" id="fe-chmod-gw"> Write</label>
-          <label><input type="checkbox" id="fe-chmod-gx"> Execute</label>
-        </div>
-        <div class="fe-chmod-section">
-          <strong>Other</strong>
-          <label><input type="checkbox" id="fe-chmod-or"> Read</label>
-          <label><input type="checkbox" id="fe-chmod-ow"> Write</label>
-          <label><input type="checkbox" id="fe-chmod-ox"> Execute</label>
+        <div class="form-group mt-3">
+          <label class="form-label" for="fe-chmod-octal">Octal</label>
+          <input type="text" id="fe-chmod-octal" class="form-control" style="max-width:120px" maxlength="4" />
         </div>
       </div>
-      <div class="form-group mt-3">
-        <label class="form-label" for="fe-chmod-octal">Octal</label>
-        <input type="text" id="fe-chmod-octal" class="form-control" style="max-width:120px" maxlength="4" />
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="fe-chmod-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="fe-chmod-apply">Apply</button>
       </div>
-    </div>
-    <div class="modal-footer">
-      <button type="button" class="btn btn-secondary" id="fe-chmod-cancel">Cancel</button>
-      <button type="button" class="btn btn-primary" id="fe-chmod-apply">Apply</button>
     </div>
   </div>
 </div>
