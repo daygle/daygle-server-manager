@@ -612,6 +612,14 @@ document.querySelectorAll("[data-edit-server]").forEach((button) => {
       return;
     }
 
+    const normalizeNumericInputValue = (value, fallback = "0") => {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) {
+        return fallback;
+      }
+      return Number.isInteger(numeric) ? String(Math.trunc(numeric)) : String(numeric);
+    };
+
     const setField = (name, value) => {
       const field = serverForm.querySelector(`[name="${name}"]`);
       if (field) {
@@ -631,9 +639,9 @@ document.querySelectorAll("[data-edit-server]").forEach((button) => {
     setField("alert_cpu_threshold", row.dataset.serverAlertCpuThreshold || "90");
     setField("alert_ram_threshold", row.dataset.serverAlertRamThreshold || "90");
     setField("alert_storage_threshold", row.dataset.serverAlertStorageThreshold || "90");
-    setField("alert_load_avg_threshold", row.dataset.serverAlertLoadAvgThreshold || "0");
-    setField("alert_load_avg_5_threshold", row.dataset.serverAlertLoadAvg5Threshold || "0");
-    setField("alert_load_avg_15_threshold", row.dataset.serverAlertLoadAvg15Threshold || "0");
+    setField("alert_load_avg_threshold", normalizeNumericInputValue(row.dataset.serverAlertLoadAvgThreshold, "0"));
+    setField("alert_load_avg_5_threshold", normalizeNumericInputValue(row.dataset.serverAlertLoadAvg5Threshold, "0"));
+    setField("alert_load_avg_15_threshold", normalizeNumericInputValue(row.dataset.serverAlertLoadAvg15Threshold, "0"));
 
     toggleAuthFields();
 
