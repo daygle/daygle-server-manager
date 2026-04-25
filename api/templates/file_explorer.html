@@ -868,11 +868,11 @@
   let feWordWrap = localStorage.getItem("fe-word-wrap") !== "off";
   function applyWordWrap() {
     if (feWordWrap) {
-      editor.removeAttribute("wrap");
+      editorEl.removeAttribute("wrap");
       wrapBtn.classList.add("active");
       wrapBtn.title = "Word wrap: on";
     } else {
-      editor.setAttribute("wrap", "off");
+      editorEl.setAttribute("wrap", "off");
       wrapBtn.classList.remove("active");
       wrapBtn.title = "Word wrap: off";
     }
