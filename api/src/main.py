@@ -4622,3 +4622,48 @@ def stop_update_job(job_id: int, request: Request, db: Session = Depends(get_db)
         "status": job.status,
         "summary": job.summary,
     }
+
+
+@app.post("/api/updates/{job_id}/rerun")
+def rerun_update_job(job_id: int, request: Request, db: Session = Depends(get_db)):
+    current_user = require_api_user(request, db, admin=True)
+
+    job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Update job not found")
+
+    if job.status != "skipped":
+        raise HTTPException(status_code=409, detail="Only skipped jobs can be re-run.")
+
+    server = db.query(Server).filter(Server.id == job.server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found for this job")
+
+    job.status = "pending"
+    job.output = None
+    job.summary = None
+    job.command = "Pending package manager detection..."
+    job.started_at = None
+    job.finished_at = None
+    db.commit()
+    db.refresh(job)
+
+    thread = Thread(target=process_job_async, args=(job.id,), daemon=True)
+    thread.start()
+
+    log_audit(
+        db,
+        "update.job.rerun",
+        request=request,
+        actor=current_user,
+        target_type="update_job",
+        target_id=job.id,
+        target_label=f"Job #{job.id}",
+        detail=f"Re-ran skipped job for server_id={job.server_id}; job_type={job.job_type}; package_manager={job.package_manager}",
+    )
+
+    return {
+        "message": "Job re-run started",
+        "job_id": job.id,
+        "status": job.status,
+    }

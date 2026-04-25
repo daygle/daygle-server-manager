@@ -1349,9 +1349,13 @@ function renderJobRow(job) {
   const jobTypeLabel = job.job_type === "scheduled" ? "Scheduled" : "Manual";
   const packageManagerLabel = job.package_manager === "auto" ? "Automatically Detect" : job.package_manager;
   const canStop = job.status === "pending" || job.status === "running";
-  const actionsCell = canStop
+  const canRerun = job.status === "skipped";
+  const extraAction = canStop
     ? `<button type="button" class="btn btn-warning btn-sm btn-icon-only" data-stop-job="${job.id}" title="Stop job"><i class="fas fa-stop"></i></button>`
-    : "-";
+    : (canRerun
+      ? `<button type="button" class="btn btn-success btn-sm btn-icon-only" data-rerun-job="${job.id}" title="Re-run job"><i class="fas fa-rotate-right"></i></button>`
+      : "");
+  const actionsCell = `<div class="flex-gap-8"><button type="button" class="btn btn-primary btn-sm btn-icon-only" data-view-job="${job.id}" title="View output"><i class="fas fa-eye"></i></button>${extraAction}</div>`;
   return `
       <tr data-job-id="${job.id}" class="job-row" title="Click to view output">
         <td>${job.id}</td>
@@ -1504,6 +1508,18 @@ async function loadJobs() {
 jobsBody?.addEventListener("click", async (event) => {
   const target = event.target;
   const element = target instanceof Element ? target : target?.parentElement;
+  const viewButton = element?.closest("[data-view-job]");
+  if (viewButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    const jobId = Number(viewButton.getAttribute("data-view-job"));
+    if (!jobId) {
+      return;
+    }
+    await viewJobOutput(jobId);
+    return;
+  }
+
   const stopButton = element?.closest("[data-stop-job]");
   if (stopButton) {
     event.preventDefault();
@@ -1534,6 +1550,40 @@ jobsBody?.addEventListener("click", async (event) => {
       notify(`Failed to stop job: ${error.message}`, "error");
     } finally {
       stopButton.removeAttribute("disabled");
+    }
+    return;
+  }
+
+  const rerunButton = element?.closest("[data-rerun-job]");
+  if (rerunButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    const jobId = Number(rerunButton.getAttribute("data-rerun-job"));
+    if (!jobId) {
+      return;
+    }
+    if (!window.confirm(`Re-run skipped job #${jobId}?`)) {
+      return;
+    }
+
+    rerunButton.setAttribute("disabled", "disabled");
+    try {
+      const response = await fetch(`/api/updates/${jobId}/rerun`, { method: "POST" });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: "Failed to re-run job." }));
+        notify(error.detail || "Failed to re-run job.", "error");
+      } else {
+        notify("Job re-run started. Refreshing jobs...", "success");
+        if (window.location.pathname.startsWith("/updates/jobs")) {
+          window.location.reload();
+        } else {
+          await loadJobs();
+        }
+      }
+    } catch (error) {
+      notify(`Failed to re-run job: ${error.message}`, "error");
+    } finally {
+      rerunButton.removeAttribute("disabled");
     }
     return;
   }

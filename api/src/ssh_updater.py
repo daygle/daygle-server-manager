@@ -309,6 +309,38 @@ def build_check_command(package_manager: str, lock_timeout_seconds: int = 120, p
     raise ValueError("Unsupported package manager")
 
 
+def detect_apt_lock_activity(
+    client: paramiko.SSHClient,
+    sudo_password: str | None,
+    privilege_prefix: str,
+    timeout_seconds: int = 15,
+) -> tuple[bool, str]:
+    """Return (locked, detail) for active apt/dpkg lock/process detection."""
+    command = (
+        "if command -v fuser >/dev/null 2>&1; then "
+        f"{privilege_prefix}sh -c '"
+        "if fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock /var/cache/apt/archives/lock >/dev/null 2>&1; "
+        "then echo __DAYGLE_APT_LOCKED__; else echo __DAYGLE_APT_CLEAR__; fi'"
+        "; "
+        "else "
+        "if pgrep -fa \"(^|/)(apt|apt-get|dpkg|unattended-upgrade)( |$)\" >/dev/null 2>&1; "
+        "then echo __DAYGLE_APT_LOCKED__; else echo __DAYGLE_APT_CLEAR__; fi; "
+        "fi"
+    )
+
+    exit_code, output, timed_out = run_remote_command(
+        client,
+        command,
+        sudo_password,
+        timeout_seconds=timeout_seconds,
+    )
+    if timed_out or exit_code != 0:
+        return False, "Could not determine whether apt/dpkg is already running."
+    if "__DAYGLE_APT_LOCKED__" in output:
+        return True, "Another apt/dpkg or unattended-upgrades process is already running on the server."
+    return False, "No active apt/dpkg lock detected."
+
+
 def parse_check_result(package_manager: str, output: str, exit_code: int, timed_out: bool) -> tuple[bool, int, str]:
     """Return (updates_available, count, summary_text).
 
@@ -461,12 +493,32 @@ def run_check_job(
         else:
             step_logs.append(f"[{datetime.utcnow().isoformat()}] Privilege mode: root (no sudo)")
 
+        sudo_password = server.sudo_password or server.password
+        if package_manager == "apt":
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Checking for active apt/dpkg lock")
+            apt_locked, apt_lock_detail = detect_apt_lock_activity(client, sudo_password, privilege_prefix)
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] {apt_lock_detail}")
+            if apt_locked:
+                summary = "Skipped: apt/dpkg already running"
+                output_with_steps = (
+                    "[summary]\n"
+                    + summary
+                    + "\n\n[steps]\n"
+                    + "\n".join(step_logs)
+                    + "\n\n[hint]\nWait for the existing package operation to finish, then retry."
+                ).strip()
+                job.status = "skipped"
+                job.output = output_with_steps
+                job.summary = summary
+                job.finished_at = datetime.utcnow()
+                db.commit()
+                return
+
         command = build_check_command(package_manager, lock_timeout_seconds, privilege_prefix)
         job.command = command
         db.commit()
 
         step_logs.append(f"[{datetime.utcnow().isoformat()}] Checking for available updates")
-        sudo_password = server.sudo_password or server.password
         exit_code, output, timed_out = run_remote_command(
             client,
             command,
@@ -623,6 +675,27 @@ def run_update_job(
         else:
             step_logs.append(f"[{datetime.utcnow().isoformat()}] Privilege mode: root (no sudo)")
 
+        sudo_password = server.sudo_password or server.password
+        if package_manager == "apt":
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Checking for active apt/dpkg lock")
+            apt_locked, apt_lock_detail = detect_apt_lock_activity(client, sudo_password, privilege_prefix)
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] {apt_lock_detail}")
+            if apt_locked:
+                summary = "Skipped: apt/dpkg already running"
+                output_with_steps = (
+                    "[summary]\n"
+                    + summary
+                    + "\n\n[steps]\n"
+                    + "\n".join(step_logs)
+                    + "\n\n[hint]\nWait for the existing package operation to finish, then retry."
+                ).strip()
+                job.status = "skipped"
+                job.output = output_with_steps
+                job.summary = summary
+                job.finished_at = datetime.utcnow()
+                db.commit()
+                return
+
         command = build_update_command(package_manager, job.apt_extra_steps, lock_timeout_seconds, privilege_prefix)
         job.command = command
         db.commit()
@@ -630,7 +703,6 @@ def run_update_job(
             step_logs.append(f"[{datetime.utcnow().isoformat()}] Extra apt steps requested: {', '.join(job.apt_extra_steps)}")
         step_logs.append(f"[{datetime.utcnow().isoformat()}] Running update command")
 
-        sudo_password = server.sudo_password or server.password
         exit_code, output, timed_out = run_remote_command(
             client,
             command,
