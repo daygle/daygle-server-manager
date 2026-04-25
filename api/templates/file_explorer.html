@@ -102,11 +102,11 @@
           <i class="fas fa-floppy-disk"></i>
           <span>Save</span>
         </button>
-        <button type="button" class="btn btn-secondary btn-sm" id="fe-find-btn" title="Find/Replace (Ctrl+F / Ctrl+H)">
+        <button type="button" class="btn btn-info btn-sm" id="fe-find-btn" title="Find/Replace (Ctrl+F / Ctrl+H)">
           <i class="fas fa-magnifying-glass"></i>
           <span>Find/Replace</span>
         </button>
-        <button type="button" class="btn btn-secondary btn-sm" id="fe-wrap-btn" title="Toggle word wrap">
+        <button type="button" class="btn btn-warning btn-sm" id="fe-wrap-btn" title="Toggle word wrap">
           <i class="fas fa-text-width"></i>
           <span>Word Wrap</span>
         </button>
@@ -655,10 +655,18 @@
     chmodPathLabel.textContent = entryPath;
     checkboxesFromOctal(modeOctal || "644");
     chmodModal.style.display = "";
+    requestAnimationFrame(() => {
+      chmodModal.classList.add("show");
+      const inner = chmodModal.querySelector(".modal");
+      if (inner) inner.classList.add("show");
+    });
   }
 
   function closeChmodModal() {
-    chmodModal.style.display = "none";
+    chmodModal.classList.remove("show");
+    const inner = chmodModal.querySelector(".modal");
+    if (inner) inner.classList.remove("show");
+    setTimeout(() => { chmodModal.style.display = "none"; }, 200);
     chmodModal._targetPath = null;
   }
 
