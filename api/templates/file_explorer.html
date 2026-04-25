@@ -106,6 +106,10 @@
           <i class="fas fa-magnifying-glass"></i>
           <span>Find/Replace</span>
         </button>
+        <button type="button" class="btn btn-secondary btn-sm" id="fe-wrap-btn" title="Toggle word wrap">
+          <i class="fas fa-text-width"></i>
+          <span>Word Wrap</span>
+        </button>
         <button type="button" class="btn btn-primary btn-sm" id="fe-download-btn">
           <i class="fas fa-download"></i>
           <span>Download</span>
@@ -150,7 +154,7 @@
         </div>
         <div class="fe-editor-wrap">
           <div id="fe-line-numbers" class="fe-line-numbers" aria-hidden="true"></div>
-          <textarea id="fe-editor" class="fe-editor" wrap="off" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+          <textarea id="fe-editor" class="fe-editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
         </div>
       </div>
     </div>
@@ -231,6 +235,7 @@
   const editorInfo     = document.getElementById("fe-editor-info");
   const saveBtn        = document.getElementById("fe-save-btn");
   const findBtn        = document.getElementById("fe-find-btn");
+  const wrapBtn         = document.getElementById("fe-wrap-btn");
   const downloadBtn    = document.getElementById("fe-download-btn");
   const chmodBtn       = document.getElementById("fe-chmod-btn");
   const renameBtn      = document.getElementById("fe-rename-btn");
@@ -859,6 +864,27 @@
   });
 
   saveBtn.addEventListener("click", saveFile);
+  // ── Word wrap toggle ──────────────────────────────────────────────────
+  let feWordWrap = localStorage.getItem("fe-word-wrap") !== "off";
+  function applyWordWrap() {
+    if (feWordWrap) {
+      editor.removeAttribute("wrap");
+      wrapBtn.classList.add("active");
+      wrapBtn.title = "Word wrap: on";
+    } else {
+      editor.setAttribute("wrap", "off");
+      wrapBtn.classList.remove("active");
+      wrapBtn.title = "Word wrap: off";
+    }
+    updateLineNumbers();
+  }
+  wrapBtn.addEventListener("click", () => {
+    feWordWrap = !feWordWrap;
+    localStorage.setItem("fe-word-wrap", feWordWrap ? "on" : "off");
+    applyWordWrap();
+  });
+  applyWordWrap();
+
   findBtn.addEventListener("click", () => openFindPanel(false));
   findNextBtn.addEventListener("click", findNext);
   replaceBtn.addEventListener("click", replaceCurrent);
