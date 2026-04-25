@@ -4,6 +4,7 @@ import io
 import re
 from datetime import datetime
 from time import monotonic, sleep
+from typing import Callable
 
 import paramiko
 from sqlalchemy.orm import Session
@@ -169,6 +170,7 @@ def run_remote_command(
     command: str,
     sudo_password: str | None,
     timeout_seconds: int = REMOTE_COMMAND_TIMEOUT_SECONDS,
+    stop_requested_fn: Callable[[], bool] | None = None,
 ) -> tuple[int, str, bool]:
     stdin, stdout, stderr = client.exec_command(command, get_pty=True)
     if sudo_password and "sudo -S" in command:
@@ -185,6 +187,16 @@ def run_remote_command(
             stdout_chunks.append(channel.recv(4096).decode("utf-8", errors="replace"))
         while channel.recv_stderr_ready():
             stderr_chunks.append(channel.recv_stderr(4096).decode("utf-8", errors="replace"))
+
+        if stop_requested_fn and stop_requested_fn():
+            channel.close()
+            combined = "".join(stdout_chunks)
+            err = "".join(stderr_chunks)
+            if err:
+                combined = f"{combined}\n\n[stderr]\n{err}".strip()
+            stop_message = "Job stop requested by user."
+            combined = f"{stop_message}\n\n{combined}".strip()
+            return -2, combined, False
 
         if channel.exit_status_ready():
             break
@@ -392,6 +404,8 @@ def run_check_job(
     job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
     if not job:
         return
+    if job.status not in {"pending", "running"}:
+        return
 
     server = db.query(Server).filter(Server.id == job.server_id).first()
     if not server:
@@ -458,8 +472,35 @@ def run_check_job(
             command,
             sudo_password,
             timeout_seconds=command_timeout_seconds,
+            stop_requested_fn=lambda: bool(
+                db.query(UpdateJob.id)
+                .filter(
+                    UpdateJob.id == job_id,
+                    UpdateJob.status == "skipped",
+                    UpdateJob.summary == "Stopped by user",
+                )
+                .first()
+            ),
         )
         output = redact_secrets(output, [server_password, server_sudo_password])
+
+        if exit_code == -2:
+            summary = "Stopped by user"
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Job stop requested by user")
+            output_with_steps = (
+                "[summary]\n"
+                + summary
+                + "\n\n[steps]\n"
+                + "\n".join(step_logs)
+                + "\n\n[command-output]\n"
+                + (clean_command_output(package_manager, output) or "No relevant command output.")
+            ).strip()
+            job.status = "skipped"
+            job.output = output_with_steps
+            job.summary = summary
+            job.finished_at = datetime.utcnow()
+            db.commit()
+            return
 
         updates_available, count, summary = parse_check_result(package_manager, output, exit_code, timed_out)
 
@@ -524,6 +565,8 @@ def run_update_job(
 ) -> None:
     job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
     if not job:
+        return
+    if job.status not in {"pending", "running"}:
         return
 
     server = db.query(Server).filter(Server.id == job.server_id).first()
@@ -593,8 +636,36 @@ def run_update_job(
             command,
             sudo_password,
             timeout_seconds=command_timeout_seconds,
+            stop_requested_fn=lambda: bool(
+                db.query(UpdateJob.id)
+                .filter(
+                    UpdateJob.id == job_id,
+                    UpdateJob.status == "skipped",
+                    UpdateJob.summary == "Stopped by user",
+                )
+                .first()
+            ),
         )
         output = redact_secrets(output, [server_password, server_sudo_password])
+
+        if exit_code == -2:
+            summary = "Stopped by user"
+            step_logs.append(f"[{datetime.utcnow().isoformat()}] Job stop requested by user")
+            output_with_steps = (
+                "[summary]\n"
+                + summary
+                + "\n\n[steps]\n"
+                + "\n".join(step_logs)
+                + "\n\n[command-output]\n"
+                + (clean_command_output(package_manager, output) or "No relevant command output.")
+            ).strip()
+            job.status = "skipped"
+            job.output = output_with_steps
+            job.summary = summary
+            job.finished_at = datetime.utcnow()
+            db.commit()
+            return
+
         summary = summarize_update_result(package_manager, output, exit_code, timed_out)
 
         if exit_code == 0 and not timed_out:

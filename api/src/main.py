@@ -1577,7 +1577,18 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     total_servers = db.query(func.count(Server.id)).scalar() or 0
     servers_online = db.query(func.count(Server.id)).filter(Server.last_health_status == "online").scalar() or 0
     running_jobs = db.query(func.count(UpdateJob.id)).filter(UpdateJob.status == "running").scalar() or 0
-    failed_jobs = db.query(func.count(UpdateJob.id)).filter(UpdateJob.status == "failed").scalar() or 0
+    failed_jobs = (
+        db.query(func.count(func.distinct(UpdateJob.id)))
+        .outerjoin(
+            Alert,
+            (Alert.source_type == "update_job")
+            & (Alert.source_id == func.cast(UpdateJob.id, String)),
+        )
+        .filter(UpdateJob.status == "failed")
+        .filter(or_(Alert.id.is_(None), Alert.acknowledged_at.is_(None)))
+        .scalar()
+        or 0
+    )
     unacknowledged_alerts = db.query(func.count(Alert.id)).filter(Alert.acknowledged_at.is_(None)).scalar() or 0
     latest_jobs = db.query(UpdateJob).order_by(UpdateJob.created_at.desc()).limit(10).all()
     servers = db.query(Server).order_by(Server.name.asc()).all()
@@ -4565,3 +4576,49 @@ def get_update_job(job_id: int, request: Request, db: Session = Depends(get_db))
         detail=f"Viewed job output status={job.status}; server_id={job.server_id}",
     )
     return job
+
+
+@app.post("/api/updates/{job_id}/stop")
+def stop_update_job(job_id: int, request: Request, db: Session = Depends(get_db)):
+    current_user = require_api_user(request, db, admin=True)
+
+    job = db.query(UpdateJob).filter(UpdateJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Update job not found")
+
+    if job.status not in {"pending", "running"}:
+        raise HTTPException(status_code=409, detail=f"Job is already {job.status}.")
+
+    stopped_at = datetime.utcnow()
+    stop_note = f"[system]\nStopped by {current_user.username} at {stopped_at.isoformat()} UTC."
+    if job.output:
+        job.output = f"{job.output.rstrip()}\n\n{stop_note}".strip()
+    else:
+        job.output = stop_note
+
+    previous_status = job.status
+    job.status = "skipped"
+    job.summary = "Stopped by user"
+    if not job.started_at:
+        job.started_at = stopped_at
+    job.finished_at = stopped_at
+    db.commit()
+    db.refresh(job)
+
+    log_audit(
+        db,
+        "update.job.stop",
+        request=request,
+        actor=current_user,
+        target_type="update_job",
+        target_id=job.id,
+        target_label=f"Job #{job.id}",
+        detail=f"Stopped job from status={previous_status}; server_id={job.server_id}",
+    )
+
+    return {
+        "message": "Job stop requested",
+        "job_id": job.id,
+        "status": job.status,
+        "summary": job.summary,
+    }

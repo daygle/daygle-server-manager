@@ -1348,6 +1348,10 @@ function setServerStatusLastUpdated(value) {
 function renderJobRow(job) {
   const jobTypeLabel = job.job_type === "scheduled" ? "Scheduled" : "Manual";
   const packageManagerLabel = job.package_manager === "auto" ? "Automatically Detect" : job.package_manager;
+  const canStop = job.status === "pending" || job.status === "running";
+  const actionsCell = canStop
+    ? `<button type="button" class="btn btn-warning btn-sm btn-icon-only" data-stop-job="${job.id}" title="Stop job"><i class="fas fa-stop"></i></button>`
+    : "-";
   return `
       <tr data-job-id="${job.id}" class="job-row" title="Click to view output">
         <td>${job.id}</td>
@@ -1359,6 +1363,7 @@ function renderJobRow(job) {
         <td>${escapeHtml(formatDateTimeForUi(job.started_at))}</td>
         <td>${escapeHtml(formatDateTimeForUi(job.finished_at))}</td>
         <td>${formatOutputPreview(job)}</td>
+        <td>${actionsCell}</td>
       </tr>
     `;
 }
@@ -1476,7 +1481,7 @@ async function loadJobs() {
 
   const jobs = await response.json();
   if (jobs.length === 0) {
-    jobsBody.innerHTML = '<tr><td colspan="9">No jobs yet.</td></tr>';
+    jobsBody.innerHTML = '<tr><td colspan="10">No jobs yet.</td></tr>';
     selectedJobId = null;
     return;
   }
@@ -1499,6 +1504,40 @@ async function loadJobs() {
 jobsBody?.addEventListener("click", async (event) => {
   const target = event.target;
   const element = target instanceof Element ? target : target?.parentElement;
+  const stopButton = element?.closest("[data-stop-job]");
+  if (stopButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    const jobId = Number(stopButton.getAttribute("data-stop-job"));
+    if (!jobId) {
+      return;
+    }
+    if (!window.confirm(`Stop job #${jobId}?`)) {
+      return;
+    }
+
+    stopButton.setAttribute("disabled", "disabled");
+    try {
+      const response = await fetch(`/api/updates/${jobId}/stop`, { method: "POST" });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ detail: "Failed to stop job." }));
+        notify(error.detail || "Failed to stop job.", "error");
+      } else {
+        notify("Stop requested. Refreshing jobs...", "success");
+        if (window.location.pathname.startsWith("/updates/jobs")) {
+          window.location.reload();
+        } else {
+          await loadJobs();
+        }
+      }
+    } catch (error) {
+      notify(`Failed to stop job: ${error.message}`, "error");
+    } finally {
+      stopButton.removeAttribute("disabled");
+    }
+    return;
+  }
+
   const row = element?.closest("tr[data-job-id]");
   if (!row) {
     return;

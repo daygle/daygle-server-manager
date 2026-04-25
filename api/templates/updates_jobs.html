@@ -138,6 +138,7 @@
             <th class="hide-mobile">Started</th>
             <th class="hide-mobile">Finished</th>
             <th>Result</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody id="jobs-body">
@@ -152,10 +153,19 @@
             <td class="hide-mobile">{{ format_dt(job.started_at) }}</td>
             <td class="hide-mobile">{{ format_dt(job.finished_at) }}</td>
             <td>{{ job.summary or ('-' if job.status == 'pending' or job.status == 'running' else 'Update completed') }}</td>
+            <td>
+              {% if job.status == 'pending' or job.status == 'running' %}
+              <button type="button" class="btn btn-warning btn-sm btn-icon-only" data-stop-job="{{ job.id }}" title="Stop job">
+                <i class="fas fa-stop"></i>
+              </button>
+              {% else %}
+              -
+              {% endif %}
+            </td>
           </tr>
           {% else %}
           <tr>
-            <td colspan="9" class="text-center empty-state">
+            <td colspan="10" class="text-center empty-state">
               <div>
                 <i class="fas fa-search empty-icon"></i>
                 <p>No jobs yet{% if search_q or selected_status or selected_job_type or selected_date_from or selected_date_to %} matching your filters{% endif %}.</p>
