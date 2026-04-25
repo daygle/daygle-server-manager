@@ -865,7 +865,7 @@
 
   saveBtn.addEventListener("click", saveFile);
   // ── Word wrap toggle ──────────────────────────────────────────────────
-  let feWordWrap = localStorage.getItem("fe-word-wrap") !== "off";
+  let feWordWrap = localStorage.getItem("fe-word-wrap") === "on";
   function applyWordWrap() {
     if (feWordWrap) {
       editorEl.removeAttribute("wrap");
