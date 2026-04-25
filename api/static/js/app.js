@@ -1251,6 +1251,10 @@ function formatDateTimeForUi(value) {
 }
 
 function formatOutputPreview(job) {
+  if (job.status === "failed") {
+    return escapeHtml(`${job.summary || "Update failed"} - press View Output`);
+  }
+
   if (job.summary) {
     return escapeHtml(job.summary);
   }

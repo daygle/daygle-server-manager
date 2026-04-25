@@ -157,7 +157,13 @@
             <td class="hide-mobile">{{ format_dt(job.created_at) }}</td>
             <td class="hide-mobile">{{ format_dt(job.started_at) }}</td>
             <td class="hide-mobile">{{ format_dt(job.finished_at) }}</td>
-            <td>{{ job.summary or ('-' if job.status == 'pending' or job.status == 'running' else 'Update completed') }}</td>
+            <td>
+              {% if job.status == 'failed' %}
+              {{ (job.summary or 'Update failed') ~ ' - press View Output' }}
+              {% else %}
+              {{ job.summary or ('-' if job.status == 'pending' or job.status == 'running' else 'Update completed') }}
+              {% endif %}
+            </td>
             <td>
               <div class="flex-gap-8">
                 <button type="button" class="btn btn-primary btn-sm btn-icon-only" data-view-job="{{ job.id }}" title="View output">
