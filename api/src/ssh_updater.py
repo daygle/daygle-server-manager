@@ -350,7 +350,7 @@ def parse_check_result(package_manager: str, output: str, exit_code: int, timed_
         return False, 0, "Timed out checking for updates"
     if exit_code not in (0, 1, 100):
         # dnf/yum returns 100 when updates are available; 1 = error for some managers
-        return False, 0, "Check failed (see details)"
+        return False, 0, "Check failed (see output)"
 
     lower = output.lower()
 
