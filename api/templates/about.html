@@ -41,7 +41,7 @@
             <span>Overview</span>
           </h3>
           <p class="help-intro">Daygle Server Manager is a self-hosted web application for remotely patching and maintaining Linux servers over SSH.</p>
-          <p>It provides a central control panel to trigger package manager updates, define recurring maintenance schedules, track job history, and receive notifications when something needs attention — all without requiring direct shell access to each server.</p>
+          <p>It provides a central control panel to trigger package manager updates, define recurring maintenance schedules, track job history, and receive notifications when something needs attention - all without requiring direct shell access to each server.</p>
           <p>The application is built with Python and FastAPI, deployed via Docker Compose. All configuration is stored in a single <code>daygle_server_manager.conf</code> file, keeping setup straightforward and portable.</p>
           <p>For step-by-step usage instructions, see the <a href="/help">Help</a> page.</p>
         </section>
@@ -52,16 +52,16 @@
             <span>Key Features</span>
           </h3>
           <ul>
-            <li><strong>SSH-based updates</strong> — run package manager updates on remote servers using stored credentials. Supports <code>apt</code>, <code>dnf</code>, <code>yum</code>, and auto-detection.</li>
-            <li><strong>Scheduled updates</strong> — define cron-based schedules with full timezone support for fully automated, recurring maintenance windows.</li>
-            <li><strong>Job history</strong> — every update operation is logged with status, output, and timestamps for a complete audit trail.</li>
-            <li><strong>Alerts</strong> — failed jobs and post-update reboot requirements generate alerts in the UI. Optional SMTP delivery notifies admins by email.</li>
-            <li><strong>Audit log</strong> — records all administrative actions, configuration changes, and system events for traceability and compliance.</li>
-            <li><strong>SSH key management</strong> — generate or import SSH key pairs directly in the UI. Private keys are encrypted at rest.</li>
-            <li><strong>File explorer</strong> — browse, view, edit, upload, and download files on remote servers over SFTP without leaving the browser.</li>
-            <li><strong>SSH terminal</strong> — run ad-hoc commands on a server via an in-browser terminal session.</li>
-            <li><strong>Server status</strong> — monitor CPU, RAM, storage, and load across all configured servers at a glance.</li>
-            <li><strong>Multi-user support</strong> — manage multiple users with admin or standard roles, per-user display preferences, and individual timezone settings.</li>
+            <li><strong>SSH-based updates</strong> - run package manager updates on remote servers using stored credentials. Supports <code>apt</code>, <code>dnf</code>, <code>yum</code>, and auto-detection.</li>
+            <li><strong>Scheduled updates</strong> - define cron-based schedules with full timezone support for fully automated, recurring maintenance windows.</li>
+            <li><strong>Job history</strong> - every update operation is logged with status, output, and timestamps for a complete audit trail.</li>
+            <li><strong>Alerts</strong> - failed jobs and post-update reboot requirements generate alerts in the UI. Optional SMTP delivery notifies admins by email.</li>
+            <li><strong>Audit log</strong> - records all administrative actions, configuration changes, and system events for traceability and compliance.</li>
+            <li><strong>SSH key management</strong> - generate or import SSH key pairs directly in the UI. Private keys are encrypted at rest.</li>
+            <li><strong>File explorer</strong> - browse, view, edit, upload, and download files on remote servers over SFTP without leaving the browser.</li>
+            <li><strong>SSH terminal</strong> - run ad-hoc commands on a server via an in-browser terminal session.</li>
+            <li><strong>Server status</strong> - monitor CPU, RAM, storage, and load across all configured servers at a glance.</li>
+            <li><strong>Multi-user support</strong> - manage multiple users with admin or standard roles, per-user display preferences, and individual timezone settings.</li>
           </ul>
         </section>
 
@@ -71,10 +71,10 @@
             <span>Technology Stack</span>
           </h3>
           <ul>
-            <li><strong>API</strong> — Python 3, FastAPI, SQLAlchemy, Jinja2</li>
-            <li><strong>Worker</strong> — Python background process managing SSH update jobs and cron schedule execution</li>
-            <li><strong>Database</strong> — PostgreSQL</li>
-            <li><strong>Deployment</strong> — Docker Compose</li>
+            <li><strong>API</strong> - Python 3, FastAPI, SQLAlchemy, Jinja2</li>
+            <li><strong>Worker</strong> - Python background process managing SSH update jobs and cron schedule execution</li>
+            <li><strong>Database</strong> - PostgreSQL</li>
+            <li><strong>Deployment</strong> - Docker Compose</li>
           </ul>
         </section>
 
@@ -83,3 +83,4 @@
   </main>
 </div>
 {% endblock %}
+
