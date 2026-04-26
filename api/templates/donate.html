@@ -4,118 +4,138 @@
 {% block title %}Donate{% endblock %}
 
 {% block content %}
-<div class="docs-layout">
-  <section class="card prose">
-    <div class="card-header">
-      <div class="card-title">
-        <i class="fab fa-paypal"></i>
-        <span>Donate via PayPal</span>
+<div class="help-docs-layout">
+  <aside class="help-toc-card">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">
+          <i class="fas fa-hand-holding-heart"></i>
+          <span>Contents</span>
+        </h4>
+      </div>
+      <div class="card-body p-0">
+        <nav class="help-toc-nav">
+          <a href="#donate-paypal" class="help-toc-link"><i class="fab fa-paypal"></i> Donate via PayPal</a>
+          <a href="#other-support" class="help-toc-link"><i class="fas fa-hands-helping"></i> Other Ways to Support</a>
+          <a href="#why-donate" class="help-toc-link"><i class="fas fa-heart"></i> Why Donate?</a>
+        </nav>
       </div>
     </div>
-    <div class="card-body">
-      <p>
-        Daygle Server Manager is free and open source. If you find it useful, please consider supporting
-        ongoing development. Every contribution helps keep the project maintained and improving.
-      </p>
+  </aside>
 
-      <form action="https://www.paypal.com/donate" method="post" target="_blank" id="donationForm">
-        <input type="hidden" name="business" value="daygle@daygle.net" />
-        <input type="hidden" name="no_recurring" value="0" />
-        <input type="hidden" name="item_name" value="Daygle Server Manager Development" />
-        <input type="hidden" name="currency_code" value="AUD" id="currencyCodeInput" />
+  <main class="help-content">
+    <section class="card prose">
+      <div class="card-header">
+        <h2 class="card-title">
+          <i class="fas fa-hand-holding-heart"></i>
+          <span>Support Daygle Server Manager</span>
+        </h2>
+      </div>
+      <div class="card-body help-body">
 
-        <div class="form-group">
-          <label for="amount" class="form-label">Donation Amount</label>
-          <div class="two-col-grid">
-            <div class="form-group mb-0">
-              <label for="amount" class="form-label">Amount</label>
-              <div class="donation-amount-wrap">
-                <span id="currencySymbol" class="donation-currency-symbol">$</span>
-                <input
-                  type="number"
-                  class="form-control donation-amount-input"
-                  id="amount"
-                  name="amount"
-                  min="1"
-                  step="0.01"
-                  placeholder="10.00"
-                />
+        <section id="donate-paypal" class="help-section">
+          <h3 class="help-heading">
+            <i class="fab fa-paypal help-icon"></i>
+            <span>Donate via PayPal</span>
+          </h3>
+          <p class="help-intro">
+            Daygle Server Manager is free and open source. If you find it useful, please consider supporting
+            ongoing development. Every contribution helps keep the project maintained and improving.
+          </p>
+
+          <form action="https://www.paypal.com/donate" method="post" target="_blank" id="donationForm">
+            <input type="hidden" name="business" value="daygle@daygle.net" />
+            <input type="hidden" name="no_recurring" value="0" />
+            <input type="hidden" name="item_name" value="Daygle Server Manager Development" />
+            <input type="hidden" name="currency_code" value="AUD" id="currencyCodeInput" />
+
+            <div class="form-group">
+              <label for="amount" class="form-label">Donation Amount</label>
+              <div class="two-col-grid">
+                <div class="form-group mb-0">
+                  <label for="amount" class="form-label">Amount</label>
+                  <div class="donation-amount-wrap">
+                    <span id="currencySymbol" class="donation-currency-symbol">$</span>
+                    <input
+                      type="number"
+                      class="form-control donation-amount-input"
+                      id="amount"
+                      name="amount"
+                      min="1"
+                      step="0.01"
+                      placeholder="10.00"
+                    />
+                  </div>
+                </div>
+                <div class="form-group mb-0">
+                  <label for="currency" class="form-label">Currency</label>
+                  <select class="form-select" id="currency" name="currency">
+                    <option value="AUD" data-symbol="$" selected>AUD - Australian Dollar</option>
+                    <option value="USD" data-symbol="$">USD - US Dollar</option>
+                    <option value="EUR" data-symbol="€">EUR - Euro</option>
+                    <option value="GBP" data-symbol="£">GBP - British Pound</option>
+                    <option value="CAD" data-symbol="$">CAD - Canadian Dollar</option>
+                    <option value="JPY" data-symbol="¥">JPY - Japanese Yen</option>
+                    <option value="CHF" data-symbol="CHF">CHF - Swiss Franc</option>
+                    <option value="SEK" data-symbol="kr">SEK - Swedish Krona</option>
+                    <option value="NOK" data-symbol="kr">NOK - Norwegian Krone</option>
+                    <option value="DKK" data-symbol="kr">DKK - Danish Krone</option>
+                    <option value="NZD" data-symbol="$">NZD - New Zealand Dollar</option>
+                    <option value="MXN" data-symbol="$">MXN - Mexican Peso</option>
+                    <option value="SGD" data-symbol="$">SGD - Singapore Dollar</option>
+                    <option value="HKD" data-symbol="$">HKD - Hong Kong Dollar</option>
+                    <option value="INR" data-symbol="₹">INR - Indian Rupee</option>
+                    <option value="BRL" data-symbol="R$">BRL - Brazilian Real</option>
+                  </select>
+                </div>
               </div>
+              <small class="form-text">Enter any amount you wish to donate.</small>
             </div>
-            <div class="form-group mb-0">
-              <label for="currency" class="form-label">Currency</label>
-              <select class="form-select" id="currency" name="currency">
-                <option value="AUD" data-symbol="$" selected>AUD - Australian Dollar</option>
-                <option value="USD" data-symbol="$">USD - US Dollar</option>
-                <option value="EUR" data-symbol="€">EUR - Euro</option>
-                <option value="GBP" data-symbol="£">GBP - British Pound</option>
-                <option value="CAD" data-symbol="$">CAD - Canadian Dollar</option>
-                <option value="JPY" data-symbol="¥">JPY - Japanese Yen</option>
-                <option value="CHF" data-symbol="CHF">CHF - Swiss Franc</option>
-                <option value="SEK" data-symbol="kr">SEK - Swedish Krona</option>
-                <option value="NOK" data-symbol="kr">NOK - Norwegian Krone</option>
-                <option value="DKK" data-symbol="kr">DKK - Danish Krone</option>
-                <option value="NZD" data-symbol="$">NZD - New Zealand Dollar</option>
-                <option value="MXN" data-symbol="$">MXN - Mexican Peso</option>
-                <option value="SGD" data-symbol="$">SGD - Singapore Dollar</option>
-                <option value="HKD" data-symbol="$">HKD - Hong Kong Dollar</option>
-                <option value="INR" data-symbol="₹">INR - Indian Rupee</option>
-                <option value="BRL" data-symbol="R$">BRL - Brazilian Real</option>
-              </select>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">
+                <i class="fab fa-paypal"></i>
+                <span>Donate with PayPal</span>
+              </button>
             </div>
+          </form>
+        </section>
+
+        <section id="other-support" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-hands-helping help-icon"></i>
+            <span>Other Ways to Support</span>
+          </h3>
+          <ul>
+            <li>Star the project on GitHub</li>
+            <li>Report bugs and suggest features</li>
+            <li>Contribute code or documentation</li>
+            <li>Share the project with others</li>
+          </ul>
+        </section>
+
+        <section id="why-donate" class="help-section">
+          <h3 class="help-heading">
+            <i class="fas fa-heart help-icon"></i>
+            <span>Why Donate?</span>
+          </h3>
+          <ul>
+            <li>Supports ongoing development</li>
+            <li>Helps with infrastructure costs</li>
+            <li>Enables new features</li>
+            <li>Maintains documentation</li>
+            <li>Provides bug fixes</li>
+          </ul>
+
+          <div class="alert alert-info mb-0">
+            <strong>Thank you!</strong><br />
+            Your support helps keep this project moving forward.
           </div>
-          <small class="form-text">Enter any amount you wish to donate.</small>
-        </div>
+        </section>
 
-        <div class="form-actions">
-          <button type="submit" class="btn btn-primary">
-            <i class="fab fa-paypal"></i>
-            <span>Donate with PayPal</span>
-          </button>
-        </div>
-      </form>
-    </div>
-  </section>
-
-  <section class="card prose">
-    <div class="card-header">
-      <div class="card-title">
-        <i class="fas fa-hands-helping"></i>
-        <span>Other Ways to Support</span>
       </div>
-    </div>
-    <div class="card-body">
-      <ul>
-        <li>Star the project on GitHub</li>
-        <li>Report bugs and suggest features</li>
-        <li>Contribute code or documentation</li>
-        <li>Share the project with others</li>
-      </ul>
-    </div>
-  </section>
-
-  <section class="card prose">
-    <div class="card-header">
-      <div class="card-title">
-        <i class="fas fa-heart"></i>
-        <span>Why Donate?</span>
-      </div>
-    </div>
-    <div class="card-body">
-      <ul>
-        <li>Supports ongoing development</li>
-        <li>Helps with infrastructure costs</li>
-        <li>Enables new features</li>
-        <li>Maintains documentation</li>
-        <li>Provides bug fixes</li>
-      </ul>
-
-      <div class="alert alert-info mb-0">
-        <strong>Thank you!</strong><br />
-        Your support helps keep this project moving forward.
-      </div>
-    </div>
-  </section>
+    </section>
+  </main>
 </div>
 
 <script>
