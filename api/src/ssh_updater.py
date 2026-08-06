@@ -331,8 +331,6 @@ def parse_check_result(package_manager: str, output: str, exit_code: int, timed_
         # dnf/yum returns 100 when updates are available; 1 = error for some managers
         return False, 0, "Check failed (see output)"
 
-    lower = output.lower()
-
     if package_manager == "apt":
         # apt list --upgradable prints one line per upgradable package (plus a header)
         lines = [
