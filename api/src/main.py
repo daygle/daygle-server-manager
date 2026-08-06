@@ -3572,8 +3572,7 @@ def create_ssh_key(payload: SSHKeyCreate, request: Request, db: Session = Depend
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
-    import base64
-    
+
     try:
         # Try to load the private key
         private_key = serialization.load_pem_private_key(
@@ -3642,7 +3641,6 @@ def generate_ssh_key(
         PrivateFormat,
         PublicFormat,
     )
-    import base64
 
     raw_private = Ed25519PrivateKey.generate()
     pem_bytes = raw_private.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption())
@@ -4152,6 +4150,7 @@ def file_explorer_delete(
         attr = sftp.stat(resolved)
         if stat_mod.S_ISDIR(attr.st_mode or 0):
             if not recursive:
+                # Non-recursive delete only removes an empty directory; rmdir fails otherwise.
                 try:
                     sftp.rmdir(resolved)
                 except Exception as exc:
@@ -4162,20 +4161,20 @@ def file_explorer_delete(
                             "to remove a folder and all of its contents."
                         ),
                     ) from exc
+            else:
+                def _delete_tree(dir_path: str) -> None:
+                    for entry in sftp.listdir_attr(dir_path):
+                        name = entry.filename
+                        if name in (".", ".."):
+                            continue
+                        child_path = f"{dir_path.rstrip('/')}/{name}"
+                        if stat_mod.S_ISDIR(entry.st_mode or 0):
+                            _delete_tree(child_path)
+                        else:
+                            sftp.remove(child_path)
+                    sftp.rmdir(dir_path)
 
-            def _delete_tree(dir_path: str) -> None:
-                for entry in sftp.listdir_attr(dir_path):
-                    name = entry.filename
-                    if name in (".", ".."):
-                        continue
-                    child_path = f"{dir_path.rstrip('/')}/{name}"
-                    if stat_mod.S_ISDIR(entry.st_mode or 0):
-                        _delete_tree(child_path)
-                    else:
-                        sftp.remove(child_path)
-                sftp.rmdir(dir_path)
-
-            _delete_tree(resolved)
+                _delete_tree(resolved)
         else:
             sftp.remove(resolved)
         sftp.close()
