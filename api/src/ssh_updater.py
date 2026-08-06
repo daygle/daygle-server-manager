@@ -14,13 +14,6 @@ from .models import Server, UpdateJob
 SSH_CONNECT_TIMEOUT_SECONDS = 30
 REMOTE_COMMAND_TIMEOUT_SECONDS = 1800
 
-APT_PROGRESS_PREFIXES = (
-    "Reading package lists...",
-    "Building dependency tree...",
-    "Reading state information...",
-    "Calculating upgrade...",
-)
-
 REDACTION_PLACEHOLDER = "[REDACTED]"
 
 
@@ -62,22 +55,6 @@ def should_skip_output_line(package_manager: str, line: str) -> bool:
         return True
 
     return False
-
-
-def is_noisy_apt_line(line: str) -> bool:
-    if line == "[stderr]":
-        return False
-
-    if re.match(r"^\d+%\s+\[.*\]$", line):
-        return True
-
-    if re.match(r"^(Hit|Get|Ign):\d+\s", line):
-        return True
-
-    if re.match(r"^Fetched\s+.+\sin\s.+\(.+\/s\)$", line):
-        return True
-
-    return any(line.startswith(prefix) for prefix in APT_PROGRESS_PREFIXES)
 
 
 def detect_package_manager(client: paramiko.SSHClient) -> str:
@@ -302,10 +279,12 @@ def build_check_command(package_manager: str, lock_timeout_seconds: int = 120, p
             f"{privilege_prefix}apt-get -o Acquire::Lock::Timeout={lock_timeout_seconds} -o DPkg::Lock::Timeout={lock_timeout_seconds} -q update 2>&1 "
             "&& apt list --upgradable 2>/dev/null"
         )
+    # dnf/yum check-update exits 100 when updates are available and 0 when none are.
+    # parse_check_result relies on that exit code, so we must NOT swallow it with "; true".
     if package_manager == "dnf":
-        return f"{privilege_prefix}dnf check-update; true"
+        return f"{privilege_prefix}dnf check-update"
     if package_manager == "yum":
-        return f"{privilege_prefix}yum check-update; true"
+        return f"{privilege_prefix}yum check-update"
     raise ValueError("Unsupported package manager")
 
 
@@ -351,8 +330,6 @@ def parse_check_result(package_manager: str, output: str, exit_code: int, timed_
     if exit_code not in (0, 1, 100):
         # dnf/yum returns 100 when updates are available; 1 = error for some managers
         return False, 0, "Check failed (see output)"
-
-    lower = output.lower()
 
     if package_manager == "apt":
         # apt list --upgradable prints one line per upgradable package (plus a header)
@@ -558,13 +535,14 @@ def run_check_job(
 
         if updates_available:
             step_logs.append(f"[{datetime.utcnow().isoformat()}] {summary} — creating alert")
+            # create_alert accepts keyword-only arguments after the db session.
             create_alert_fn(
                 db,
-                "warning",
-                f"Updates available: {server.name}",
-                f"{summary} on {server.name} ({server.host}). Log in and run updates when ready.",
-                "update_job",
-                str(job_id),
+                level="warning",
+                title=f"Updates available: {server.name}",
+                message=f"{summary} on {server.name} ({server.host}). Log in and run updates when ready.",
+                source_type="update_job",
+                source_id=str(job_id),
             )
         else:
             step_logs.append(f"[{datetime.utcnow().isoformat()}] {summary}")

@@ -1,21 +1,20 @@
 from __future__ import annotations
 
 import asyncio
-import io
 import json
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from pathlib import Path
 import secrets
 import smtplib
-from threading import Thread
+from threading import Lock, Thread
 from time import monotonic, sleep
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from zoneinfo import ZoneInfo, available_timezones
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from croniter import croniter
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import paramiko
@@ -40,17 +39,68 @@ from .schemas import (
     UpdateScheduleRead,
 )
 from .security import hash_password, verify_password
-from .ssh_updater import run_check_job, run_update_job
+from .ssh_updater import load_private_key_for_ssh, run_check_job, run_update_job
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Known placeholder secrets shipped in config.py DEFAULTS and the example conf.
+# The app refuses to start with any of these so a misconfigured deployment can
+# never sign session cookies with a publicly known key.
+INSECURE_SESSION_SECRETS = {
+    "change-me-in-production",
+    "replace-with-long-random-secret",
+}
+MIN_SESSION_SECRET_LENGTH = 16
+
+
+def load_session_secret() -> str:
+    secret = get_setting("SESSION_SECRET")
+    if not secret or secret in INSECURE_SESSION_SECRETS or len(secret) < MIN_SESSION_SECRET_LENGTH:
+        raise RuntimeError(
+            "SESSION_SECRET is missing, too short, or still set to a default placeholder. "
+            "Set a strong random SESSION_SECRET in daygle_server_manager.conf before starting "
+            "(run ./setup.sh to generate one, or use `openssl rand -hex 32`)."
+        )
+    return secret
+
+
+SESSION_SECRET = load_session_secret()
 
 app = FastAPI(title="Daygle Server Manager", version="0.1.0")
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key=get_setting("SESSION_SECRET"),
+    secret_key=SESSION_SECRET,
     max_age=60 * 60 * 24 * 30,
+    same_site="lax",
 )
+
+SAFE_HTTP_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+
+
+@app.middleware("http")
+async def enforce_same_origin(request: Request, call_next):
+    """Reject state-changing cross-origin requests as a CSRF defense.
+
+    Modern browsers always attach an ``Origin`` header to unsafe requests, so a
+    forged cross-site POST/PUT/DELETE is caught here by comparing the request's
+    origin against its own ``Host``. Requests with neither ``Origin`` nor
+    ``Referer`` (e.g. non-browser API clients) are allowed through; for those the
+    ``SameSite=lax`` session cookie remains the primary defense. Reverse proxies
+    must forward the original ``Host`` header (``proxy_set_header Host $host;``).
+    """
+    if request.method not in SAFE_HTTP_METHODS:
+        source = request.headers.get("origin") or request.headers.get("referer")
+        host = request.headers.get("host")
+        if source and host:
+            source_host = urlsplit(source).netloc
+            if source_host and source_host != host:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "CSRF validation failed: cross-origin request rejected."},
+                )
+    return await call_next(request)
+
 
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -1193,7 +1243,10 @@ def build_server_connect_kwargs(
         ssh_key = db.query(SSHKey).filter(SSHKey.id == resolved_ssh_key_id).first()
         if not ssh_key:
             raise HTTPException(status_code=400, detail="Selected SSH key does not exist")
-        connect_kwargs["pkey"] = load_private_key_for_ssh(ssh_key.private_key)
+        try:
+            connect_kwargs["pkey"] = load_private_key_for_ssh(ssh_key.private_key)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Stored SSH private key format is not supported") from exc
 
     return connect_kwargs
 
@@ -1534,6 +1587,52 @@ def login_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+# ---------------------------------------------------------------------------
+# Login brute-force protection (in-memory; the app runs as a single process).
+# ---------------------------------------------------------------------------
+LOGIN_MAX_FAILURES = 5
+LOGIN_FAILURE_WINDOW_SECONDS = 300  # sliding failure window and lockout duration
+_login_failures: dict[str, list[float]] = {}
+_login_guard_lock = Lock()
+# A wrong password is verified against this pre-computed hash for unknown or
+# disabled accounts so a failed login costs the same time regardless of whether
+# the username exists — preventing timing-based username enumeration.
+_DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
+
+
+def _login_client_key(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip() or "unknown"
+    return request.client.host if request.client else "unknown"
+
+
+def login_attempts_exceeded(client_key: str) -> tuple[bool, int]:
+    now = monotonic()
+    with _login_guard_lock:
+        recent = [t for t in _login_failures.get(client_key, []) if now - t < LOGIN_FAILURE_WINDOW_SECONDS]
+        _login_failures[client_key] = recent
+        if len(recent) >= LOGIN_MAX_FAILURES:
+            retry_after = int(LOGIN_FAILURE_WINDOW_SECONDS - (now - recent[0])) + 1
+            return True, max(1, retry_after)
+    return False, 0
+
+
+def record_login_failure(client_key: str) -> bool:
+    """Record a failed attempt; return True if it just reached the lockout threshold."""
+    now = monotonic()
+    with _login_guard_lock:
+        recent = [t for t in _login_failures.get(client_key, []) if now - t < LOGIN_FAILURE_WINDOW_SECONDS]
+        recent.append(now)
+        _login_failures[client_key] = recent
+        return len(recent) == LOGIN_MAX_FAILURES
+
+
+def clear_login_failures(client_key: str) -> None:
+    with _login_guard_lock:
+        _login_failures.pop(client_key, None)
+
+
 @app.post("/login")
 def login_submit(
     request: Request,
@@ -1544,14 +1643,52 @@ def login_submit(
     if not users_exist(db):
         return RedirectResponse(url="/setup", status_code=303)
 
-    user = db.query(User).filter(User.username == username.strip()).first()
-    if not user or not user.enabled or not verify_password(password, user.password_hash):
+    client_key = _login_client_key(request)
+    limited, retry_after = login_attempts_exceeded(client_key)
+    if limited:
+        minutes = max(1, (retry_after + 59) // 60)
+        set_flash(
+            request,
+            f"Too many failed login attempts. Please try again in about {minutes} minute(s).",
+            "error",
+        )
+        return RedirectResponse(url="/login", status_code=303)
+
+    clean_username = username.strip()
+    user = db.query(User).filter(User.username == clean_username).first()
+    if user and user.enabled:
+        password_ok = verify_password(password, user.password_hash)
+    else:
+        # Equalize timing against the unknown/disabled-user path.
+        verify_password(password, _DUMMY_PASSWORD_HASH)
+        password_ok = False
+
+    if not password_ok:
+        newly_locked = record_login_failure(client_key)
+        log_audit(
+            db,
+            "user.login_failed",
+            request=request,
+            target_type="user",
+            target_label=clean_username[:120] or None,
+            detail="Failed login attempt",
+        )
+        if newly_locked:
+            log_audit(
+                db,
+                "user.login_locked",
+                request=request,
+                detail=f"Login temporarily locked after {LOGIN_MAX_FAILURES} failed attempts",
+            )
         set_flash(request, "Invalid username or password.", "error")
         return RedirectResponse(url="/login", status_code=303)
 
+    clear_login_failures(client_key)
     user.last_login = datetime.utcnow()
     db.commit()
 
+    # Start a fresh session for the newly authenticated user (session-fixation hardening).
+    request.session.clear()
     request.session["user_id"] = user.id
     request.session["last_seen_at"] = int(datetime.utcnow().timestamp())
     log_audit(
@@ -3572,8 +3709,7 @@ def create_ssh_key(payload: SSHKeyCreate, request: Request, db: Session = Depend
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519, ed448
-    import base64
-    
+
     try:
         # Try to load the private key
         private_key = serialization.load_pem_private_key(
@@ -3642,7 +3778,6 @@ def generate_ssh_key(
         PrivateFormat,
         PublicFormat,
     )
-    import base64
 
     raw_private = Ed25519PrivateKey.generate()
     pem_bytes = raw_private.private_bytes(Encoding.PEM, PrivateFormat.OpenSSH, NoEncryption())
@@ -3695,22 +3830,6 @@ def delete_ssh_key(key_id: int, request: Request, db: Session = Depends(get_db))
               target_type="ssh_key", target_id=key_id, target_label=ssh_key.name,
               detail=f"Deleted SSH key type={ssh_key.key_type}")
     return {"message": "SSH key deleted"}
-
-
-def load_private_key_for_ssh(private_key_pem: str) -> paramiko.PKey:
-    key_loaders = [
-        paramiko.Ed25519Key,
-        paramiko.RSAKey,
-        paramiko.ECDSAKey,
-        paramiko.DSSKey,
-    ]
-    last_error: Exception | None = None
-    for loader in key_loaders:
-        try:
-            return loader.from_private_key(io.StringIO(private_key_pem))
-        except Exception as exc:  # pragma: no cover - fallback probing
-            last_error = exc
-    raise HTTPException(status_code=400, detail="Stored SSH private key format is not supported") from last_error
 
 
 @app.post("/api/servers/test-connection")
@@ -4152,6 +4271,7 @@ def file_explorer_delete(
         attr = sftp.stat(resolved)
         if stat_mod.S_ISDIR(attr.st_mode or 0):
             if not recursive:
+                # Non-recursive delete only removes an empty directory; rmdir fails otherwise.
                 try:
                     sftp.rmdir(resolved)
                 except Exception as exc:
@@ -4162,20 +4282,20 @@ def file_explorer_delete(
                             "to remove a folder and all of its contents."
                         ),
                     ) from exc
+            else:
+                def _delete_tree(dir_path: str) -> None:
+                    for entry in sftp.listdir_attr(dir_path):
+                        name = entry.filename
+                        if name in (".", ".."):
+                            continue
+                        child_path = f"{dir_path.rstrip('/')}/{name}"
+                        if stat_mod.S_ISDIR(entry.st_mode or 0):
+                            _delete_tree(child_path)
+                        else:
+                            sftp.remove(child_path)
+                    sftp.rmdir(dir_path)
 
-            def _delete_tree(dir_path: str) -> None:
-                for entry in sftp.listdir_attr(dir_path):
-                    name = entry.filename
-                    if name in (".", ".."):
-                        continue
-                    child_path = f"{dir_path.rstrip('/')}/{name}"
-                    if stat_mod.S_ISDIR(entry.st_mode or 0):
-                        _delete_tree(child_path)
-                    else:
-                        sftp.remove(child_path)
-                sftp.rmdir(dir_path)
-
-            _delete_tree(resolved)
+                _delete_tree(resolved)
         else:
             sftp.remove(resolved)
         sftp.close()

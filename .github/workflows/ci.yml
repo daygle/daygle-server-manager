@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint & compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install ruff
+        run: pip install ruff==0.16.1
+
+      # Scoped to pyflakes (F) + syntax (E9) correctness rules: catches undefined
+      # names, unused imports/variables, and bad f-strings without style noise.
+      - name: Ruff (correctness rules)
+        run: ruff check --select F,E9 api/src worker/src
+
+      - name: Byte-compile all sources
+        run: python -m compileall -q api/src worker/src
+
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Validates each Dockerfile and, for the API image, that requirements.txt
+      # resolves and installs cleanly. Images are built but never pushed.
+      - name: Build API image
+        run: docker build -t daygle-api:ci ./api
+
+      - name: Build worker image
+        run: docker build -t daygle-worker:ci ./worker
