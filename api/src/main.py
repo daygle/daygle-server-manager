@@ -7,7 +7,7 @@ from email.message import EmailMessage
 from pathlib import Path
 import secrets
 import smtplib
-from threading import Thread
+from threading import Lock, Thread
 from time import monotonic, sleep
 from urllib.parse import urlencode, urlsplit
 from zoneinfo import ZoneInfo, available_timezones
@@ -1587,6 +1587,52 @@ def login_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+# ---------------------------------------------------------------------------
+# Login brute-force protection (in-memory; the app runs as a single process).
+# ---------------------------------------------------------------------------
+LOGIN_MAX_FAILURES = 5
+LOGIN_FAILURE_WINDOW_SECONDS = 300  # sliding failure window and lockout duration
+_login_failures: dict[str, list[float]] = {}
+_login_guard_lock = Lock()
+# A wrong password is verified against this pre-computed hash for unknown or
+# disabled accounts so a failed login costs the same time regardless of whether
+# the username exists — preventing timing-based username enumeration.
+_DUMMY_PASSWORD_HASH = hash_password(secrets.token_urlsafe(32))
+
+
+def _login_client_key(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip() or "unknown"
+    return request.client.host if request.client else "unknown"
+
+
+def login_attempts_exceeded(client_key: str) -> tuple[bool, int]:
+    now = monotonic()
+    with _login_guard_lock:
+        recent = [t for t in _login_failures.get(client_key, []) if now - t < LOGIN_FAILURE_WINDOW_SECONDS]
+        _login_failures[client_key] = recent
+        if len(recent) >= LOGIN_MAX_FAILURES:
+            retry_after = int(LOGIN_FAILURE_WINDOW_SECONDS - (now - recent[0])) + 1
+            return True, max(1, retry_after)
+    return False, 0
+
+
+def record_login_failure(client_key: str) -> bool:
+    """Record a failed attempt; return True if it just reached the lockout threshold."""
+    now = monotonic()
+    with _login_guard_lock:
+        recent = [t for t in _login_failures.get(client_key, []) if now - t < LOGIN_FAILURE_WINDOW_SECONDS]
+        recent.append(now)
+        _login_failures[client_key] = recent
+        return len(recent) == LOGIN_MAX_FAILURES
+
+
+def clear_login_failures(client_key: str) -> None:
+    with _login_guard_lock:
+        _login_failures.pop(client_key, None)
+
+
 @app.post("/login")
 def login_submit(
     request: Request,
@@ -1597,14 +1643,52 @@ def login_submit(
     if not users_exist(db):
         return RedirectResponse(url="/setup", status_code=303)
 
-    user = db.query(User).filter(User.username == username.strip()).first()
-    if not user or not user.enabled or not verify_password(password, user.password_hash):
+    client_key = _login_client_key(request)
+    limited, retry_after = login_attempts_exceeded(client_key)
+    if limited:
+        minutes = max(1, (retry_after + 59) // 60)
+        set_flash(
+            request,
+            f"Too many failed login attempts. Please try again in about {minutes} minute(s).",
+            "error",
+        )
+        return RedirectResponse(url="/login", status_code=303)
+
+    clean_username = username.strip()
+    user = db.query(User).filter(User.username == clean_username).first()
+    if user and user.enabled:
+        password_ok = verify_password(password, user.password_hash)
+    else:
+        # Equalize timing against the unknown/disabled-user path.
+        verify_password(password, _DUMMY_PASSWORD_HASH)
+        password_ok = False
+
+    if not password_ok:
+        newly_locked = record_login_failure(client_key)
+        log_audit(
+            db,
+            "user.login_failed",
+            request=request,
+            target_type="user",
+            target_label=clean_username[:120] or None,
+            detail="Failed login attempt",
+        )
+        if newly_locked:
+            log_audit(
+                db,
+                "user.login_locked",
+                request=request,
+                detail=f"Login temporarily locked after {LOGIN_MAX_FAILURES} failed attempts",
+            )
         set_flash(request, "Invalid username or password.", "error")
         return RedirectResponse(url="/login", status_code=303)
 
+    clear_login_failures(client_key)
     user.last_login = datetime.utcnow()
     db.commit()
 
+    # Start a fresh session for the newly authenticated user (session-fixation hardening).
+    request.session.clear()
     request.session["user_id"] = user.id
     request.session["last_seen_at"] = int(datetime.utcnow().timestamp())
     log_audit(

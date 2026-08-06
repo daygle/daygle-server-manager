@@ -305,15 +305,21 @@ document.getElementById('import-form').addEventListener('submit', async (e) => {
   }
 });
 
+function escHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
 function addKeyRow(key) {
   document.getElementById('no-keys-row')?.remove();
   const tbody = document.getElementById('keys-table');
-  const preview = key.public_key.substring(0, 28) + '...';
+  const preview = escHtml(key.public_key.substring(0, 28)) + '...';
   const tr = document.createElement('tr');
   tr.id = `key-row-${key.id}`;
   tr.innerHTML = `
-    <td><strong>${key.name}</strong></td>
-    <td><span class="badge badge-info">${key.key_type}</span></td>
+    <td><strong>${escHtml(key.name)}</strong></td>
+    <td><span class="badge badge-info">${escHtml(key.key_type)}</span></td>
     <td><code class="key-preview">${preview}</code></td>
     <td class="hide-mobile"><small>${formatDateForUi(key.created_at)}</small></td>
     <td>
