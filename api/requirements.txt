@@ -3,7 +3,7 @@ uvicorn[standard]==0.34.0
 SQLAlchemy==2.0.52
 paramiko==5.0.0
 Jinja2==3.1.6
-python-multipart==0.0.31
+python-multipart==0.0.32
 passlib[bcrypt]==1.7.4
 bcrypt==5.0.0
 psycopg2-binary==2.9.10
