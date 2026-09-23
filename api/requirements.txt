@@ -1,6 +1,6 @@
 fastapi==0.141.1
 uvicorn[standard]==0.52.4
-SQLAlchemy==2.0.52
+SQLAlchemy==2.0.54
 paramiko==5.0.0
 Jinja2==3.1.6
 python-multipart==0.0.32
