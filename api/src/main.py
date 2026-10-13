@@ -39,6 +39,7 @@ from .schemas import (
     UpdateScheduleRead,
 )
 from .security import hash_password, verify_password
+from .ssh_host_keys import create_ssh_client, describe_ssh_error, forget_host_keys
 from .ssh_updater import load_private_key_for_ssh, run_check_job, run_update_job
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -1252,15 +1253,15 @@ def build_server_connect_kwargs(
 
 
 def run_ssh_connection_check(connect_kwargs: dict) -> tuple[bool, str]:
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client = create_ssh_client()
 
     try:
         client.connect(**connect_kwargs)
     except paramiko.AuthenticationException:
         return False, "Authentication failed. Check username and credentials."
     except Exception as exc:
-        return False, f"Connection failed: {str(exc)}"
+        print(f"[ssh] connection check to {connect_kwargs['hostname']}:{connect_kwargs['port']} failed: {type(exc).__name__}: {exc}")
+        return False, f"Connection failed: {describe_ssh_error(exc)}"
     finally:
         client.close()
 
@@ -1382,8 +1383,7 @@ def run_saved_server_health_check(db: Session, server: Server) -> dict:
             ssh_key_id=server.ssh_key_id,
             existing_server=server,
         )
-        client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client = create_ssh_client()
         try:
             client.connect(**connect_kwargs)
             is_online = True
@@ -1394,8 +1394,9 @@ def run_saved_server_health_check(db: Session, server: Server) -> dict:
             message = "Authentication failed. Check username and credentials."
             cpu_usage, ram_usage, storage_usage, load_avg_1, load_avg_5, load_avg_15 = None, None, None, None, None, None
         except Exception as exc:
+            print(f"[ssh] health check for {server.host}:{server.port} failed: {type(exc).__name__}: {exc}")
             is_online = False
-            message = f"Connection failed: {str(exc)}"
+            message = f"Connection failed: {describe_ssh_error(exc)}"
             cpu_usage, ram_usage, storage_usage, load_avg_1, load_avg_5, load_avg_15 = None, None, None, None, None, None
         finally:
             client.close()
@@ -1875,8 +1876,7 @@ async def ssh_terminal_socket(websocket: WebSocket):
     await websocket.accept()
 
     db = SessionLocal()
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client = create_ssh_client()
     channel = None
     output_task: asyncio.Task | None = None
     current_user: User | None = None
@@ -3957,8 +3957,7 @@ def reboot_server(server_id: int, request: Request, db: Session = Depends(get_db
         existing_server=server,
     )
 
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client = create_ssh_client()
     try:
         client.connect(**connect_kwargs)
         # Use nohup so the command survives the SSH session being terminated by the reboot.
@@ -4023,8 +4022,7 @@ def _sftp_for_server(server: Server, db: Session) -> tuple[paramiko.SSHClient, p
         ssh_key_id=server.ssh_key_id,
         existing_server=server,
     )
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client = create_ssh_client()
     client.connect(**connect_kwargs)
     sftp = client.open_sftp()
     return client, sftp
@@ -4419,6 +4417,7 @@ def update_server(server_id: int, payload: ServerUpdate, request: Request, db: S
             raise HTTPException(status_code=400, detail="Server name already exists")
         server.name = clean_name
 
+    previous_host, previous_port = server.host, server.port
     if "host" in updates:
         server.host = (updates.get("host") or "").strip()
     if "port" in updates and updates.get("port") is not None:
@@ -4463,6 +4462,8 @@ def update_server(server_id: int, payload: ServerUpdate, request: Request, db: S
     changed_fields = sorted(updates.keys())
     db.commit()
     db.refresh(server)
+    if (server.host, server.port) != (previous_host, previous_port):
+        forget_unused_host_keys(db, previous_host, previous_port)
     actor = get_session_user(request, db)
     log_audit(db, "server.update", request=request, actor=actor,
               target_type="server", target_id=server.id, target_label=server.name,
@@ -4471,6 +4472,30 @@ def update_server(server_id: int, payload: ServerUpdate, request: Request, db: S
                   f"host={server.host}:{server.port}; user={server.username}; auth={server.auth_method}"
               ))
     return server
+
+
+def forget_unused_host_keys(db: Session, host: str, port: int) -> None:
+    if not db.query(Server).filter(Server.host == host, Server.port == port).first():
+        forget_host_keys(db, host, port)
+
+
+@app.post("/api/servers/{server_id}/reset-host-key")
+def reset_server_host_key(server_id: int, request: Request, db: Session = Depends(get_db)):
+    require_api_user(request, db, admin=True)
+
+    server = db.query(Server).filter(Server.id == server_id).first()
+    if not server:
+        raise HTTPException(status_code=404, detail="Server not found")
+
+    deleted = forget_host_keys(db, server.host, server.port)
+    actor = get_session_user(request, db)
+    log_audit(db, "server.reset_host_key", request=request, actor=actor,
+              target_type="server", target_id=server.id, target_label=server.name,
+              detail=f"host={server.host}:{server.port}; removed_keys={deleted}")
+    return {
+        "ok": True,
+        "message": f"Host key reset for {server.host}:{server.port}. The key presented on the next connection will be trusted.",
+    }
 
 
 @app.get("/api/servers", response_model=list[ServerRead])
@@ -4504,6 +4529,7 @@ def delete_server(server_id: int, request: Request, db: Session = Depends(get_db
 
     db.delete(server)
     db.commit()
+    forget_unused_host_keys(db, server.host, server.port)
     actor = get_session_user(request, db)
     log_audit(db, "server.delete", request=request, actor=actor,
               target_type="server", target_id=server_id, target_label=server.name,

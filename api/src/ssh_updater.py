@@ -10,6 +10,7 @@ import paramiko
 from sqlalchemy.orm import Session
 
 from .models import Server, UpdateJob
+from .ssh_host_keys import create_ssh_client
 
 SSH_CONNECT_TIMEOUT_SECONDS = 30
 REMOTE_COMMAND_TIMEOUT_SECONDS = 1800
@@ -425,8 +426,7 @@ def run_check_job(
         db.commit()
         return
 
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client = create_ssh_client()
     step_logs: list[str] = []
     server_password = server.password
     server_sudo_password = server.sudo_password
@@ -608,8 +608,7 @@ def run_update_job(
         db.commit()
         return
 
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client = create_ssh_client()
     step_logs: list[str] = []
     server_password = server.password
     server_sudo_password = server.sudo_password
