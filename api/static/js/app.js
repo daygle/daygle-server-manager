@@ -33,6 +33,7 @@ const keyLabel = document.getElementById("key_label");
 const cancelEditBtn = document.getElementById("cancel_edit_btn");
 const saveServerBtn = document.getElementById("save_server_btn");
 const testConnectionBtn = document.getElementById("test_connection_btn");
+const resetHostKeyBtn = document.getElementById("reset_host_key_btn");
 const serverFormTitle = document.getElementById("server-form-title");
 const serverFormCard = document.getElementById("serverFormCard");
 const serversListCard = document.getElementById("serversListCard");
@@ -485,6 +486,31 @@ testConnectionBtn?.addEventListener("click", async () => {
   }
 });
 
+resetHostKeyBtn?.addEventListener("click", async () => {
+  const serverId = serverForm?.querySelector('input[name="server_id"]')?.value;
+  if (!serverId) {
+    return;
+  }
+  if (!window.confirm("Reset the trusted SSH host key for this server?\n\nOnly do this if the server was reinstalled or its host keys were regenerated. The key presented on the next connection will be trusted.")) {
+    return;
+  }
+
+  resetHostKeyBtn.disabled = true;
+  try {
+    const response = await fetch(`/api/servers/${serverId}/reset-host-key`, { method: "POST" });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      notify(data.detail || "Failed to reset host key.", "error");
+      return;
+    }
+    notify(data.message || "Host key reset.", "success");
+  } catch (error) {
+    notify(`Failed to reset host key: ${error.message}`, "error");
+  } finally {
+    resetHostKeyBtn.disabled = false;
+  }
+});
+
 serverForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(serverForm);
@@ -534,6 +560,7 @@ serverForm?.addEventListener("submit", async (event) => {
   if (saveServerBtn) {
     saveServerBtn.innerHTML = '<i class="fas fa-save"></i><span>Save Server</span>';
   }
+  resetHostKeyBtn?.classList.add("hidden");
   if (typeof window.showToastAfterReload === "function") {
     window.showToastAfterReload(serverId ? "Server updated successfully." : "Server created successfully.", "success");
   }
@@ -648,6 +675,7 @@ document.querySelectorAll("[data-edit-server]").forEach((button) => {
     if (saveServerBtn) {
       saveServerBtn.innerHTML = '<i class="fas fa-pen"></i><span>Update Server</span>';
     }
+    resetHostKeyBtn?.classList.remove("hidden");
     if (serverFormTitle) {
       serverFormTitle.textContent = "Edit Server";
     }
@@ -1393,7 +1421,6 @@ function renderJobOutput(raw) {
   if (!raw) return "No output loaded.";
   const sectionPattern = /^\[([a-z-]+)\]\n?/gm;
   const parts = [];
-  let lastIndex = 0;
   let match;
   const matches = [];
 
@@ -1402,7 +1429,7 @@ function renderJobOutput(raw) {
   }
 
   for (let i = 0; i < matches.length; i++) {
-    const { index, tag, end } = matches[i];
+    const { tag, end } = matches[i];
     const contentEnd = i + 1 < matches.length ? matches[i + 1].index : raw.length;
     const label = SECTION_LABELS[tag] || tag;
     const content = raw.slice(end, contentEnd).trimEnd();
@@ -1410,7 +1437,6 @@ function renderJobOutput(raw) {
       `<span class="output-section-label">${escapeHtml(label)}</span>` +
       `<span class="output-section-body">${escapeHtml(content)}</span>`
     );
-    lastIndex = contentEnd;
   }
 
   if (matches.length === 0) {

@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -249,3 +249,16 @@ class Alert(Base):
     source_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class SSHHostKey(Base):
+    __tablename__ = "ssh_host_keys"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    # Host key lookup name as used by paramiko/known_hosts: "host" for port 22, "[host]:port" otherwise.
+    hostname: Mapped[str] = mapped_column(String(300), nullable=False)
+    key_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    key_data: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("hostname", "key_type", name="uq_ssh_host_keys_hostname_key_type"),)
