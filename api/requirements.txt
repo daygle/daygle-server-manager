@@ -1,7 +1,7 @@
 fastapi==0.143.0
 uvicorn[standard]==0.54.0
 SQLAlchemy==2.1.4
-paramiko==5.0.0
+paramiko==5.1.0
 Jinja2==3.1.6
 python-multipart==0.0.32
 passlib[bcrypt]==1.7.4
